@@ -77,9 +77,20 @@ def get_report_for_read(*, report_id: UUID | str) -> Report:
             .get(pk=report_id)
         )
     except (Report.DoesNotExist, ValueError, TypeError) as exc:
-        # `ValueError`/`TypeError` cover a malformed UUID reaching a caller outside the URL
-        # converter (a management command, a test). A bad id is "not found", never a `500`.
-        raise Http404("Report not found.") from exc
+        # Check if an Issue ID was provided from the map or external reference
+        issue_report = (
+            Report.objects.filter(issue_id=report_id)
+            .select_related("category", "issue")
+            .prefetch_related(visible_media_prefetch())
+            .order_by("created_at")
+            .first()
+        )
+        if issue_report is not None:
+            report = issue_report
+        else:
+            # `ValueError`/`TypeError` cover a malformed UUID reaching a caller outside the URL
+            # converter (a management command, a test). A bad id is "not found", never a `500`.
+            raise Http404("Report not found.") from exc
 
     if report.status in MODERATED_STATUSES:
         raise Gone

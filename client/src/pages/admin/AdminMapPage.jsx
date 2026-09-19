@@ -787,7 +787,7 @@ export default function AdminMapPage() {
           features={features}
           onViewportChange={setViewport}
           onMapClick={handleMapClick}
-          getDetailLink={() => `/admin/queue`}
+          getDetailLink={(id) => `/admin/queue/${id}`}
           className="h-full w-full"
         />
       </div>

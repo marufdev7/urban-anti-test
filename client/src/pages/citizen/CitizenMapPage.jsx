@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { FilterX, Layers, MapPin } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -138,6 +139,7 @@ export default function CitizenMapPage() {
           features={features}
           onViewportChange={setViewport}
           onSelectIssue={(f) => setSelectedIssue(f)}
+          getDetailLink={(id) => `/citizen/reports/${id}`}
           className="h-full w-full"
         />
 
@@ -179,6 +181,13 @@ export default function CitizenMapPage() {
                 &times;
               </button>
             </div>
+            <Link
+              to={`/citizen/reports/${selectedIssue.id}`}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#005a4c] px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-[#004a3e] active:scale-[0.99]"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              View Report Details
+            </Link>
           </div>
         )}
       </div>

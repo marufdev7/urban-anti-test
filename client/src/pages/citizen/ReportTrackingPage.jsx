@@ -100,7 +100,41 @@ export default function ReportTrackingPage() {
 
   const { data: remoteReport, isLoading, isError, error } = useQuery({
     queryKey: ['reports', reportId],
-    queryFn: () => api(`/reports/${reportId}`),
+    queryFn: async () => {
+      try {
+        return await api(`/reports/${reportId}`)
+      } catch (err) {
+        // If report not found, check if an Issue ID was provided from the map
+        try {
+          const reportsRes = await api(`/issues/${reportId}/reports`)
+          const first = reportsRes?.data?.[0] || reportsRes?.results?.[0]
+          if (first) return first
+        } catch {}
+
+        try {
+          const issueRes = await api(`/issues/${reportId}`)
+          if (issueRes) {
+            return {
+              id: issueRes.id,
+              issueId: issueRes.id,
+              description: issueRes.description || 'Public municipal safety issue',
+              location: issueRes.representativeLocation || { address: 'Dhaka Metropolitan Area' },
+              status: issueRes.status,
+              issueStatus: issueRes.status,
+              createdAt: issueRes.openedAt || new Date().toISOString(),
+              classification: {
+                category: issueRes.primaryCategory,
+                severitySignal: issueRes.severity?.current || 'medium',
+                source: 'gemini',
+              },
+              media: [],
+            }
+          }
+        } catch {}
+
+        throw err
+      }
+    },
     enabled: !fallbackReport,
     retry: 1,
     refetchInterval: (query) =>

@@ -202,7 +202,7 @@ function IssueMarker({ feature, onSelect, getDetailLink }) {
   const props = feature.properties ?? {}
   const sev = props.severity ?? 'medium'
   const icon = useMemo(() => createPinIcon(sev), [sev])
-  const detailLink = getDetailLink ? getDetailLink(feature.id, props) : null
+  const detailLink = getDetailLink ? getDetailLink(feature.id, props) : `/citizen/reports/${feature.id}`
 
   return (
     <Marker
@@ -213,16 +213,13 @@ function IssueMarker({ feature, onSelect, getDetailLink }) {
       }}
     >
       <Popup className="custom-popup">
-        <div className="p-1 text-xs">
-          <p className="font-semibold text-ink">
-            Issue #{shortId(feature.id)}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-medium capitalize text-ink-muted">
-              {props.status === 'triaged' ? 'Under Review' : (props.status?.replaceAll('_', ' ') ?? 'Under Review')}
-            </span>
+        <div className="p-1 text-xs min-w-[170px]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-bold text-ink">
+              Issue #{shortId(feature.id)}
+            </p>
             <span
-              className={`rounded px-1.5 py-0.5 font-medium uppercase text-white ${
+              className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase text-white ${
                 sev === 'critical' || sev === 'high'
                   ? 'bg-status-critical'
                   : sev === 'medium'
@@ -233,19 +230,22 @@ function IssueMarker({ feature, onSelect, getDetailLink }) {
               {sev}
             </span>
           </div>
-          {props.corroborationCount > 1 && (
-            <p className="mt-1 text-ink-muted">
-              Confirmed by {props.corroborationCount} citizens
-            </p>
-          )}
-          {detailLink && (
-            <Link
-              to={detailLink}
-              className="mt-2 inline-block font-semibold text-primary hover:underline"
-            >
-              View details &rarr;
-            </Link>
-          )}
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span className="rounded bg-surface-sunken px-1.5 py-0.5 text-[11px] font-medium capitalize text-ink-muted">
+              {props.status === 'triaged' ? 'Under Review' : (props.status?.replaceAll('_', ' ') ?? 'Under Review')}
+            </span>
+            {props.corroborationCount > 1 && (
+              <span className="text-[10px] text-ink-muted">
+                · {props.corroborationCount} confirmed
+              </span>
+            )}
+          </div>
+          <Link
+            to={detailLink}
+            className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-md bg-[#005a4c] px-2.5 py-1.5 text-center text-xs font-semibold text-white shadow-xs hover:bg-[#004a3e] transition active:scale-[0.98]"
+          >
+            View Report Details &rarr;
+          </Link>
         </div>
       </Popup>
     </Marker>
