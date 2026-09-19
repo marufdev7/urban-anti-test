@@ -85,6 +85,7 @@ export default function AdminMapPage() {
   const [customBounds, setCustomBounds] = useState(null)
   const [mapCenter, setMapCenter] = useState(null)
   const [mapZoom, setMapZoom] = useState(12)
+  const [showAllZones, setShowAllZones] = useState(true)
 
   // Interactive Area Marking / Polygon Drawing
   const [isDrawingArea, setIsDrawingArea] = useState(false)
@@ -741,13 +742,44 @@ export default function AdminMapPage() {
           isDrawingArea || focalMode ? 'cursor-crosshair' : ''
         }`}
       >
+        {/* Floating City & Jurisdiction Overlay Badge */}
+        <div className="absolute top-3 left-3 z-[1000] flex flex-wrap items-center gap-2 rounded-panel border border-line/80 bg-surface/90 backdrop-blur-md px-3 py-1.5 text-xs shadow-md">
+          <div className="flex items-center gap-1.5">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-[#0e7c6d] animate-pulse" />
+            <span className="font-bold text-ink">{currentCity.nameBn || currentCity.nameEn}</span>
+          </div>
+          <span className="text-[11px] text-ink-muted hidden sm:inline">
+            ({currentCity.corpName || currentCity.division})
+          </span>
+          <div className="h-3 w-px bg-line" />
+          <span className="text-[11px] font-semibold text-primary">
+            {currentZone.id && !currentZone.id.endsWith('_all')
+              ? currentZone.nameBn || currentZone.nameEn
+              : `${cityZones.length - 1} Marked Wards/Zones`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowAllZones(!showAllZones)}
+            className="ml-1 rounded px-2 py-0.5 text-[10px] font-medium border border-line bg-surface-sunken hover:bg-surface text-ink-muted hover:text-ink transition-colors"
+            title="Toggle display of all ward boundary outlines"
+          >
+            {showAllZones ? 'Hide Wards' : 'Show All Wards'}
+          </button>
+        </div>
+
         <InteractiveMap
           center={mapCenter || currentCity.center || center || DHAKA_CENTER}
           zoom={mapZoom}
           bounds={customBounds}
           polygons={polygons}
           boundaryPolygon={currentCity.boundaryPolygon}
+          cityName={currentCity.nameBn || currentCity.nameEn}
+          cityZones={cityZones}
+          activeZoneId={selectedZoneId}
           activeZonePolygon={currentZone?.polygon}
+          activeZoneName={currentZone?.nameBn || currentZone?.nameEn}
+          showAllZones={showAllZones}
+          onZoneClick={handleZoneSelect}
           drawnPolygonPoints={drawnPoints}
           customMarkedArea={customMarkedArea}
           focalCircle={focalCenter ? { center: focalCenter, radius: focalRadius } : null}

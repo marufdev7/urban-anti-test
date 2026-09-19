@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -206,7 +206,13 @@ export default function InteractiveMap({
   zoom = 13,
   bounds = null,
   polygons = [],
+  boundaryPolygon = null,
+  cityName = '',
+  cityZones = [],
+  activeZoneId = '',
   activeZonePolygon = null,
+  activeZoneName = '',
+  showAllZones = true,
   focalCircle = null,
   searchMarker = null,
   drawnPolygonPoints = [],
@@ -214,6 +220,7 @@ export default function InteractiveMap({
   features = [],
   onViewportChange,
   onMapClick,
+  onZoneClick,
   onSelectIssue,
   getDetailLink,
   className = 'h-full w-full',
@@ -231,14 +238,66 @@ export default function InteractiveMap({
       <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <MapViewController center={center} zoom={zoom} bounds={bounds} />
 
-      {/* Default city boundary polygons */}
+      {/* Database city boundary polygons (if any) */}
       {polygons.map((polygon, index) => (
         <Polygon
-          key={index}
+          key={`db-poly-${index}`}
           positions={polygon}
           pathOptions={{ color: '#0e7c6d', weight: 1.8, fillOpacity: 0.03 }}
         />
       ))}
+
+      {/* Selected City Corporation Official Boundary Outline */}
+      {boundaryPolygon && (
+        <Polygon
+          positions={boundaryPolygon}
+          pathOptions={{
+            color: '#0e7c6d',
+            weight: 2.8,
+            fillColor: '#0e7c6d',
+            fillOpacity: 0.06,
+            dashArray: '6, 6',
+          }}
+        >
+          {cityName && (
+            <Tooltip sticky direction="top">
+              <div className="px-1 py-0.5 text-xs font-bold text-[#0e7c6d]">
+                🏛️ {cityName} Municipal Boundary
+              </div>
+            </Tooltip>
+          )}
+        </Polygon>
+      )}
+
+      {/* All Sub-Zone / Ward Polygons across the selected City */}
+      {showAllZones &&
+        cityZones &&
+        cityZones.map((zone) => {
+          if (!zone.polygon || zone.id === activeZoneId) return null
+          return (
+            <Polygon
+              key={`zone-poly-${zone.id}`}
+              positions={zone.polygon}
+              pathOptions={{
+                color: '#64748b',
+                weight: 1.5,
+                fillColor: '#94a3b8',
+                fillOpacity: 0.06,
+                dashArray: '4, 4',
+              }}
+              eventHandlers={{
+                click: () => onZoneClick?.(zone.id),
+              }}
+            >
+              <Tooltip sticky direction="center">
+                <div className="p-0.5 text-center text-xs font-semibold text-ink">
+                  📍 {zone.nameBn || zone.nameEn}
+                  <div className="text-[10px] text-primary font-normal">Click to filter zone</div>
+                </div>
+              </Tooltip>
+            </Polygon>
+          )
+        })}
 
       {/* Highlighted active zone polygon */}
       {activeZonePolygon && (
@@ -246,12 +305,20 @@ export default function InteractiveMap({
           positions={activeZonePolygon}
           pathOptions={{
             color: '#2563eb',
-            weight: 2.5,
+            weight: 3,
             fillColor: '#3b82f6',
-            fillOpacity: 0.12,
+            fillOpacity: 0.16,
             dashArray: '6, 6',
           }}
-        />
+        >
+          {activeZoneName && (
+            <Tooltip permanent direction="top">
+              <div className="px-1 py-0.5 text-xs font-bold text-primary">
+                📌 {activeZoneName} (Active Jurisdiction)
+              </div>
+            </Tooltip>
+          )}
+        </Polygon>
       )}
 
       {/* Completed Custom Marked Area Polygon */}
@@ -260,11 +327,17 @@ export default function InteractiveMap({
           positions={customMarkedArea}
           pathOptions={{
             color: '#059669',
-            weight: 2.5,
+            weight: 2.8,
             fillColor: '#10b981',
-            fillOpacity: 0.16,
+            fillOpacity: 0.18,
           }}
-        />
+        >
+          <Tooltip permanent direction="top">
+            <div className="px-1 py-0.5 text-xs font-bold text-status-resolved">
+              📐 Custom Marked Area ({customMarkedArea.length} vertices)
+            </div>
+          </Tooltip>
+        </Polygon>
       )}
 
       {/* In-Progress Drawn Polygon Lines & Filled Shape */}
