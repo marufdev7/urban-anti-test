@@ -348,20 +348,20 @@ export default function ModerationQueuePage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2.5">
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-0.5 text-xs font-bold ${
+                      className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-0.5 text-xs font-bold text-black ${
                         isCritical
-                          ? 'border-rose-300 bg-rose-50 text-rose-600'
+                          ? 'border-rose-300 bg-rose-50'
                           : isHigh
-                          ? 'border-amber-300 bg-amber-50 text-amber-700'
-                          : 'border-sky-300 bg-sky-50 text-sky-700'
+                          ? 'border-amber-300 bg-amber-50'
+                          : 'border-sky-300 bg-sky-50'
                       }`}
                     >
                       {isCritical ? (
-                        <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                        <AlertCircle className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" />
                       ) : (
-                        <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
                       )}
-                      <span>{item.flagSeverity}</span>
+                      <span className="text-black">{item.flagSeverity}</span>
                     </span>
 
                     <span className="font-mono text-xs text-ink-muted">
@@ -370,20 +370,20 @@ export default function ModerationQueuePage() {
 
                     {/* Workflow Status Pill */}
                     {item.workflowStatus === 'new' && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-200 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
-                        <Clock className="h-3 w-3" />
+                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-200 px-2.5 py-0.5 text-[11px] font-semibold text-black">
+                        <Clock className="h-3 w-3 text-sky-600" />
                         New
                       </span>
                     )}
                     {item.workflowStatus === 'in_process' && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800">
-                        <Clock className="h-3 w-3" />
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-black">
+                        <Clock className="h-3 w-3 text-amber-600" />
                         In Process
                       </span>
                     )}
                     {item.workflowStatus === 'resolved' && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        <CheckCircle2 className="h-3 w-3" />
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[11px] font-bold text-black">
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                         Resolved
                       </span>
                     )}
@@ -429,8 +429,8 @@ export default function ModerationQueuePage() {
                   {/* Contextual Action Buttons */}
                   {isResolved ? (
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-bold text-black">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                         Resolved
                       </span>
                       <Button

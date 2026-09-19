@@ -23,7 +23,7 @@ import ReportCard from '../../components/report/ReportCard'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'solved', label: '✅ Solved / Resolved' },
+  { value: 'solved', label: 'Solved / Resolved' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'triaged', label: 'Under Review' },
   { value: 'processing', label: 'Processing' },
@@ -159,7 +159,7 @@ export default function MyReportsPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-ink">Citizen Submissions Record</span>
-                <span className="rounded bg-status-resolved/20 px-2 py-0.5 text-[10px] font-bold text-status-resolved uppercase">
+                <span className="rounded bg-emerald-100 border border-emerald-300 px-2 py-0.5 text-[10px] font-bold text-black uppercase">
                   {solvedCount} Solved
                 </span>
               </div>
@@ -189,7 +189,7 @@ export default function MyReportsPage() {
               className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
                 activeTab === 'all'
                   ? 'bg-ink text-white shadow-xs'
-                  : 'bg-surface-sunken text-ink-muted hover:bg-surface-sunken/80 hover:text-ink border border-line/60'
+                  : 'bg-surface-sunken text-black hover:bg-surface-sunken/80 border border-line/60'
               }`}
             >
               All Reports ({totalCount})
@@ -200,7 +200,7 @@ export default function MyReportsPage() {
               className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
                 activeTab === 'queue'
                   ? 'bg-primary text-white shadow-xs'
-                  : 'bg-surface-sunken text-ink-muted hover:bg-surface-sunken/80 hover:text-ink border border-line/60'
+                  : 'bg-surface-sunken text-black hover:bg-surface-sunken/80 border border-line/60'
               }`}
             >
               <Clock3 className="h-3.5 w-3.5" />
@@ -211,12 +211,12 @@ export default function MyReportsPage() {
               onClick={() => handleTabChange('solved')}
               className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
                 activeTab === 'solved'
-                  ? 'bg-status-resolved text-white shadow-xs'
-                  : 'bg-status-resolved/10 text-status-resolved hover:bg-status-resolved/20 border border-status-resolved/30'
+                  ? 'bg-emerald-200 text-black border border-emerald-400 shadow-xs'
+                  : 'bg-emerald-50 text-black hover:bg-emerald-100 border border-emerald-300'
               }`}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              ✅ Solved / Resolved ({solvedCount})
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              Solved / Resolved ({solvedCount})
             </button>
 
             {(search || status) && (

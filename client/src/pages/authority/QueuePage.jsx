@@ -30,10 +30,10 @@ import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 
 const SEV_STYLES = {
-  critical: 'border-rose-400 text-rose-600 bg-rose-50/60',
-  high: 'border-amber-400 text-amber-700 bg-amber-50/60',
-  medium: 'border-sky-400 text-sky-700 bg-sky-50/60',
-  low: 'border-emerald-400 text-emerald-700 bg-emerald-50/60',
+  critical: 'border-rose-400 text-black font-semibold bg-rose-100/70',
+  high: 'border-amber-400 text-black font-semibold bg-amber-100/70',
+  medium: 'border-sky-400 text-black font-semibold bg-sky-100/70',
+  low: 'border-emerald-400 text-black font-semibold bg-emerald-100/70',
 }
 
 const STATUS_DOTS = {

@@ -203,13 +203,14 @@ export default function ReportTrackingPage() {
               pill
               tone={cls.severitySignal.toLowerCase()}
               label={sevLabel(cls.severitySignal)}
+              className="text-black font-semibold"
             />
           )}
           <StatusBadge
             pill
             tone={badge.tone}
             label={badge.label}
-            className={isResolved ? 'bg-emerald-600 text-white font-bold' : ''}
+            className={`font-bold text-black ${isResolved ? 'bg-emerald-100 text-black border-emerald-400' : 'text-black'}`}
           />
         </div>
       </div>
@@ -220,7 +221,7 @@ export default function ReportTrackingPage() {
             ✓
           </div>
           <div>
-            <h3 className="font-bold text-sm text-status-resolved">Problem Successfully Resolved</h3>
+            <h3 className="font-bold text-sm text-black">Problem Successfully Resolved</h3>
             <p className="text-ink-muted text-xs mt-0.5">
               This municipal issue has been repaired and verified complete by the responsible authority department.
             </p>

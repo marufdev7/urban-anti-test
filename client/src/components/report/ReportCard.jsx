@@ -45,7 +45,7 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
                 pill
                 tone={sevBadge.tone}
                 label={sevBadge.label}
-                className="shadow-xs font-semibold"
+                className="shadow-xs font-semibold text-black"
               />
             </div>
           )}
@@ -56,7 +56,11 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
               pill
               tone={badge.tone}
               label={badge.label}
-              className={`shadow-xs font-bold ${isSolved ? 'bg-emerald-600 text-white border-emerald-700' : ''}`}
+              className={`shadow-xs font-bold text-black ${
+                isSolved
+                  ? 'bg-emerald-100 text-black border-emerald-400'
+                  : 'text-black'
+              }`}
             />
           </div>
         </div>
@@ -73,14 +77,14 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
 
           {/* Prominent Solved Verification Banner */}
           {isSolved ? (
-            <div className="mt-2.5 flex items-center gap-1.5 rounded border border-status-resolved/30 bg-status-resolved/10 px-2 py-1 text-[11px] font-bold text-status-resolved">
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-              <span>Problem Solved &amp; Verified</span>
+            <div className="mt-2.5 flex items-center gap-1.5 rounded border border-status-resolved/40 bg-status-resolved/10 px-2 py-1 text-[11px] font-bold text-black">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-resolved" />
+              <span className="text-black font-bold">Problem Solved &amp; Verified</span>
             </div>
           ) : badge.label === 'In Progress' ? (
-            <div className="mt-2.5 flex items-center gap-1.5 rounded border border-primary/30 bg-primary-soft px-2 py-1 text-[11px] font-semibold text-primary">
+            <div className="mt-2.5 flex items-center gap-1.5 rounded border border-primary/30 bg-primary-soft px-2 py-1 text-[11px] font-semibold text-black">
               <span className="flex h-1.5 w-1.5 rounded-full bg-primary animate-ping" />
-              <span>Repair Work in Progress</span>
+              <span className="text-black font-semibold">Repair Work in Progress</span>
             </div>
           ) : null}
 
