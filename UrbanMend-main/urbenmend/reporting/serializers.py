@@ -245,6 +245,7 @@ class ReportDetailSerializer(CamelCaseSerializer):
     media = serializers.SerializerMethodField()
     classification = serializers.SerializerMethodField()
     issue_id = serializers.SerializerMethodField()
+    issue_status = serializers.SerializerMethodField()
     status = serializers.CharField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
@@ -308,6 +309,15 @@ class ReportDetailSerializer(CamelCaseSerializer):
         its key.
         """
         return str(report.issue_id) if report.issue_id else None
+
+    def get_issue_status(self, report: Report) -> str | None:
+        """The authoritative resolution status of the linked issue ('in_progress', 'resolved', 'closed', etc.)."""
+        if report.issue_id:
+            try:
+                return report.issue.status if report.issue else None
+            except Exception:
+                return None
+        return None
 
 
 class ReportListQuerySerializer(CamelCaseSerializer):

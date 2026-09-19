@@ -72,7 +72,7 @@ def get_report_for_read(*, report_id: UUID | str) -> Report:
     """
     try:
         report = (
-            Report.objects.select_related("category")
+            Report.objects.select_related("category", "issue")
             .prefetch_related(visible_media_prefetch())
             .get(pk=report_id)
         )
@@ -135,7 +135,7 @@ def list_reports(
 
     queryset = (
         Report.objects.exclude(status__in=MODERATED_STATUSES)
-        .select_related("category")
+        .select_related("category", "issue")
         # ⚠️ **One query for the whole page's `media[]`, not one per row.** §6.3's list items carry
         # the same `media[]` the detail body does, so without this a 20-item page issues 21 queries
         # and NFR-2's p95 budget is spent on a loop no reader of the serializer would notice.

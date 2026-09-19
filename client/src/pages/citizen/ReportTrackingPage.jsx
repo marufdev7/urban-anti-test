@@ -151,7 +151,12 @@ export default function ReportTrackingPage() {
   const position = report.location
 
   const isAssigned = !!issueId
-  const isResolved = issue?.status === 'resolved' || issue?.status === 'closed'
+  const isResolved =
+    issue?.status === 'resolved' ||
+    issue?.status === 'closed' ||
+    report?.issueStatus === 'resolved' ||
+    report?.issueStatus === 'closed' ||
+    report?.status === 'resolved'
 
   const timeline = [
     {
@@ -171,8 +176,8 @@ export default function ReportTrackingPage() {
       active: !isAssigned && !!cls.source,
     },
     {
-      label: isResolved ? 'Issue Resolved' : 'Issue Resolved',
-      time: isResolved ? formatDateTime(issue?.updatedAt) : null,
+      label: isResolved ? 'Issue Resolved' : 'Issue Resolution',
+      time: isResolved ? formatDateTime(issue?.updatedAt || report?.createdAt) : null,
       done: isResolved,
       active: isAssigned && !isResolved,
     },
@@ -192,8 +197,36 @@ export default function ReportTrackingPage() {
           <span className="text-line" aria-hidden="true">|</span>
           <h1 className="truncate text-lg font-bold text-ink">Report #{shortId(report.id)}</h1>
         </div>
-        <StatusBadge tone={badge.tone} label={badge.label} />
+        <div className="flex items-center gap-2">
+          {cls.severitySignal && (
+            <StatusBadge
+              pill
+              tone={cls.severitySignal.toLowerCase()}
+              label={sevLabel(cls.severitySignal)}
+            />
+          )}
+          <StatusBadge
+            pill
+            tone={badge.tone}
+            label={badge.label}
+            className={isResolved ? 'bg-emerald-600 text-white font-bold' : ''}
+          />
+        </div>
       </div>
+
+      {isResolved && (
+        <div className="mb-5 flex items-center gap-3 rounded-panel border border-status-resolved/40 bg-status-resolved/10 p-4 text-xs shadow-xs">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-status-resolved text-white font-bold text-base">
+            ✓
+          </div>
+          <div>
+            <h3 className="font-bold text-sm text-status-resolved">Problem Successfully Resolved</h3>
+            <p className="text-ink-muted text-xs mt-0.5">
+              This municipal issue has been repaired and verified complete by the responsible authority department.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* Main column */}

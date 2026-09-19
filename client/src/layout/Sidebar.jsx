@@ -19,9 +19,9 @@ import { useIssues } from '../hooks/issues'
 const NAV_BY_ROLE = {
   citizen: [
     { to: '/citizen/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/citizen/queue', label: 'Queue', icon: ClipboardList },
+    { to: '/citizen/queue', label: 'Processing Queue', icon: ClipboardList },
+    { to: '/citizen/reports', label: 'My Reports', icon: FileText },
     { to: '/citizen/map', label: 'Map', icon: Map },
-    { to: '/citizen/reports', label: 'Reports', icon: FileText },
   ],
   authority: [
     { to: '/authority/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -75,6 +75,12 @@ export default function Sidebar({ onNavigate }) {
     }
     if (to === '/admin/queue') {
       return location.pathname === '/admin/queue' || location.pathname.startsWith('/admin/queue/')
+    }
+    if (to === '/citizen/queue') {
+      return location.pathname === '/citizen/queue'
+    }
+    if (to === '/citizen/reports') {
+      return location.pathname === '/citizen/reports' || location.pathname.startsWith('/citizen/reports/')
     }
     return navIsActive
   }

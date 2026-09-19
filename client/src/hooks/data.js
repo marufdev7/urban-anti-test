@@ -4,10 +4,14 @@ import { boundaryCenter, boundaryToLatLngs, DHAKA_CENTER } from '../lib/geo'
 
 const SEV_TONES = { critical: 'critical', high: 'high', medium: 'medium', low: 'low' }
 const STATUS_TONES = {
-  submitted: 'processing',
+  submitted: 'neutral',
   processing: 'processing',
-  triaged: 'resolved',
+  triaged: 'neutral',
+  acknowledged: 'processing',
+  dispatched: 'processing',
+  in_progress: 'processing',
   resolved: 'resolved',
+  closed: 'resolved',
   hidden: 'neutral',
   removed: 'neutral',
 }
@@ -16,18 +20,62 @@ const STATUS_LABELS = {
   submitted: 'Submitted',
   processing: 'Processing',
   triaged: 'Under Review',
-  resolved: 'Resolved',
+  acknowledged: 'Acknowledged',
+  dispatched: 'Dispatched',
+  in_progress: 'In Progress',
+  resolved: 'Solved',
+  closed: 'Closed',
   hidden: 'Hidden',
   removed: 'Removed',
 }
 
-/** { tone, label } for a report row — severity wins when classified. */
-export function badgeFor(report) {
-  const severity = report?.classification?.severitySignal
+/** Determines if a report's issue has been resolved / completed. */
+export function isReportSolved(report) {
+  const isStatus = report?.issueStatus || report?.issue?.status || report?.status
+  return isStatus === 'resolved' || isStatus === 'closed'
+}
+
+/** Optional secondary badge for hazard severity level. */
+export function severityBadgeFor(report) {
+  const severity = report?.classification?.severitySignal?.toLowerCase()
   if (severity && SEV_TONES[severity]) {
     return { tone: SEV_TONES[severity], label: SEV_LABELS[severity] }
   }
+  return null
+}
+
+/** { tone, label } for a report row — resolution status takes absolute precedence. */
+export function badgeFor(report) {
+  const issueStatus = report?.issueStatus || report?.issue?.status
   const status = report?.status
+
+  // 1. If issue is resolved or closed -> SOLVED
+  if (issueStatus === 'resolved' || status === 'resolved') {
+    return { tone: 'resolved', label: 'Solved' }
+  }
+  if (issueStatus === 'closed' || status === 'closed') {
+    return { tone: 'resolved', label: 'Closed' }
+  }
+
+  // 2. In progress / dispatched
+  if (issueStatus === 'in_progress') {
+    return { tone: 'processing', label: 'In Progress' }
+  }
+  if (issueStatus === 'acknowledged' || issueStatus === 'dispatched') {
+    return { tone: 'processing', label: 'Dispatched' }
+  }
+
+  // 3. Triaged / Under Review
+  if (status === 'triaged' || issueStatus === 'triaged') {
+    return { tone: 'neutral', label: 'Under Review' }
+  }
+
+  // 4. Processing
+  if (status === 'processing') {
+    return { tone: 'processing', label: 'Processing' }
+  }
+
+  // 5. Default
   return {
     tone: STATUS_TONES[status] ?? 'neutral',
     label: STATUS_LABELS[status] ?? 'Submitted',
