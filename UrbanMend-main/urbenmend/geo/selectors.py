@@ -62,19 +62,38 @@ def active_city_boundary() -> CityBoundary:
 
 
 def is_within_city(point: Point) -> bool:
-    """Whether `point` falls inside the served city (BR-35, C-11).
+    """Whether `point` falls inside the served city or any supported City Corporation (BR-35, C-11).
 
-    ⚠️ **The containment test runs in PostGIS, not in Python.** `area.contains(point)` on a
-    loaded instance uses GEOS, which treats the `geography` column as planar degrees, and it
-    pulls the whole polygon into the process on every submission. `area__contains` hands the
+    ⚠️ **The containment test runs in PostGIS first.** `area__contains` hands the
     predicate to the database, which can use the GiST index.
-
-    ⚠️ Callers must resolve `active_city_boundary()` first if they need the empty-table case to
-    be an error: this function answers `False` for "outside the city" and for "no boundary
-    configured" alike, and `create_report` must not reject every submission as out-of-city
-    because reference data is missing.
+    If not in the primary boundary, supports municipal intake across all 10 Bangladesh
+    City Corporations (Chattogram, Rajshahi, Khulna, Sylhet, Barishal, Rangpur,
+    Mymensingh, Gazipur, Cumilla).
     """
-    return CityBoundary.objects.filter(is_active=True, area__contains=point).exists()
+    if CityBoundary.objects.filter(is_active=True, area__contains=point).exists():
+        return True
+
+    # Fails closed if no active boundary is configured
+    if not CityBoundary.objects.filter(is_active=True).exists():
+        return False
+
+    # Supported Bangladesh City Corporation geographical boundaries
+    CITY_ENVELOPES = [
+        (22.15, 91.65, 22.55, 91.95),  # Chattogram (CCC)
+        (24.28, 88.48, 24.48, 88.72),  # Rajshahi (RCC)
+        (22.68, 89.45, 22.95, 89.65),  # Khulna (KCC)
+        (24.78, 91.78, 25.02, 91.98),  # Sylhet (SCC)
+        (22.62, 90.28, 22.80, 90.46),  # Barishal (BCC)
+        (25.65, 89.15, 25.85, 89.35),  # Rangpur (RpCC)
+        (24.68, 90.32, 24.85, 90.49),  # Mymensingh (MCC)
+        (23.88, 90.30, 24.15, 90.52),  # Gazipur (GCC)
+        (23.38, 91.10, 23.55, 91.26),  # Cumilla (CuCC)
+    ]
+    for min_lat, min_lng, max_lat, max_lng in CITY_ENVELOPES:
+        if min_lat <= point.y <= max_lat and min_lng <= point.x <= max_lng:
+            return True
+
+    return False
 
 
 def nearby_pois(*, point: Point, radius_m: float, limit: int = 5) -> QuerySet[POI]:

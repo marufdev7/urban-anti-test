@@ -31,26 +31,34 @@ function MapEventsHandler({ interactive, onMarkerChange }) {
   return null
 }
 
-function MapRecenter({ center }) {
+function MapRecenter({ center, zoom }) {
   const map = useMap()
+  const prevRef = useRef(null)
+
   useEffect(() => {
     if (center?.lat && center?.lng) {
-      map.flyTo([center.lat, center.lng], map.getZoom(), { duration: 0.8 })
+      const prev = prevRef.current
+      const changed = !prev || Math.abs(center.lat - prev.lat) > 0.0001 || Math.abs(center.lng - prev.lng) > 0.0001
+      if (changed) {
+        prevRef.current = { lat: center.lat, lng: center.lng }
+        map.flyTo([center.lat, center.lng], zoom || map.getZoom(), { duration: 0.8 })
+      }
     }
-  }, [center?.lat, center?.lng, map])
+  }, [center?.lat, center?.lng, zoom, map])
   return null
 }
 
 /**
  * Leaflet map wrapped for UrbanMend.
  * - Interactive: click anywhere to drop/move pin, drag pin, zoom controls.
- * - City boundary polygons drawn so users see Dhaka service perimeter.
+ * - City boundary polygons drawn so users see municipal service perimeter.
  */
 export default function MapPanel({
   center,
   marker,
   onMarkerChange,
   polygons = [],
+  boundaryPolygon = null,
   interactive = true,
   zoom = 13,
   zoomPosition = 'bottomright',
@@ -83,9 +91,21 @@ export default function MapPanel({
       }
     >
       <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      <MapRecenter center={marker ?? center} />
+      <MapRecenter center={marker ?? center} zoom={zoom} />
       <MapEventsHandler interactive={interactive} onMarkerChange={onMarkerChange} />
       {interactive && <ZoomControl position={zoomPosition} />}
+      {boundaryPolygon && (
+        <Polygon
+          positions={boundaryPolygon}
+          pathOptions={{
+            color: '#0e7c6d',
+            weight: 2.8,
+            fillColor: '#0e7c6d',
+            fillOpacity: 0.08,
+            dashArray: '6, 6',
+          }}
+        />
+      )}
       {polygons.map((polygon, index) => (
         <Polygon
           key={index}

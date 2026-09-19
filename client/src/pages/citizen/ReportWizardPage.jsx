@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  Building2,
   Camera,
   Check,
   Crosshair,
@@ -16,6 +17,7 @@ import {
 import { api, apiUpload, ApiError } from '../../lib/api'
 import { mediaErrorMessage, useCategories, useCityBoundary } from '../../hooks/data'
 import { forwardGeocode, isPointInBoundary, reverseGeocode } from '../../lib/geo'
+import { BANGLADESH_CITIES, isPointInPolygon } from '../../lib/zones'
 import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -75,6 +77,20 @@ export default function ReportWizardPage() {
     }
   })
 
+  const [selectedCityId, setSelectedCityId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('urbanmend_report_draft')
+      return saved ? JSON.parse(saved).selectedCityId ?? 'dhaka' : 'dhaka'
+    } catch {
+      return 'dhaka'
+    }
+  })
+
+  const currentCity = useMemo(
+    () => BANGLADESH_CITIES.find((c) => c.id === selectedCityId) || BANGLADESH_CITIES[0],
+    [selectedCityId],
+  )
+
   const [marker, setMarker] = useState(() => {
     try {
       const saved = localStorage.getItem('urbanmend_report_draft')
@@ -109,7 +125,32 @@ export default function ReportWizardPage() {
   const [submitError, setSubmitError] = useState(null)
   const [submitted, setSubmitted] = useState(null) // 202 acknowledgement
 
-  const activeMarker = marker ?? center
+  const defaultCityCenter = useMemo(
+    () => (selectedCityId === 'dhaka' && center ? center : currentCity.center),
+    [selectedCityId, center, currentCity],
+  )
+  const activeMarker = marker ?? defaultCityCenter
+
+  // Handle City Corporation selection: shifts map view, relocates pin, and reverse-geocodes
+  const handleCityChange = async (cityId) => {
+    setSelectedCityId(cityId)
+    const city = BANGLADESH_CITIES.find((c) => c.id === cityId) || BANGLADESH_CITIES[0]
+    const newLoc = { lat: city.center.lat, lng: city.center.lng }
+    setMarker(newLoc)
+    setIsGeocoding(true)
+    try {
+      const resolved = await reverseGeocode(newLoc.lat, newLoc.lng)
+      if (resolved) {
+        setAddress(resolved)
+      } else {
+        setAddress(`${city.nameEn.split(' ')[0]}, Bangladesh`)
+      }
+    } catch {
+      setAddress(`${city.nameEn.split(' ')[0]}, Bangladesh`)
+    } finally {
+      setIsGeocoding(false)
+    }
+  }
 
   // Auto-detect citizen's precise GPS location on mount (or geocode center if permission denied)
   useEffect(() => {
@@ -123,6 +164,13 @@ export default function ReportWizardPage() {
           setMarker(userLoc)
           setIsLocating(false)
           setIsGeocoding(true)
+          // Automatically detect matched City Corporation if inside one of them
+          const matchedCity = BANGLADESH_CITIES.find(
+            (c) => c.boundaryPolygon && isPointInPolygon(userLoc, c.boundaryPolygon),
+          )
+          if (matchedCity) {
+            setSelectedCityId(matchedCity.id)
+          }
           const resolved = await reverseGeocode(userLoc.lat, userLoc.lng)
           if (resolved) setAddress(resolved)
           setIsGeocoding(false)
@@ -153,22 +201,40 @@ export default function ReportWizardPage() {
   // Autosave draft to localStorage
   useEffect(() => {
     try {
-      if (category || marker || address || description || categoryGroup) {
+      if (category || marker || address || description || categoryGroup || selectedCityId) {
         localStorage.setItem(
           'urbanmend_report_draft',
-          JSON.stringify({ categoryGroup, category, marker, address, description }),
+          JSON.stringify({ categoryGroup, category, marker, address, description, selectedCityId }),
         )
       }
     } catch {
       // ignore storage quota or disabled storage
     }
-  }, [categoryGroup, category, marker, address, description])
+  }, [categoryGroup, category, marker, address, description, selectedCityId])
 
-  // Boundary validation (FRONT-PLAN §9.2, prevent 422 OUT_OF_CITY)
-  const isInsideBoundary = useMemo(
-    () => isPointInBoundary(activeMarker, boundaryQuery.data),
-    [activeMarker, boundaryQuery.data],
-  )
+  // Boundary validation against selected City Corporation (FRONT-PLAN §9.2, prevent 422 OUT_OF_CITY)
+  const isInsideBoundary = useMemo(() => {
+    if (!activeMarker) return false
+    // 1. If Dhaka and backend GeoJSON boundary is loaded, check GeoJSON
+    if (selectedCityId === 'dhaka' && boundaryQuery.data) {
+      if (isPointInBoundary(activeMarker, boundaryQuery.data)) return true
+    }
+    // 2. Check against selected city corporation boundary polygon
+    if (currentCity?.boundaryPolygon && currentCity.boundaryPolygon.length >= 3) {
+      if (isPointInPolygon(activeMarker, currentCity.boundaryPolygon)) return true
+    }
+    // 3. Fallback: check city bounds bounding box
+    if (currentCity?.bounds) {
+      const [[minLat, minLng], [maxLat, maxLng]] = currentCity.bounds
+      return (
+        activeMarker.lat >= minLat - 0.05 &&
+        activeMarker.lat <= maxLat + 0.05 &&
+        activeMarker.lng >= minLng - 0.05 &&
+        activeMarker.lng <= maxLng + 0.05
+      )
+    }
+    return true
+  }, [activeMarker, currentCity, selectedCityId, boundaryQuery.data])
 
   // BR-3: at least one of description (min 15 chars) or media is required.
   const hasValidContent = photos.length > 0 || description.trim().length >= MIN_DESCRIPTION
@@ -381,6 +447,28 @@ export default function ReportWizardPage() {
           {/* STEP 0: Category, Description & Photos */}
           {step === 0 && (
             <div className="space-y-5">
+              {/* City Corporation Selector */}
+              <div>
+                <label htmlFor="city-select" className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <Building2 className="h-4 w-4 text-[#005a4c]" />
+                  <span>City Corporation</span>
+                </label>
+                <div className="relative">
+                  <select
+                    id="city-select"
+                    value={selectedCityId}
+                    onChange={(e) => handleCityChange(e.target.value)}
+                    className="w-full cursor-pointer rounded-xl border border-line bg-white p-3 text-sm font-medium text-ink focus:border-[#005a4c] focus:outline-none focus:ring-1 focus:ring-[#005a4c]"
+                  >
+                    {BANGLADESH_CITIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nameEn} ({c.nameBn})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               {/* Issue Category */}
               <div>
                 <label className="mb-2.5 block text-sm font-semibold text-ink">Issue Category</label>
@@ -600,6 +688,22 @@ export default function ReportWizardPage() {
               <dl className="space-y-3">
                 <div className="flex items-start justify-between gap-4 border-b border-line pb-3">
                   <div>
+                    <dt className="text-xs font-semibold uppercase tracking-wide text-ink-muted">City Corporation</dt>
+                    <dd className="mt-0.5 text-sm font-semibold text-ink">
+                      {currentCity.nameEn} ({currentCity.nameBn})
+                    </dd>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/citizen/reports/new')}
+                    className="text-xs font-semibold text-[#005a4c] hover:underline"
+                  >
+                    Edit
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-4 border-b border-line pb-3">
+                  <div>
                     <dt className="text-xs font-semibold uppercase tracking-wide text-ink-muted">Category</dt>
                     <dd className="mt-0.5 text-sm font-semibold text-ink">
                       {categoryMeta?.label?.en || (categoryGroup === 'infrastructure' ? 'Infrastructure Hazard' : 'Environmental')}
@@ -673,7 +777,7 @@ export default function ReportWizardPage() {
               {!isInsideBoundary && (
                 <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-800 font-medium flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
-                  <span>Outside city service boundary. Please align the pin inside Dhaka boundaries before submitting.</span>
+                  <span>Outside city service boundary. Please align the pin inside {currentCity.nameEn} boundaries before submitting.</span>
                 </div>
               )}
 
@@ -713,14 +817,28 @@ export default function ReportWizardPage() {
         <div className="relative h-[550px] lg:h-[650px] w-full overflow-hidden rounded-2xl border border-line shadow-xs bg-slate-100">
           {/* Floating Pinpoint Location Card on top-left of the map */}
           <div className="absolute left-4 top-4 z-20 w-84 max-w-[calc(100%-32px)] rounded-xl border border-line bg-white/95 backdrop-blur-xs p-3.5 shadow-md">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#005a4c]/10 text-[#005a4c]">
-                <MapPin className="h-4 w-4" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#005a4c]/10 text-[#005a4c]">
+                  <MapPin className="h-4 w-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900 leading-tight">Pinpoint Location</p>
+                  <p className="text-[11px] text-slate-500">Click or drag the map</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900 leading-tight">Pinpoint Location</p>
-                <p className="text-[11px] text-slate-500">Click or drag the map to align the pin</p>
-              </div>
+              <select
+                value={selectedCityId}
+                onChange={(e) => handleCityChange(e.target.value)}
+                className="cursor-pointer rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-[#005a4c] shadow-2xs focus:border-[#005a4c] focus:outline-none"
+                title="Switch City Corporation"
+              >
+                {BANGLADESH_CITIES.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nameEn.split(' ')[0]}
+                  </option>
+                ))}
+              </select>
             </div>
             <form onSubmit={handleSearchAddress} className="relative mt-2.5">
               <input
@@ -762,12 +880,12 @@ export default function ReportWizardPage() {
             {activeMarker && !isInsideBoundary && (
               <div className="mt-2 flex items-center gap-1.5 rounded bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200">
                 <AlertTriangle className="h-3 w-3 shrink-0 text-rose-600" />
-                <span>Outside city service boundary.</span>
+                <span>Outside {currentCity.nameEn.split(' ')[0]} boundary.</span>
               </div>
             )}
             {activeMarker && (
               <p className="mt-1 text-[10px] font-mono text-slate-400 truncate">
-                Coords: {activeMarker.lat.toFixed(5)}, {activeMarker.lng.toFixed(5)}
+                {currentCity.nameEn.split(' ')[0]} • Coords: {activeMarker.lat.toFixed(5)}, {activeMarker.lng.toFixed(5)}
               </p>
             )}
           </div>
@@ -777,7 +895,9 @@ export default function ReportWizardPage() {
             center={activeMarker}
             marker={activeMarker}
             onMarkerChange={handleMarkerChange}
-            polygons={polygons}
+            polygons={selectedCityId === 'dhaka' && polygons?.length ? polygons : undefined}
+            boundaryPolygon={currentCity?.boundaryPolygon}
+            zoom={currentCity?.zoom || 13}
             interactive={true}
             className="h-full w-full"
           />
