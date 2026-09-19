@@ -19,13 +19,13 @@ const TONES = {
 }
 
 const PILL_TONES = {
-  critical: 'bg-white/95 text-status-critical border-status-critical/40 shadow-xs backdrop-blur-xs',
-  high: 'bg-white/95 text-status-high border-status-high/40 shadow-xs backdrop-blur-xs',
-  medium: 'bg-white/95 text-status-medium border-status-medium/40 shadow-xs backdrop-blur-xs',
-  low: 'bg-white/95 text-status-low border-status-low/40 shadow-xs backdrop-blur-xs',
-  resolved: 'bg-white/95 text-status-resolved border-status-resolved/40 shadow-xs backdrop-blur-xs',
-  processing: 'bg-white/95 text-ink-muted border-line shadow-xs backdrop-blur-xs',
-  neutral: 'bg-white/95 text-ink-muted border-line shadow-xs backdrop-blur-xs',
+  critical: 'bg-rose-50/95 text-rose-600 border-rose-200 shadow-xs backdrop-blur-xs',
+  high: 'bg-amber-50/95 text-amber-600 border-amber-200 shadow-xs backdrop-blur-xs',
+  medium: 'bg-sky-50/95 text-sky-600 border-sky-200 shadow-xs backdrop-blur-xs',
+  low: 'bg-emerald-50/95 text-emerald-600 border-emerald-200 shadow-xs backdrop-blur-xs',
+  resolved: 'bg-emerald-50/95 text-emerald-600 border-emerald-200 shadow-xs backdrop-blur-xs',
+  processing: 'bg-slate-100/95 text-slate-600 border-slate-200 shadow-xs backdrop-blur-xs',
+  neutral: 'bg-slate-100/95 text-slate-600 border-slate-200 shadow-xs backdrop-blur-xs',
 }
 
 const ICONS = {
@@ -43,10 +43,11 @@ export default function StatusBadge({ tone = 'neutral', label, icon = true, pill
   const toneMap = pill ? PILL_TONES : TONES
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide
-        ${toneMap[tone] ?? toneMap.neutral} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
+        pill ? 'font-medium normal-case' : 'font-semibold uppercase tracking-wide'
+      } ${toneMap[tone] ?? toneMap.neutral} ${className}`}
     >
-      {icon && <Icon className="h-3 w-3" aria-hidden="true" />}
+      {icon && <Icon className="h-3.5 w-3.5" aria-hidden="true" />}
       {label}
     </span>
   )

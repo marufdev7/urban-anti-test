@@ -3,11 +3,17 @@ import { api } from '../lib/api'
 
 // ---------- Users / authorities (API §6.2) ----------
 
-export function useUsers(params, options = {}) {
-  const qs = new URLSearchParams(params).toString()
+export function useUsers(params = {}, options = {}) {
+  const searchParams = new URLSearchParams()
+  for (const [key, val] of Object.entries(params || {})) {
+    if (val !== undefined && val !== null && val !== '') {
+      searchParams.set(key, val)
+    }
+  }
+  const qs = searchParams.toString()
   return useQuery({
     queryKey: ['users', qs],
-    queryFn: () => api(`/users?${qs}`),
+    queryFn: () => api(`/users${qs ? `?${qs}` : ''}`),
     placeholderData: (prev) => prev,
     ...options,
   })
@@ -40,7 +46,7 @@ export function useUpdateUser(userId) {
 
 // ---------- Analytics (API §6.9) ----------
 
-export function useAnalytics(groupBy, params = {}) {
+export function useAnalytics(groupBy, params = {}, options = {}) {
   const searchParams = new URLSearchParams({ groupBy })
   for (const [key, val] of Object.entries(params)) {
     if (val !== undefined && val !== null && val !== '') {
@@ -52,6 +58,7 @@ export function useAnalytics(groupBy, params = {}) {
     queryKey: ['analytics', groupBy, qs],
     queryFn: () => api(`/analytics/summary?${qs}`),
     staleTime: 30_000,
+    ...options,
   })
 }
 
@@ -93,10 +100,16 @@ export function useExportStatus(exportId, enabled = false) {
 // ---------- Audit log (API §6.10) ----------
 
 export function useAuditEvents(params = {}) {
-  const qs = new URLSearchParams(params).toString()
+  const searchParams = new URLSearchParams()
+  for (const [key, val] of Object.entries(params || {})) {
+    if (val !== undefined && val !== null && val !== '') {
+      searchParams.set(key, val)
+    }
+  }
+  const qs = searchParams.toString()
   return useQuery({
     queryKey: ['audit-events', qs],
-    queryFn: () => api(`/audit-events?${qs}`),
+    queryFn: () => api(`/audit-events${qs ? `?${qs}` : ''}`),
     placeholderData: (prev) => prev,
   })
 }

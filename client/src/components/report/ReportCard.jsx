@@ -17,7 +17,7 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
   const title =
     truncate(report.description, 45) ||
     categoryLabel(categories, report.classification?.category)
-  const place = report.location?.address || 'Downtown Sector'
+  const place = report.location?.address?.trim() || 'Dhaka Sector'
 
   return (
     <Card className="overflow-hidden transition-shadow hover:shadow-md">
