@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Circle, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -209,6 +209,8 @@ export default function InteractiveMap({
   activeZonePolygon = null,
   focalCircle = null,
   searchMarker = null,
+  drawnPolygonPoints = [],
+  customMarkedArea = null,
   features = [],
   onViewportChange,
   onMapClick,
@@ -251,6 +253,69 @@ export default function InteractiveMap({
           }}
         />
       )}
+
+      {/* Completed Custom Marked Area Polygon */}
+      {customMarkedArea && (
+        <Polygon
+          positions={customMarkedArea}
+          pathOptions={{
+            color: '#059669',
+            weight: 2.5,
+            fillColor: '#10b981',
+            fillOpacity: 0.16,
+          }}
+        />
+      )}
+
+      {/* In-Progress Drawn Polygon Lines & Filled Shape */}
+      {drawnPolygonPoints.length >= 2 && (
+        <Polyline
+          positions={drawnPolygonPoints}
+          pathOptions={{
+            color: '#2563eb',
+            weight: 2.5,
+            dashArray: '6, 6',
+          }}
+        />
+      )}
+      {drawnPolygonPoints.length >= 3 && (
+        <Polygon
+          positions={drawnPolygonPoints}
+          pathOptions={{
+            color: '#2563eb',
+            weight: 1.5,
+            fillColor: '#3b82f6',
+            fillOpacity: 0.15,
+          }}
+        />
+      )}
+
+      {/* Drawn Polygon Vertex Markers */}
+      {drawnPolygonPoints.map((pt, idx) => (
+        <Marker
+          key={`vertex-${idx}`}
+          position={pt}
+          icon={L.divIcon({
+            className: 'vertex-marker',
+            html: `<div style="
+              background: #2563eb;
+              color: white;
+              font-weight: bold;
+              font-size: 10px;
+              width: 18px;
+              height: 18px;
+              border-radius: 50%;
+              border: 2px solid white;
+              box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">${idx + 1}</div>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+          })}
+        />
+      ))}
 
       {/* Focal Inspection Circle */}
       {focalCircle && (
