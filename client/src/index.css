@@ -14,3 +14,18 @@
     @apply outline-none ring-2 ring-primary ring-offset-1;
   }
 }
+
+/* Ensure buttons and action links inside Leaflet popups display pure white text */
+.leaflet-container a.custom-popup-btn,
+.leaflet-popup-content a.custom-popup-btn,
+.custom-popup a.custom-popup-btn {
+  color: #ffffff !important;
+  text-decoration: none !important;
+}
+
+.leaflet-container a.custom-popup-btn:hover,
+.leaflet-popup-content a.custom-popup-btn:hover,
+.custom-popup a.custom-popup-btn:hover {
+  color: #ffffff !important;
+  text-decoration: none !important;
+}

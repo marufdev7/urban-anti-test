@@ -242,9 +242,12 @@ function IssueMarker({ feature, onSelect, getDetailLink }) {
           </div>
           <Link
             to={detailLink}
-            className="mt-2.5 flex w-full items-center justify-center gap-1 rounded-md bg-[#005a4c] px-2.5 py-1.5 text-center text-xs font-semibold text-white shadow-xs hover:bg-[#004a3e] transition active:scale-[0.98]"
+            style={{ color: '#ffffff' }}
+            className="custom-popup-btn mt-2.5 flex w-full items-center justify-center gap-1 rounded-md bg-[#005a4c] px-2.5 py-1.5 text-center text-xs font-semibold !text-white shadow-xs hover:bg-[#004a3e] hover:!text-white transition active:scale-[0.98]"
           >
-            View Report Details &rarr;
+            <span style={{ color: '#ffffff' }} className="!text-white font-semibold">
+              View Report Details &rarr;
+            </span>
           </Link>
         </div>
       </Popup>
