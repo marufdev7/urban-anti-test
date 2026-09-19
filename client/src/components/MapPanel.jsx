@@ -38,10 +38,23 @@ function MapRecenter({ center, zoom }) {
   useEffect(() => {
     if (center?.lat && center?.lng) {
       const prev = prevRef.current
-      const changed = !prev || Math.abs(center.lat - prev.lat) > 0.0001 || Math.abs(center.lng - prev.lng) > 0.0001
+      const latDelta = prev ? Math.abs(center.lat - prev.lat) : Infinity
+      const lngDelta = prev ? Math.abs(center.lng - prev.lng) : Infinity
+      const changed = !prev || latDelta > 0.0001 || lngDelta > 0.0001
+
       if (changed) {
+        // Large jump (> ~5 km) = city switch → fly with the city's default zoom.
+        // Small move = user clicked nearby or dragged pin → keep current zoom.
+        const isCitySwitch = latDelta > 0.05 || lngDelta > 0.05
+        const targetZoom = isCitySwitch ? (zoom || map.getZoom()) : map.getZoom()
+
         prevRef.current = { lat: center.lat, lng: center.lng }
-        map.flyTo([center.lat, center.lng], zoom || map.getZoom(), { duration: 0.8 })
+        if (isCitySwitch) {
+          map.flyTo([center.lat, center.lng], targetZoom, { duration: 0.8 })
+        } else {
+          // For nearby clicks, just pan without changing zoom — instant and non-disruptive
+          map.panTo([center.lat, center.lng], { animate: false })
+        }
       }
     }
   }, [center?.lat, center?.lng, zoom, map])
