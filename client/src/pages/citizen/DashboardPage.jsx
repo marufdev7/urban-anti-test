@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -5,6 +6,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Hourglass,
+  MapPin,
   PlusCircle,
 } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -12,6 +14,18 @@ import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import PageHeader from '../../components/ui/PageHeader'
 import ReportCard from '../../components/report/ReportCard'
+
+/** Haversine distance in km between two {lat, lng} points. */
+function haversineKm(a, b) {
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const R = 6371 // Earth's radius in km
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
 
 /** Citizen dashboard with real live database data. */
 export default function DashboardPage() {
@@ -86,7 +100,52 @@ export default function DashboardPage() {
   ]
 
   // Real database reports for Nearby Activity (newest first)
-  const displayReports = reports.slice(0, 6)
+  // Detect citizen's GPS location for proximity filtering
+  const [userLocation, setUserLocation] = useState(null)
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {}, // silently ignore if denied
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60_000 },
+      )
+    }
+  }, [])
+
+  // Nearby Activity: 1 km first, fallback to 5 km if nothing within 1 km
+  const { nearbyReports, nearbyRadiusKm } = useMemo(() => {
+    if (!userLocation || reports.length === 0) {
+      return { nearbyReports: reports.slice(0, 6), nearbyRadiusKm: null }
+    }
+
+    // Attach distance to each report that has coordinates
+    const withDistance = reports
+      .map((r) => {
+        const loc = r.location
+        if (loc?.lat && loc?.lng) {
+          return { report: r, distance: haversineKm(userLocation, { lat: loc.lat, lng: loc.lng }) }
+        }
+        return null
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.distance - b.distance)
+
+    // Try 1 km first
+    const within1km = withDistance.filter((r) => r.distance <= 1)
+    if (within1km.length > 0) {
+      return { nearbyReports: within1km.slice(0, 6).map((r) => r.report), nearbyRadiusKm: 1 }
+    }
+
+    // Fallback to 5 km
+    const within5km = withDistance.filter((r) => r.distance <= 5)
+    if (within5km.length > 0) {
+      return { nearbyReports: within5km.slice(0, 6).map((r) => r.report), nearbyRadiusKm: 5 }
+    }
+
+    // Nothing within 5 km — show nearest available
+    return { nearbyReports: withDistance.slice(0, 6).map((r) => r.report), nearbyRadiusKm: null }
+  }, [reports, userLocation])
 
   return (
     <div>
@@ -160,8 +219,22 @@ export default function DashboardPage() {
 
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-ink">Nearby Activity</h2>
-          <p className="text-xs text-ink-muted">Recent infrastructure reports in your district.</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-ink">Nearby Activity</h2>
+            {nearbyRadiusKm && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#005a4c]/10 px-2 py-0.5 text-[11px] font-semibold text-[#005a4c]">
+                <MapPin className="h-3 w-3" />
+                {nearbyRadiusKm} km
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-ink-muted">
+            {nearbyRadiusKm === 1
+              ? 'Reports within 1 km of your location.'
+              : nearbyRadiusKm === 5
+                ? 'No reports within 1 km — showing reports within 5 km.'
+                : 'Recent infrastructure reports in your area.'}
+          </p>
         </div>
         <Link
           to="/citizen/map"
@@ -172,7 +245,7 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {displayReports.length === 0 ? (
+      {nearbyReports.length === 0 ? (
         <Card className="p-8 text-center">
           <EmptyState
             title="No reports found"
@@ -181,7 +254,7 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {displayReports.map((report) => {
+          {nearbyReports.map((report) => {
             const linkedIssue = issueById.get(report.issueId)
             const resolved =
               linkedIssue?.status === 'resolved' ||
