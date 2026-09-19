@@ -560,6 +560,7 @@ class IssueMapQuerySerializer(CamelCaseSerializer):
     category = serializers.CharField(required=False)
     severity = serializers.CharField(required=False)
     status = serializers.CharField(required=False)
+    assigned_to = serializers.ChoiceField(choices=["me"], required=False)
     bbox = serializers.CharField(required=True)
     zoom = serializers.IntegerField(required=False, default=12, min_value=0, max_value=22)
 
@@ -573,6 +574,13 @@ class IssueMapQuerySerializer(CamelCaseSerializer):
             self,
             message="This query parameter is not accepted by this endpoint.",
         )
+        if attrs.get("assigned_to") == "me":
+            request = self.context.get("request")
+            if request is None or not request.user.is_authenticated:
+                raise serializers.ValidationError(
+                    {"assigned_to": "Sign in to filter by your own assignments."},
+                    code="INVALID",
+                )
         return attrs
 
 

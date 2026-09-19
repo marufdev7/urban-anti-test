@@ -302,15 +302,17 @@ class IssueMapView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request) -> Response:
-        params = IssueMapQuerySerializer(data=request.query_params)
+        params = IssueMapQuerySerializer(data=request.query_params, context={"request": request})
         params.is_valid(raise_exception=True)
         filters = params.validated_data
         bbox = filters["bbox"]
+        assigned_to_me = filters.get("assigned_to") == "me"
         queryset = selectors.list_issues(
             actor=request.user,
             category_slugs=filters.get("category", ()),
             severities=filters.get("severity", ()),
             statuses=filters.get("status", ()),
+            assigned_to_me=assigned_to_me,
             bbox=bbox,
         )
         zoom = filters["zoom"]
@@ -332,6 +334,7 @@ class IssueMapView(APIView):
                 "properties": {
                     "severity": issue.current_severity,
                     "status": issue.status,
+                    "assignedTo": str(issue.assignee_id) if issue.assignee_id else None,
                     "corroborationCount": _corroboration_total(issue),
                     "count": 1,
                 },
