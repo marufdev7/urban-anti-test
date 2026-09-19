@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { boundaryCenter, boundaryToLatLngs, DHAKA_CENTER } from '../lib/geo'
@@ -103,10 +104,19 @@ export function useCityBoundary() {
     staleTime: 30 * 60_000,
   })
   const feature = query.data
+
+  const center = useMemo(() => {
+    return feature ? boundaryCenter(feature) : DHAKA_CENTER
+  }, [feature])
+
+  const polygons = useMemo(() => {
+    return feature ? boundaryToLatLngs(feature) : []
+  }, [feature])
+
   return {
     ...query,
-    center: feature ? boundaryCenter(feature) : DHAKA_CENTER,
-    polygons: feature ? boundaryToLatLngs(feature) : [],
+    center,
+    polygons,
   }
 }
 

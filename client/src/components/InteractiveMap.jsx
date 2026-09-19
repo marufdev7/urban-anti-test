@@ -64,16 +64,44 @@ function createClusterIcon(count) {
   })
 }
 
+function areBoundsEqual(b1, b2) {
+  if (!b1 && !b2) return true
+  if (!b1 || !b2) return false
+  const getCoords = (b) => {
+    if (Array.isArray(b) && Array.isArray(b[0])) {
+      return [b[0][0], b[0][1], b[1][0], b[1][1]]
+    }
+    if (b && typeof b.getSouthWest === 'function' && typeof b.getNorthEast === 'function') {
+      const sw = b.getSouthWest()
+      const ne = b.getNorthEast()
+      return [sw.lat, sw.lng, ne.lat, ne.lng]
+    }
+    return null
+  }
+  const c1 = getCoords(b1)
+  const c2 = getCoords(b2)
+  if (!c1 || !c2) return b1 === b2
+  return c1.every((val, idx) => Math.abs(val - c2[idx]) < 0.0001)
+}
+
 function MapEventsListener({ onViewportChange, onMapClick }) {
+  const onViewportChangeRef = useRef(onViewportChange)
+  const onMapClickRef = useRef(onMapClick)
+
+  useEffect(() => {
+    onViewportChangeRef.current = onViewportChange
+    onMapClickRef.current = onMapClick
+  })
+
   const map = useMapEvents({
     moveend: () => {
       const bounds = map.getBounds()
       const zoom = map.getZoom()
       const bbox = boundsToBBox(bounds)
-      if (bbox) onViewportChange?.({ bbox, zoom })
+      if (bbox) onViewportChangeRef.current?.({ bbox, zoom })
     },
     click: (e) => {
-      onMapClick?.(e.latlng)
+      onMapClickRef.current?.(e.latlng)
     },
   })
 
@@ -82,8 +110,8 @@ function MapEventsListener({ onViewportChange, onMapClick }) {
     const bounds = map.getBounds()
     const zoom = map.getZoom()
     const bbox = boundsToBBox(bounds)
-    if (bbox) onViewportChange?.({ bbox, zoom })
-  }, [map, onViewportChange])
+    if (bbox) onViewportChangeRef.current?.({ bbox, zoom })
+  }, [map])
 
   return null
 }
@@ -91,17 +119,62 @@ function MapEventsListener({ onViewportChange, onMapClick }) {
 function MapViewController({ center, zoom, bounds }) {
   const map = useMap()
   const prevBoundsRef = useRef(null)
+  const prevCenterRef = useRef(null)
+  const prevZoomRef = useRef(null)
+  const isFirstRender = useRef(true)
 
   useEffect(() => {
-    if (bounds && bounds !== prevBoundsRef.current) {
-      prevBoundsRef.current = bounds
-      try {
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true })
-      } catch {}
-    } else if (center) {
-      map.setView([center.lat, center.lng], zoom || map.getZoom(), { animate: true })
+    // 1. Initial render: MapContainer already initializes with center & zoom
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      if (bounds) {
+        prevBoundsRef.current = bounds
+        try {
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
+        } catch {}
+      }
+      if (center && center.lat != null && center.lng != null) {
+        prevCenterRef.current = { lat: center.lat, lng: center.lng }
+      }
+      prevZoomRef.current = zoom
+      return
     }
-  }, [map, center, zoom, bounds])
+
+    // 2. Bounds change: only if bounds genuinely changed to a different geographic box
+    if (bounds) {
+      if (!areBoundsEqual(bounds, prevBoundsRef.current)) {
+        prevBoundsRef.current = bounds
+        try {
+          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true })
+        } catch {}
+      }
+      return
+    }
+
+    // 3. Center or Zoom change: only if props changed from previous prop values
+    if (center && center.lat != null && center.lng != null) {
+      const prevCenter = prevCenterRef.current
+      const prevZoom = prevZoomRef.current
+
+      const centerChanged =
+        !prevCenter ||
+        Math.abs(center.lat - prevCenter.lat) > 0.0001 ||
+        Math.abs(center.lng - prevCenter.lng) > 0.0001
+
+      // Zoom prop changed externally (e.g. searching address or clicking preset)
+      const zoomChanged =
+        zoom != null &&
+        prevZoom != null &&
+        zoom !== prevZoom
+
+      if (centerChanged || zoomChanged) {
+        prevCenterRef.current = { lat: center.lat, lng: center.lng }
+        prevZoomRef.current = zoom
+        const targetZoom = zoomChanged ? zoom : map.getZoom()
+        map.setView([center.lat, center.lng], targetZoom, { animate: true })
+      }
+    }
+  }, [map, center?.lat, center?.lng, zoom, bounds])
 
   return null
 }
