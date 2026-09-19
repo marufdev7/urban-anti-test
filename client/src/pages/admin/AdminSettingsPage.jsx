@@ -4,11 +4,14 @@ import {
   Activity,
   Bell,
   Check,
+  Database,
   Edit2,
   FolderTree,
   Network,
   Plus,
   Power,
+  Search,
+  Server,
   Shield,
   ShieldCheck,
   Tag,
@@ -36,6 +39,12 @@ export default function AdminSettingsPage() {
   // Language settings
   const [preferredLanguage, setPreferredLanguage] = useState(user?.preferredLanguage ?? 'en')
   const [profileSuccess, setProfileSuccess] = useState(false)
+
+  useEffect(() => {
+    if (user?.preferredLanguage) {
+      setPreferredLanguage(user.preferredLanguage)
+    }
+  }, [user])
 
   const updateProfile = useMutation({
     mutationFn: (body) => api('/users/me', { method: 'PATCH', body }),
@@ -205,7 +214,38 @@ export default function AdminSettingsPage() {
     onError: (err) => setTotpError(err.message),
   })
 
-  const clusteringRules = clusteringQuery.data?.data ?? clusteringQuery.data ?? []
+  const rawKeywords = severityQuery.data?.data ?? severityQuery.data
+  const keywords = Array.isArray(rawKeywords) ? rawKeywords : []
+
+  const rawRules = clusteringQuery.data?.data ?? clusteringQuery.data
+  const clusteringRules = Array.isArray(rawRules) ? rawRules : []
+
+  // Filters for severity keywords
+  const [kwSearch, setKwSearch] = useState('')
+  const [kwSeverityFilter, setKwSeverityFilter] = useState('all')
+  const [kwLangFilter, setKwLangFilter] = useState('all')
+
+  // Filter for clustering rules
+  const [ruleSearch, setRuleSearch] = useState('')
+
+  const filteredKeywords = keywords.filter((kw) => {
+    if (kwSeverityFilter !== 'all' && kw.severity !== kwSeverityFilter) return false
+    if (kwLangFilter !== 'all' && kw.language !== kwLangFilter) return false
+    if (kwSearch.trim()) {
+      const q = kwSearch.toLowerCase()
+      const matchesTerm = kw.term?.toLowerCase().includes(q)
+      const matchesCat = kw.category?.toLowerCase().includes(q)
+      if (!matchesTerm && !matchesCat) return false
+    }
+    return true
+  })
+
+  const filteredRules = clusteringRules.filter((r) => {
+    if (ruleSearch.trim()) {
+      return r.category?.toLowerCase().includes(ruleSearch.toLowerCase())
+    }
+    return true
+  })
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -463,7 +503,7 @@ export default function AdminSettingsPage() {
           {/* TAB 2: Severity Keywords */}
           {refTab === 'keywords' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-ink-muted">
                   Heuristic signals extracted from citizen report titles and descriptions to flag emergency severity.
                 </p>
@@ -472,16 +512,56 @@ export default function AdminSettingsPage() {
                 </Button>
               </div>
 
-              {keywords.length === 0 ? (
+              {/* Keyword Filter & Search Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative min-w-[200px] flex-1">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+                  <input
+                    type="text"
+                    value={kwSearch}
+                    onChange={(e) => setKwSearch(e.target.value)}
+                    placeholder="Search keywords or category..."
+                    className="w-full rounded-button border border-line bg-surface py-1.5 pl-8 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                <Select
+                  value={kwSeverityFilter}
+                  onChange={(e) => setKwSeverityFilter(e.target.value)}
+                  options={[
+                    { value: 'all', label: 'All Severities' },
+                    { value: 'critical', label: 'Critical' },
+                    { value: 'high', label: 'High' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'low', label: 'Low' },
+                  ]}
+                  className="text-xs"
+                />
+                <Select
+                  value={kwLangFilter}
+                  onChange={(e) => setKwLangFilter(e.target.value)}
+                  options={[
+                    { value: 'all', label: 'All Languages' },
+                    { value: 'en', label: 'English (EN)' },
+                    { value: 'bn', label: 'Bengali (BN)' },
+                  ]}
+                  className="text-xs"
+                />
+              </div>
+
+              {filteredKeywords.length === 0 ? (
                 <EmptyState
                   icon={Tag}
-                  title="No severity keywords defined"
-                  message="Create keyword signals to help automate emergency priority triage."
+                  title="No severity keywords found"
+                  message={
+                    keywords.length === 0
+                      ? "Create keyword signals to help automate emergency priority review."
+                      : "No keywords match your current search filters."
+                  }
                 />
               ) : (
-                <div className="overflow-x-auto rounded-panel border border-line">
+                <div className="max-h-[480px] overflow-y-auto overflow-x-auto rounded-panel border border-line">
                   <table className="w-full text-left text-xs">
-                    <thead className="border-b border-line bg-surface-sunken text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+                    <thead className="sticky top-0 z-10 border-b border-line bg-surface-sunken text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
                       <tr>
                         <th className="px-3 py-2.5">Term / Keyword</th>
                         <th className="px-3 py-2.5">Severity</th>
@@ -491,8 +571,8 @@ export default function AdminSettingsPage() {
                         <th className="px-3 py-2.5 text-right">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-line">
-                      {keywords.map((kw) => (
+                    <tbody className="divide-y divide-line bg-surface">
+                      {filteredKeywords.map((kw) => (
                         <tr key={kw.id} className="hover:bg-surface-sunken/50">
                           <td className="px-3 py-2 font-medium text-ink">{kw.term}</td>
                           <td className="px-3 py-2">
@@ -542,7 +622,7 @@ export default function AdminSettingsPage() {
           {/* TAB 3: Clustering Rules */}
           {refTab === 'clustering' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-ink-muted">
                   Spatial and temporal thresholds used by the clustering engine to aggregate reports into a single incident.
                 </p>
@@ -551,11 +631,29 @@ export default function AdminSettingsPage() {
                 </Button>
               </div>
 
-              {clusteringRules.length === 0 ? (
+              {/* Rule Search Controls */}
+              <div className="max-w-xs">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+                  <input
+                    type="text"
+                    value={ruleSearch}
+                    onChange={(e) => setRuleSearch(e.target.value)}
+                    placeholder="Filter by category slug..."
+                    className="w-full rounded-button border border-line bg-surface py-1.5 pl-8 pr-3 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              {filteredRules.length === 0 ? (
                 <EmptyState
                   icon={Network}
                   title="No clustering rules defined"
-                  message="Add spatial radius and temporal window rules for municipal incident aggregation."
+                  message={
+                    clusteringRules.length === 0
+                      ? "Add spatial radius and temporal window rules for municipal incident aggregation."
+                      : "No clustering rules match your search."
+                  }
                 />
               ) : (
                 <div className="overflow-x-auto rounded-panel border border-line">
@@ -570,7 +668,7 @@ export default function AdminSettingsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
-                      {clusteringRules.map((rule) => {
+                      {filteredRules.map((rule) => {
                         const radius = rule.radiusM ?? rule.radius_m ?? '—'
                         const hours = rule.timeWindowHours ?? rule.time_window_hours ?? '—'
                         return (
@@ -679,6 +777,68 @@ export default function AdminSettingsPage() {
               )}
             </div>
           </form>
+        </CardBody>
+      </Card>
+
+      {/* System Infrastructure Diagnostics Card */}
+      <Card>
+        <CardHeader
+          title={
+            <span className="flex items-center gap-2">
+              <Server className="h-4 w-4 text-primary" aria-hidden="true" />
+              System Infrastructure &amp; Services
+            </span>
+          }
+        />
+        <CardBody className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-panel border border-line bg-surface-sunken p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-ink">API Gateway</span>
+                <span className="h-2 w-2 rounded-full bg-status-resolved" />
+              </div>
+              <p className="mt-1 font-mono text-xs text-ink-muted">/api/v1 (FastAPI/Uvicorn)</p>
+              <p className="mt-2 text-[11px] font-medium text-status-resolved">Operational</p>
+            </div>
+
+            <div className="rounded-panel border border-line bg-surface-sunken p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-ink">Spatial Database</span>
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    healthQuery.data?.dependencies?.database?.status === 'ok'
+                      ? 'bg-status-resolved'
+                      : 'bg-status-critical'
+                  }`}
+                />
+              </div>
+              <p className="mt-1 font-mono text-xs text-ink-muted">PostgreSQL 17 + PostGIS</p>
+              <p className="mt-2 text-[11px] font-medium text-status-resolved">
+                {healthQuery.data?.dependencies?.database?.status === 'ok'
+                  ? 'Connected & Healthy'
+                  : 'Degraded'}
+              </p>
+            </div>
+
+            <div className="rounded-panel border border-line bg-surface-sunken p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-ink">Cache &amp; Message Broker</span>
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    healthQuery.data?.dependencies?.cache?.status === 'ok'
+                      ? 'bg-status-resolved'
+                      : 'bg-status-critical'
+                  }`}
+                />
+              </div>
+              <p className="mt-1 font-mono text-xs text-ink-muted">Redis 8-alpine</p>
+              <p className="mt-2 text-[11px] font-medium text-status-resolved">
+                {healthQuery.data?.dependencies?.cache?.status === 'ok'
+                  ? 'Connected & Healthy'
+                  : 'Degraded'}
+              </p>
+            </div>
+          </div>
         </CardBody>
       </Card>
 

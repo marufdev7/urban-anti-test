@@ -135,7 +135,7 @@ export default function AuthoritySettingsPage() {
               Assigned Category Scope
             </p>
             <p className="mt-0.5 text-xs text-ink-muted">
-              You are authorized to triage, assign, and resolve issues within these categories:
+              You are authorized to review, assign, and resolve issues within these categories:
             </p>
             <div className="mt-2.5 flex flex-wrap gap-1.5">
               {user?.categoryScope?.length ? (

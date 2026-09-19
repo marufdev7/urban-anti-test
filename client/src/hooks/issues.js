@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 // excluded — they are not filterable, per IssueStatusQuerySerializer).
 export const ISSUE_STATUSES = [
   { value: 'submitted', label: 'Submitted' },
-  { value: 'triaged', label: 'Triaged' },
+  { value: 'triaged', label: 'Under Review' },
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },

@@ -309,7 +309,7 @@ export default function ReportWizardPage() {
           <p className="mt-2 text-sm text-ink-muted">
             Your report ID is{' '}
             <span className="font-mono font-bold text-ink">UM-{shortId(submitted.reportId)}</span>.
-            Our AI triage will classify it and an authority will review it shortly.
+            Our AI system will review and classify it, and an authority will inspect it shortly.
           </p>
           <p className="mt-1 text-xs text-ink-faint">
             Full reference: {submitted.reportId}

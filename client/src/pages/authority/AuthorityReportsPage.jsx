@@ -18,7 +18,7 @@ const STATUSES = [
   { value: '', label: 'All Statuses' },
   { value: 'submitted', label: 'Submitted' },
   { value: 'processing', label: 'Processing' },
-  { value: 'triaged', label: 'Triaged' },
+  { value: 'triaged', label: 'Under Review' },
 ]
 
 export default function AuthorityReportsPage() {
@@ -269,7 +269,7 @@ export default function AuthorityReportsPage() {
                           Issue #{shortId(r.issueId)}
                         </Link>
                       ) : (
-                        <span className="text-xs text-ink-faint">Pending triage</span>
+                        <span className="text-xs text-ink-faint">Pending review</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">

@@ -21,7 +21,7 @@ const SEVERITIES = [
 
 const STATUSES = [
   { value: '', label: 'All Statuses' },
-  { value: 'triaged', label: 'Triaged' },
+  { value: 'triaged', label: 'Under Review' },
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'dispatched', label: 'Dispatched' },
   { value: 'in_progress', label: 'In Progress' },

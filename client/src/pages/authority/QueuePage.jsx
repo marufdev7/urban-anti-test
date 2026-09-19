@@ -259,7 +259,7 @@ export default function QueuePage() {
         <p className="mt-1 text-sm text-ink-muted">
           {isMyIssues
             ? 'Municipal incidents assigned directly to you for municipal response, dispatch, and resolution.'
-            : 'Manage and triage active municipal reports across your jurisdiction.'}
+            : 'Manage and review active municipal reports across your jurisdiction.'}
         </p>
       </div>
 
@@ -269,7 +269,7 @@ export default function QueuePage() {
           <div className="w-full max-w-md rounded-panel border border-line bg-surface-panel p-6 shadow-menu">
             <h3 className="text-lg font-bold text-ink">Log Manual Municipal Report</h3>
             <p className="mt-1 text-xs text-ink-muted">
-              File an incident received via hotline or radio dispatch to initiate automated triage.
+              File an incident received via hotline or radio dispatch to initiate automated review.
             </p>
             {manualError && (
               <p className="mt-3 rounded border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
@@ -432,7 +432,7 @@ export default function QueuePage() {
                 ? 'You currently have no tasks assigned to you. Browse the Work Queue to claim unassigned issues or wait for dispatch.'
                 : hasFilters
                 ? 'Try widening the filters or clearing them.'
-                : 'New reports will appear here as triage processes them.'
+                : 'New reports will appear here as reports are reviewed.'
             }
             action={
               isMyIssues ? (

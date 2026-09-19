@@ -15,7 +15,7 @@ const SEV_LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 
 const STATUS_LABELS = {
   submitted: 'Submitted',
   processing: 'Processing',
-  triaged: 'Triaged',
+  triaged: 'Under Review',
   resolved: 'Resolved',
   hidden: 'Hidden',
   removed: 'Removed',

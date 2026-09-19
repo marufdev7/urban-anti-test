@@ -77,6 +77,9 @@ export default function IssueDetailPage() {
   const { data: categories } = useCategories()
   const { polygons, center } = useCityBoundary()
 
+  const backLink = user?.role === 'admin' ? '/admin/queue' : '/authority/queue'
+  const backLabel = user?.role === 'admin' ? 'Back to Moderation Queue' : 'Back to the queue'
+
   const issue = useIssue(issueId)
   const memberReports = useIssueReports(issueId)
   const statusEvents = useStatusEvents(issueId)
@@ -134,8 +137,8 @@ export default function IssueDetailPage() {
         <p className="text-sm text-status-critical" role="alert">
           Could not load this incident: {issue.error.message}
         </p>
-        <Link to="/authority/queue" className="mt-2 inline-block text-sm text-primary hover:underline">
-          Back to the queue
+        <Link to={backLink} className="mt-2 inline-block text-sm text-primary hover:underline">
+          {backLabel}
         </Link>
       </Card>
     )
@@ -268,7 +271,7 @@ export default function IssueDetailPage() {
         <div>
           <div className="flex items-center gap-2">
             <Link
-              to="/authority/queue"
+              to={backLink}
               className="flex items-center gap-1 text-xs font-semibold text-ink-muted hover:text-ink"
             >
               <ArrowLeft className="h-3.5 w-3.5" /> Back

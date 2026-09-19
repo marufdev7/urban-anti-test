@@ -248,7 +248,7 @@ export default function ReportTrackingPage() {
               title={
                 <span className="flex items-center gap-2 font-bold text-ink">
                   <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-                  AI Triage Assessment
+                  AI Review &amp; Assessment
                 </span>
               }
             />

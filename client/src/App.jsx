@@ -1,5 +1,5 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { AuthProvider } from './auth/AuthContext'
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom'
+import { AuthProvider, useAuth } from './auth/AuthContext'
 import { RequireAuth, RequireRole, RoleHomeRedirect } from './auth/guards'
 import AppShell from './layout/AppShell'
 import OfflineBanner from './components/ui/OfflineBanner'
@@ -28,6 +28,15 @@ import AdminMapPage from './pages/admin/AdminMapPage'
 import AdminReportsPage from './pages/admin/AdminReportsPage'
 import AdminSettingsPage from './pages/admin/AdminSettingsPage'
 import AuditLogPage from './pages/admin/AuditLogPage'
+
+function AuthorityQueueDetailRoute() {
+  const { user } = useAuth()
+  const { reportId } = useParams()
+  if (user?.role === 'admin') {
+    return <Navigate to={`/admin/queue/${reportId}`} replace />
+  }
+  return <IssueDetailPage />
+}
 
 /**
  * Route map = FRONTEND_PLAN.md §2, one-to-one.
@@ -63,12 +72,17 @@ export default function App() {
             </Route>
 
             {/* Authority workspace */}
+            <Route element={<RequireRole role={['authority', 'admin']} />}>
+              <Route element={<AppShell />}>
+                <Route path="/authority/queue/:reportId" element={<AuthorityQueueDetailRoute />} />
+              </Route>
+            </Route>
+
             <Route element={<RequireRole role="authority" />}>
               <Route element={<AppShell />}>
                 <Route path="/authority/dashboard" element={<AuthorityDashboardPage />} />
                 <Route path="/authority/queue" element={<QueuePage />} />
                 <Route path="/authority/my-issues" element={<QueuePage />} />
-                <Route path="/authority/queue/:reportId" element={<IssueDetailPage />} />
                 <Route path="/authority/map" element={<AuthorityMapPage />} />
                 <Route path="/authority/reports" element={<AuthorityReportsPage />} />
                 <Route path="/authority/settings" element={<AuthoritySettingsPage />} />
@@ -80,6 +94,7 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
                 <Route path="/admin/queue" element={<ModerationQueuePage />} />
+                <Route path="/admin/queue/:reportId" element={<IssueDetailPage />} />
                 <Route path="/admin/moderation/:flagId" element={<ModerationQueuePage />} />
                 <Route path="/admin/map" element={<AdminMapPage />} />
                 <Route path="/admin/reports" element={<AdminReportsPage />} />

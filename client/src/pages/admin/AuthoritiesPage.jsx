@@ -2,12 +2,14 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Download,
+  FileText,
   Search,
   UserCheck,
   UserPlus,
 } from 'lucide-react'
 import { useAuthorities } from '../../hooks/admin'
 import { categoryLabel, useCategories } from '../../hooks/data'
+import { exportAuthoritiesPdf } from '../../lib/pdfExport'
 import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card, { CardBody } from '../../components/ui/Card'
@@ -32,7 +34,7 @@ function formatAuthority(user, categories) {
     role = 'Field Supervisor'
   } else if (emailPrefix.includes('grid')) {
     name = 'Electrical Grid Inspector'
-    role = 'Triage Specialist'
+    role = 'Review Specialist'
   } else if (emailPrefix.includes('field')) {
     name = 'Field Liaison Officer'
     role = 'DPW Liaison'
@@ -41,7 +43,7 @@ function formatAuthority(user, categories) {
     role = 'Field Supervisor'
   } else if (emailPrefix.includes('traffic')) {
     name = 'Traffic Systems Specialist'
-    role = 'Triage Specialist'
+    role = 'Review Specialist'
   } else if (emailPrefix.includes('health')) {
     name = 'Public Health & Waste Inspector'
     role = 'Field Supervisor'
@@ -53,7 +55,7 @@ function formatAuthority(user, categories) {
       .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ')
     if (user.role === 'admin') role = 'Administrator'
-    else if (user.categoryScope?.length === 7) role = 'Triage Specialist'
+    else if (user.categoryScope?.length === 7) role = 'Review Specialist'
     else role = 'Field Supervisor'
   }
 
@@ -427,14 +429,24 @@ export default function AuthoritiesPage() {
                 ))
               )}
 
-              <div className="border-t border-line pt-3">
+              <div className="flex items-center justify-between border-t border-line pt-3">
+                <button
+                  type="button"
+                  onClick={() => exportAuthoritiesPdf({ authorities: displayAuthorities })}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                  title="Download official PDF compliance report"
+                >
+                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span>Export PDF</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleExportCompliance}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink hover:underline"
+                  title="Download CSV spreadsheet"
                 >
                   <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Export Compliance Report</span>
+                  <span>Export CSV</span>
                 </button>
               </div>
             </CardBody>

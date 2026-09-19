@@ -22,7 +22,7 @@ const SEVERITIES = [
 
 const STATUSES = [
   { value: '', label: 'All Statuses' },
-  { value: 'triaged', label: 'Triaged' },
+  { value: 'triaged', label: 'Under Review' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
 ]
@@ -164,7 +164,7 @@ export default function CitizenMapPage() {
                   />
                 </div>
                 <p className="mt-1 text-xs text-ink-muted">
-                  Status: <span className="font-medium text-ink capitalize">{selectedIssue.properties?.status?.replaceAll('_', ' ') ?? 'Triaged'}</span>
+                  Status: <span className="font-medium text-ink capitalize">{selectedIssue.properties?.status === 'triaged' ? 'Under Review' : (selectedIssue.properties?.status?.replaceAll('_', ' ') ?? 'Under Review')}</span>
                   {selectedIssue.properties?.corroborationCount > 1 && (
                     <span> · {selectedIssue.properties.corroborationCount} confirmations</span>
                   )}

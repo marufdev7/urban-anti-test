@@ -68,7 +68,13 @@ export default function Sidebar({ onNavigate }) {
       return location.pathname === '/authority/my-issues' || location.search.includes('assignedTo=me')
     }
     if (to === '/authority/queue') {
-      return location.pathname === '/authority/queue' && !location.search.includes('assignedTo=me')
+      return (
+        (location.pathname === '/authority/queue' || location.pathname.startsWith('/authority/queue/')) &&
+        !location.search.includes('assignedTo=me')
+      )
+    }
+    if (to === '/admin/queue') {
+      return location.pathname === '/admin/queue' || location.pathname.startsWith('/admin/queue/')
     }
     return navIsActive
   }
@@ -81,7 +87,7 @@ export default function Sidebar({ onNavigate }) {
           <ShieldCheck className="h-8 w-8 text-primary" aria-hidden="true" />
           <div>
             <p className="text-base font-bold leading-tight text-ink">UrbanMend</p>
-            <p className="text-xs text-ink-muted">Public Safety Triage</p>
+            <p className="text-xs text-ink-muted">Public Safety &amp; Review</p>
           </div>
         </div>
         <button

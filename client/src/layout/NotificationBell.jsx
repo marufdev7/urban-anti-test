@@ -112,6 +112,9 @@ export default function NotificationBell() {
     if (user?.role === 'authority') {
       return `/authority/queue/${notification.issueId}`
     }
+    if (user?.role === 'admin') {
+      return `/admin/queue/${notification.issueId}`
+    }
     return `/admin/queue`
   }
 

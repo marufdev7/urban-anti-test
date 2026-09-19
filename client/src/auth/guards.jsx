@@ -20,10 +20,11 @@ export function RequireAuth() {
   return <Outlet />
 }
 
-/** Narrows an authenticated area to a single role. */
+/** Narrows an authenticated area to one or more allowed roles. */
 export function RequireRole({ role }) {
   const { user } = useAuth()
-  if (user.role !== role) {
+  const allowed = Array.isArray(role) ? role : [role]
+  if (!user || !allowed.includes(user.role)) {
     return <Navigate to="/403" replace />
   }
   return <Outlet />

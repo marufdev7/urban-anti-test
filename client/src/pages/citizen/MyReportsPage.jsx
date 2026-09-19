@@ -13,7 +13,7 @@ const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
   { value: 'submitted', label: 'Submitted' },
   { value: 'processing', label: 'Processing' },
-  { value: 'triaged', label: 'Triaged' },
+  { value: 'triaged', label: 'Under Review' },
 ]
 
 /** /citizen/reports — full searchable list of the citizen's own reports. */

@@ -2,7 +2,9 @@ import { useState, useMemo } from 'react'
 import {
   AlertTriangle,
   Calendar,
+  CheckCircle2,
   Download,
+  FileText,
   Flame,
   Loader2,
   Target,
@@ -10,10 +12,13 @@ import {
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
+import { useAuth } from '../../auth/AuthContext'
 import { useAnalytics, useCreateExport, useExportStatus } from '../../hooks/admin'
 import { useIssues } from '../../hooks/issues'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { formatHours } from '../../lib/format'
+import { api } from '../../lib/api'
+import { exportIssuesPdf, exportIssuesCsv } from '../../lib/pdfExport'
 import Button from '../../components/ui/Button'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
 import PageHeader from '../../components/ui/PageHeader'
@@ -132,10 +137,14 @@ export default function AdminDashboardPage() {
     }
   }, [filteredIssues])
 
-  // Export controls: Start Date, End Date, Category
+  // Export controls: Start Date, End Date, Category, Format
+  const { user } = useAuth()
   const [expStart, setExpStart] = useState('')
   const [expEnd, setExpEnd] = useState('')
   const [expCategory, setExpCategory] = useState('')
+  const [expFormat, setExpFormat] = useState('pdf')
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportSuccessMsg, setExportSuccessMsg] = useState(null)
   const [exportId, setExportId] = useState(null)
   const createExport = useCreateExport()
   const exportStatus = useExportStatus(exportId, !!exportId)
@@ -278,20 +287,81 @@ export default function AdminDashboardPage() {
   const onExport = async (e) => {
     e.preventDefault()
     setExpError(null)
-    setExportId(null)
-    const filters = {}
-    if (expStart) filters.from = new Date(`${expStart}T00:00:00`).toISOString()
-    if (expEnd) filters.to = new Date(`${expEnd}T23:59:59`).toISOString()
-    if (expCategory) filters.category = expCategory
+    setExportSuccessMsg(null)
+    setIsExporting(true)
+
     try {
-      const result = await createExport.mutateAsync({
-        resource: 'issues',
-        format: 'csv',
-        filters,
-      })
-      setExportId(result.exportId)
+      // 1. Fetch matching issues from database
+      const queryParams = new URLSearchParams({ limit: '500' })
+      if (expCategory) queryParams.set('category', expCategory)
+      const res = await api(`/issues?${queryParams.toString()}`)
+      let dataset = Array.isArray(res?.data) ? res.data : allIssues
+
+      // 2. Filter by date if specified
+      if (expStart) {
+        const startTime = new Date(`${expStart}T00:00:00`).getTime()
+        dataset = dataset.filter((i) => {
+          const t = new Date(i.openedAt || i.createdAt).getTime()
+          return !isNaN(t) && t >= startTime
+        })
+      }
+      if (expEnd) {
+        const endTime = new Date(`${expEnd}T23:59:59`).getTime()
+        dataset = dataset.filter((i) => {
+          const t = new Date(i.openedAt || i.createdAt).getTime()
+          return !isNaN(t) && t <= endTime
+        })
+      }
+
+      const activeFilters = {
+        from: expStart ? new Date(`${expStart}T00:00:00`).toISOString() : null,
+        to: expEnd ? new Date(`${expEnd}T23:59:59`).toISOString() : null,
+        category: expCategory || null,
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10)
+
+      if (expFormat === 'pdf') {
+        exportIssuesPdf({
+          issues: dataset,
+          categories,
+          filters: activeFilters,
+          user,
+          filename: `urbanmend_incident_report_${dateStr}.pdf`,
+        })
+        setExportSuccessMsg(
+          `Official PDF report successfully downloaded (${dataset.length} incident${dataset.length === 1 ? '' : 's'}).`
+        )
+      } else {
+        // Also trigger backend export job if available
+        const backendFilters = {}
+        if (expStart) backendFilters.from = new Date(`${expStart}T00:00:00`).toISOString()
+        if (expEnd) backendFilters.to = new Date(`${expEnd}T23:59:59`).toISOString()
+        if (expCategory) backendFilters.category = expCategory
+        try {
+          const result = await createExport.mutateAsync({
+            resource: 'issues',
+            format: 'csv',
+            filters: backendFilters,
+          })
+          if (result?.exportId) setExportId(result.exportId)
+        } catch {
+          // Client-side CSV will download regardless
+        }
+
+        exportIssuesCsv({
+          issues: dataset,
+          categories,
+          filename: `urbanmend_incident_report_${dateStr}.csv`,
+        })
+        setExportSuccessMsg(
+          `CSV spreadsheet successfully downloaded (${dataset.length} incident${dataset.length === 1 ? '' : 's'}).`
+        )
+      }
     } catch (err) {
-      setExpError(err.message)
+      setExpError(err.message || 'Failed to export data.')
+    } finally {
+      setIsExporting(false)
     }
   }
 
@@ -524,14 +594,14 @@ export default function AdminDashboardPage() {
                 <h3 className="font-bold text-ink">Export Data</h3>
               </div>
               <p className="mt-0.5 text-xs text-ink-muted">
-                Generate and download CSV reports for external analysis.
+                Generate and download official PDF reports or CSV spreadsheets for municipal review.
               </p>
             </div>
             <div className="border-t border-line" />
             <CardBody className="pt-4">
               <form
                 onSubmit={onExport}
-                className="grid grid-cols-1 gap-3 items-end sm:grid-cols-2 lg:grid-cols-4"
+                className="grid grid-cols-1 gap-3 items-end sm:grid-cols-2 lg:grid-cols-5"
               >
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-ink-muted">
@@ -573,13 +643,35 @@ export default function AdminDashboardPage() {
                   </select>
                 </div>
                 <div>
+                  <label className="mb-1 block text-xs font-semibold text-ink-muted">
+                    Format
+                  </label>
+                  <select
+                    value={expFormat}
+                    onChange={(e) => setExpFormat(e.target.value)}
+                    className="w-full rounded-panel border border-line bg-surface-panel px-3 py-2 text-xs font-medium focus:border-primary"
+                  >
+                    <option value="pdf">PDF Document (.pdf)</option>
+                    <option value="csv">CSV Spreadsheet (.csv)</option>
+                  </select>
+                </div>
+                <div>
                   <Button
                     type="submit"
-                    loading={createExport.isPending}
+                    loading={isExporting}
                     className="flex w-full items-center justify-center gap-2 bg-[#0e7490] py-2 font-semibold text-white hover:bg-[#085f76]"
                   >
-                    <Download className="h-4 w-4" aria-hidden="true" />
-                    <span>Generate CSV</span>
+                    {expFormat === 'pdf' ? (
+                      <>
+                        <FileText className="h-4 w-4" aria-hidden="true" />
+                        <span>Export PDF</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" aria-hidden="true" />
+                        <span>Export CSV</span>
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>
@@ -587,6 +679,13 @@ export default function AdminDashboardPage() {
               {expError && (
                 <p className="mt-3 text-xs text-status-critical" role="alert">
                   {expError}
+                </p>
+              )}
+
+              {exportSuccessMsg && (
+                <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-emerald-700" role="status">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                  <span>{exportSuccessMsg}</span>
                 </p>
               )}
 
@@ -602,7 +701,7 @@ export default function AdminDashboardPage() {
                     href={downloadUrl}
                     className="text-xs font-semibold text-primary hover:underline"
                   >
-                    Download the CSV (expires soon)
+                    Download server CSV copy (expires soon)
                   </a>
                 </p>
               )}

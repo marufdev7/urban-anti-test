@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { Link } from 'react-router-dom'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -64,13 +64,16 @@ function createClusterIcon(count) {
   })
 }
 
-function MapEventsListener({ onViewportChange }) {
+function MapEventsListener({ onViewportChange, onMapClick }) {
   const map = useMapEvents({
     moveend: () => {
       const bounds = map.getBounds()
       const zoom = map.getZoom()
       const bbox = boundsToBBox(bounds)
       if (bbox) onViewportChange?.({ bbox, zoom })
+    },
+    click: (e) => {
+      onMapClick?.(e.latlng)
     },
   })
 
@@ -81,6 +84,24 @@ function MapEventsListener({ onViewportChange }) {
     const bbox = boundsToBBox(bounds)
     if (bbox) onViewportChange?.({ bbox, zoom })
   }, [map, onViewportChange])
+
+  return null
+}
+
+function MapViewController({ center, zoom, bounds }) {
+  const map = useMap()
+  const prevBoundsRef = useRef(null)
+
+  useEffect(() => {
+    if (bounds && bounds !== prevBoundsRef.current) {
+      prevBoundsRef.current = bounds
+      try {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true })
+      } catch {}
+    } else if (center) {
+      map.setView([center.lat, center.lng], zoom || map.getZoom(), { animate: true })
+    }
+  }, [map, center, zoom, bounds])
 
   return null
 }
@@ -125,7 +146,7 @@ function IssueMarker({ feature, onSelect, getDetailLink }) {
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-medium capitalize text-ink-muted">
-              {props.status?.replaceAll('_', ' ') ?? 'Triaged'}
+              {props.status === 'triaged' ? 'Under Review' : (props.status?.replaceAll('_', ' ') ?? 'Under Review')}
             </span>
             <span
               className={`rounded px-1.5 py-0.5 font-medium uppercase text-white ${
@@ -183,9 +204,14 @@ function MarkersLayer({ features, onSelectIssue, getDetailLink }) {
 export default function InteractiveMap({
   center,
   zoom = 13,
+  bounds = null,
   polygons = [],
+  activeZonePolygon = null,
+  focalCircle = null,
+  searchMarker = null,
   features = [],
   onViewportChange,
+  onMapClick,
   onSelectIssue,
   getDetailLink,
   className = 'h-full w-full',
@@ -201,6 +227,9 @@ export default function InteractiveMap({
       aria-label="City incidents map"
     >
       <TileLayer url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
+      <MapViewController center={center} zoom={zoom} bounds={bounds} />
+
+      {/* Default city boundary polygons */}
       {polygons.map((polygon, index) => (
         <Polygon
           key={index}
@@ -208,7 +237,68 @@ export default function InteractiveMap({
           pathOptions={{ color: '#0e7c6d', weight: 1.8, fillOpacity: 0.03 }}
         />
       ))}
-      <MapEventsListener onViewportChange={onViewportChange} />
+
+      {/* Highlighted active zone polygon */}
+      {activeZonePolygon && (
+        <Polygon
+          positions={activeZonePolygon}
+          pathOptions={{
+            color: '#2563eb',
+            weight: 2.5,
+            fillColor: '#3b82f6',
+            fillOpacity: 0.12,
+            dashArray: '6, 6',
+          }}
+        />
+      )}
+
+      {/* Focal Inspection Circle */}
+      {focalCircle && (
+        <Circle
+          center={[focalCircle.center.lat, focalCircle.center.lng]}
+          radius={focalCircle.radius}
+          pathOptions={{
+            color: focalCircle.color || '#ef4444',
+            weight: 2,
+            fillColor: focalCircle.color || '#ef4444',
+            fillOpacity: 0.12,
+          }}
+        />
+      )}
+
+      {/* Temporary Search Pin */}
+      {searchMarker && (
+        <Marker
+          position={[searchMarker.lat, searchMarker.lng]}
+          icon={L.divIcon({
+            className: 'search-pin',
+            html: `<div style="
+              background: #2563eb;
+              width: 30px;
+              height: 30px;
+              border-radius: 50%;
+              border: 2px solid white;
+              box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 14px;
+            ">📍</div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 30],
+          })}
+        >
+          {searchMarker.label && (
+            <Popup>
+              <div className="p-1 text-xs font-medium text-ink">
+                {searchMarker.label}
+              </div>
+            </Popup>
+          )}
+        </Marker>
+      )}
+
+      <MapEventsListener onViewportChange={onViewportChange} onMapClick={onMapClick} />
       <MarkersLayer
         features={features}
         onSelectIssue={onSelectIssue}

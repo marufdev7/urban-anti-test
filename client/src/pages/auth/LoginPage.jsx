@@ -82,7 +82,7 @@ export default function LoginPage() {
         <div className="mb-6 flex flex-col items-center">
           <ShieldCheck className="h-10 w-10 text-primary" aria-hidden="true" />
           <h1 className="mt-2 text-xl font-bold text-ink">UrbanMend</h1>
-          <p className="text-sm text-ink-muted">Public Safety Triage</p>
+          <p className="text-sm text-ink-muted">Public Safety &amp; Review</p>
         </div>
 
         <div className="rounded-panel border border-line bg-surface-panel p-6 shadow-panel">
