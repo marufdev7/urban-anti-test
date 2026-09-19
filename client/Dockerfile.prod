@@ -1,0 +1,23 @@
+# UrbanMend client — production image (multi-stage).
+#
+# Stage 1: build the static bundle with Vite.
+# Stage 2: serve it from nginx and proxy /api to the Django backend.
+#
+# Build:    docker build -f Dockerfile.prod -t urbanmend-client:prod .
+# Run:      docker run -p 8081:80 \
+#             -e API_UPSTREAM=http://host.docker.internal:8080 \
+#             urbanmend-client:prod
+#           → http://localhost:8081 serves the SPA; /api/v1/* is proxied.
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package.json ./
+RUN npm install --no-audit --no-fund
+COPY index.html vite.config.js tailwind.config.js postcss.config.js ./
+COPY src ./src
+RUN npm run build
+
+FROM nginx:1.27-alpine AS runtime
+# Template → nginx renders ${API_UPSTREAM} via envsubst at container start.
+COPY nginx.prod.conf /etc/nginx/templates/default.conf.template
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80

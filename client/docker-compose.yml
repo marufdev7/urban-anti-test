@@ -1,0 +1,27 @@
+# UrbanMend client — local dev, runs alongside the backend compose project
+# (UrbanMend-main/docker-compose.yml, service name "urbenmend", port 8080).
+# The Vite dev server proxies /api to the backend. Two ways to reach it:
+#   - backend running on this machine (any compose): http://host.docker.internal:8080
+#   - publish mode full compose both stacks share an external network (later).
+name: urbanmend-client
+
+services:
+  client:
+    build: .
+    image: urbanmend-client:local
+    working_dir: /app
+    command: ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]
+    volumes:
+      - .:/app
+      - client_node_modules:/app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_TARGET: http://host.docker.internal:8080
+    extra_hosts:
+      # Needed on Linux; harmless on Docker Desktop for Windows/Mac.
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  client_node_modules:

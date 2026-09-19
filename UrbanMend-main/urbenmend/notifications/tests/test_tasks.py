@@ -1,0 +1,150 @@
+"""T6.2 - outbox relay locking, publication and replay behavior."""
+
+from __future__ import annotations
+
+from unittest.mock import patch
+
+import pytest
+from django.utils import timezone
+
+from urbenmend.identity.tests.factories import AuthorityFactory
+from urbenmend.issues.models import IssueStatus
+from urbenmend.issues.services import transition_issue_status
+from urbenmend.issues.tests.factories import IssueFactory
+from urbenmend.notifications.models import (
+    Notification,
+    NotificationChannel,
+    NotificationState,
+    OutboxEvent,
+)
+from urbenmend.notifications.services import generate_status_change_notifications
+from urbenmend.notifications.tasks import (
+    OUTBOX_CONSUMER_TASK,
+    OUTBOX_RELAY_TASK,
+    consume_outbox_event,
+    relay_outbox,
+)
+from urbenmend.reporting.tests.factories import ReportFactory
+
+pytestmark = pytest.mark.django_db
+
+
+def _pending_event() -> OutboxEvent:
+    issue = IssueFactory.create(status=IssueStatus.TRIAGED)
+    actor = AuthorityFactory.create()
+    actor.category_scope.add(issue.primary_category)
+    transition_issue_status(
+        actor=actor,
+        issue_id=issue.pk,
+        to_status=IssueStatus.ACKNOWLEDGED,
+    )
+    return OutboxEvent.objects.get(aggregate_id=issue.pk)
+
+
+def test_relay_has_stable_task_names_and_schedule() -> None:
+    assert relay_outbox.name == OUTBOX_RELAY_TASK
+    assert consume_outbox_event.name == OUTBOX_CONSUMER_TASK
+
+
+def test_relay_publishes_and_marks_event() -> None:
+    event = _pending_event()
+    with patch.object(consume_outbox_event, "apply_async") as publish:
+        assert relay_outbox.run() == 1
+
+    event.refresh_from_db()
+    publish.assert_called_once_with(args=[str(event.pk)], task_id=str(event.pk))
+    assert event.published_at is not None
+    assert event.attempt_count == 1
+    assert event.last_error == ""
+
+
+def test_relay_does_not_republish_published_event() -> None:
+    event = _pending_event()
+    event.published_at = timezone.now()
+    event.save(update_fields=["published_at"])
+
+    with patch.object(consume_outbox_event, "apply_async") as publish:
+        assert relay_outbox.run() == 0
+
+    publish.assert_not_called()
+
+
+def test_publish_failure_leaves_event_pending_for_replay() -> None:
+    event = _pending_event()
+    with (
+        patch.object(
+            consume_outbox_event,
+            "apply_async",
+            side_effect=RuntimeError("broker unavailable"),
+        ),
+        pytest.raises(RuntimeError, match="broker unavailable"),
+    ):
+        relay_outbox.run()
+
+    event.refresh_from_db()
+    assert event.published_at is None
+    assert event.attempt_count == 0
+
+
+def test_crash_after_publish_replays_without_duplicate_notifications() -> None:
+    event = _pending_event()
+    issue = IssueFactory._meta.model.objects.get(pk=event.aggregate_id)
+    recipient = ReportFactory.create(issue=issue).author
+
+    with (
+        patch.object(consume_outbox_event, "apply_async") as publish,
+        patch.object(OutboxEvent, "save", side_effect=RuntimeError("worker lost after publish")),
+        pytest.raises(RuntimeError, match="worker lost after publish"),
+    ):
+        relay_outbox.run()
+
+    event.refresh_from_db()
+    publish.assert_called_once_with(args=[str(event.pk)], task_id=str(event.pk))
+    assert event.published_at is None
+    assert event.attempt_count == 0
+
+    consume_outbox_event.run(str(event.pk))
+    consume_outbox_event.run(str(event.pk))
+
+    assert (
+        Notification.objects.filter(
+            source_event=event,
+            recipient=recipient,
+            channel=NotificationChannel.IN_APP,
+        ).count()
+        == 1
+    )
+
+
+def test_batch_size_limits_claimed_rows() -> None:
+    _pending_event()
+    second = _pending_event()
+    with patch.object(consume_outbox_event, "apply_async") as publish:
+        assert relay_outbox.run(batch_size=1) == 1
+
+    assert publish.call_count == 1
+    assert OutboxEvent.objects.filter(published_at__isnull=True).count() == 1
+    assert OutboxEvent.objects.filter(pk=second.pk, published_at__isnull=True).exists()
+
+
+def test_status_event_generates_pending_email_and_dispatches() -> None:
+    event = _pending_event()
+    issue = IssueFactory._meta.model.objects.get(pk=event.aggregate_id)
+    recipient = ReportFactory.create(issue=issue).author
+    recipient.email_verified_at = timezone.now()
+    recipient.save(update_fields=["email_verified_at"])
+    generate_status_change_notifications(event)
+    email = Notification.objects.get(
+        source_event=event,
+        recipient=recipient,
+        channel=NotificationChannel.EMAIL,
+    )
+
+    with patch("urbenmend.notifications.tasks.send_mail") as send:
+        from urbenmend.notifications.tasks import dispatch_email_notifications
+
+        assert dispatch_email_notifications.run(event) == 1
+
+    send.assert_called_once()
+    email.refresh_from_db()
+    assert email.state == NotificationState.SENT

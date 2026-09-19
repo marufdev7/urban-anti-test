@@ -1,0 +1,52 @@
+# UrbanMend — development + test dependencies (A2 / T0.1).
+#
+# HUMANS EDIT THIS FILE. Do not edit dev.txt — it is generated, inside a container
+# (never on the host). The bare `pip-compile` invocation does NOT work; see the
+# "Recompiling deps" recipe in CLAUDE.md § Commands for why each flag is needed:
+#     docker compose run --rm --no-deps --entrypoint sh api -c "export HOME=/tmp; \
+#       pip install -q 'pip==25.2'; cd /app/requirements && \
+#       pip-compile --no-config --allow-unsafe --generate-hashes --strip-extras \
+#         -o dev.txt dev.in"
+#
+# Installed in the dev image / CI only. Never in the production final stage.
+
+# Everything in base, so dev.txt is a complete, self-consistent install set.
+-c base.txt
+-r base.in
+
+# --- Test -------------------------------------------------------------------
+pytest~=8.4
+pytest-django~=4.11
+factory-boy~=3.3
+# Concurrency tests (T4.4 advisory-lock clustering, R-2) need real parallel
+# requests against a real DB; pytest-xdist provides the worker processes.
+pytest-xdist~=3.8
+# Coverage reporting for the CI test stages.
+pytest-cov~=7.0
+
+# --- Load testing (T10.4) ---------------------------------------------------
+# The NFR-1/2/3 load harness (`urbenmend/platform/loadtest/`). Dev-only and never
+# in the production runtime stage: it is a pre-release gate run from the
+# profile-gated `loadgen` compose service, not something the API image needs.
+#
+# Chosen over k6 so the harness stays Python, in this image, under the same
+# pip-compile --generate-hashes discipline as everything else; k6's native
+# threshold gate is reproduced by the `quitting` hook in the locustfile.
+locust~=2.42
+
+# --- Lint / format / types --------------------------------------------------
+ruff~=0.14
+mypy~=1.18
+# NOTE: django-stubs versioning tracks the Django release it *fully* supports, not
+# the Django version we run. 6.0.7 fully supports Django 6.0 and carries partial
+# support for 5.2 — it is the only line djangorestframework-stubs 3.17 accepts
+# (it requires django-stubs>=6.0.4). Do not "correct" this to ~=5.2.
+# The [compatible-mypy] extra constrains mypy to >=1.13,<2.4.
+django-stubs[compatible-mypy]~=6.0.7
+djangorestframework-stubs~=3.17
+# No types-redis: redis ships its own annotations since 5.0 and base.in pins 6.4.
+
+# --- Pinning toolchain ------------------------------------------------------
+# Present in the image so requirements can be recompiled without a host Python
+# install (Compose is the mandated dev environment — no native Python on Windows).
+pip-tools~=7.5

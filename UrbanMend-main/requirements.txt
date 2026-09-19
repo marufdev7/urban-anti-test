@@ -1,0 +1,24 @@
+# A2 / T0.1 — this file is a pointer, not an install target.
+#
+# Dependencies live in requirements/, split base vs dev:
+#
+#   requirements/base.in    runtime deps, human-edited (loose bounds)
+#   requirements/base.txt   GENERATED — fully pinned + --hash. Production install.
+#   requirements/dev.in     test/lint/type deps, human-edited
+#   requirements/dev.txt    GENERATED — fully pinned + --hash. CI + local install.
+#
+# Install (always the .txt, always hash-checked):
+#   pip install --require-hashes -r requirements/base.txt     # runtime / prod stage
+#   pip install --require-hashes -r requirements/dev.txt      # dev + CI
+#
+# Regenerate after editing a .in (runs in a container — no host Python on Windows):
+#   pip-compile --generate-hashes --strip-extras \
+#       --output-file requirements/base.txt requirements/base.in
+#   pip-compile --generate-hashes --strip-extras --allow-unsafe \
+#       --output-file requirements/dev.txt  requirements/dev.in
+#
+# --allow-unsafe is required for dev.txt only: pip-tools leaves its own pip/setuptools
+# deps unpinned by default, which pip rejects in a hashed file.
+#
+# Never hand-edit a .txt. Never install this file.
+-r requirements/base.txt

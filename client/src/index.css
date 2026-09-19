@@ -1,0 +1,16 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-surface text-ink antialiased;
+  }
+
+  /* Visible focus everywhere (WCAG 2.4.7). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-1;
+  }
+}

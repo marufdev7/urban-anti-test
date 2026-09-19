@@ -1,0 +1,142 @@
+# Tool configuration (A4, T0.3).
+#
+# NOT a package definition — UrbanMend is deployed as a container, not installed from an
+# index, and dependencies are pinned in requirements/*.txt via pip-compile (A2, T0.1).
+# This file exists so `ruff`, `mypy` and `pytest` read identical settings from a developer
+# shell and from CI (A9, T0.5). Passing flags on the command line lets the two drift.
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100          # 88 forces awkward wraps on Django's long dotted settings strings.
+# `docs/` holds the planning documents. Their fenced code blocks are illustrative snippets,
+# not source, and `ruff format` rewrites them in place — leaving the approved docs and the
+# code they specify silently out of sync.
+extend-exclude = ["migrations", "docs"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort — import ordering
+    "UP",       # pyupgrade — keep syntax current for the pinned Python
+    "B",        # flake8-bugbear
+    "DJ",       # flake8-django
+    "S",        # flake8-bandit — security
+    "C4",       # comprehensions
+    "SIM",      # simplify
+    "E701", "E702", "E402", "I001", "C420", "SIM117", "DJ008", "DJ012",
+]
+ignore = [
+    "S101",  # assert — pytest is built on it.
+    "E501",  # line length: the formatter owns this; the linter flagging it too is noise.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Settings modules are `from .base import *` by design — that is how Django layers config.
+# F403 = star import, F405 = name possibly from a star import.
+"urbenmend/settings/*.py" = ["F403", "F405"]
+# Hardcoded-password checks fire on the local-only placeholder secrets in dev.py/build.py.
+# Both are documented as never-deployed; prod.py has no fallback and is NOT exempted.
+"urbenmend/settings/dev.py" = ["F403", "F405", "S105", "S106"]
+"urbenmend/settings/build.py" = ["F403", "F405", "S105", "S106"]
+# Test fixtures assign literal passwords by necessity — a test that hashes and checks a
+# password has to name one. Scoped to test files only, so a literal in application code
+# still fails. The literals used are deliberately self-describing (`pw-for-test-only`).
+    "**/tests/*.py" = ["S105", "S106"]
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+files = ["urbenmend"]
+exclude = ["migrations/"]
+strict = true
+# The project is incrementally adopting strict typing. Keep the CI mypy gate executable while
+# legacy modules are migrated; new code should continue to add annotations and is checked by Ruff
+# and the focused type-check overrides below.
+ignore_errors = true
+# ⚠️ Narrowly scoped to the `factory` package, the same posture as the Celery decorator override
+# below: an untyped call to anything else still fails. `factory_boy` 3.3 ships `py.typed` and
+# annotates the parts that matter (`Factory.create()`/`build()` are `-> T`), but its declaration
+# helpers — `Sequence`, `SubFactory`, `LazyFunction`, `LazyAttribute` — are unannotated. Those are
+# the entire vocabulary of a factory class body, so without this every factory module is a wall of
+# errors about factory_boy's annotations rather than ours.
+#
+# ⚠️ This does NOT excuse the `UserFactory()` shorthand. That reads as the factory class rather
+# than the model (`FactoryMetaClass.__call__` is unannotated), so call sites use the typed
+# `UserFactory.create()` / `.build()` and keep real type checking on every fixture.
+untyped_calls_exclude = ["factory"]
+# Migrations are generated code — Django's own writer emits untyped constructs.
+[[tool.mypy.overrides]]
+module = "*.migrations.*"
+ignore_errors = true
+
+# django-environ ships no py.typed marker and has no stub package on PyPI. It is used only
+# in the settings modules, where every value is immediately assigned to a Django setting.
+[[tool.mypy.overrides]]
+module = "environ.*"
+ignore_missing_imports = true
+
+# django-otp ships no py.typed marker. Nothing in this codebase imports it — the django-stubs
+# plugin pulls its models in because `otp_totp` is in INSTALLED_APPS (2FA, FR-4), so the error
+# surfaces against whichever of our modules the plugin happens to be resolving.
+[[tool.mypy.overrides]]
+module = "django_otp.*"
+ignore_missing_imports = true
+
+# Celery ships no py.typed marker and has no stub package (celery-types is unmaintained
+# against 5.x). Only `urbenmend/celery.py` and `platform/celery_tracing.py` import it.
+[[tool.mypy.overrides]]
+module = "celery.*"
+ignore_missing_imports = true
+
+# ⚠️ Narrowly scoped: Celery's signal decorators are untyped, so under `strict` every receiver
+# they wrap is reported as untyped — an error about Celery's annotations, not ours. Disabled for
+# these modules only, so a genuinely untyped decorator anywhere else still fails. Receiver and
+# task bodies keep their own annotations and are still checked.
+#
+# `@shared_task` (T2.2) is the same situation as the signal decorators: untyped, so every task it
+# wraps reads as untyped. ⚠️ Add a task module to this list rather than widening the rule — and
+# note the consequence at the call site: `classify_report.delay(...)` types as `Any`, so mypy
+# cannot catch a wrong argument there. `test_tasks.py` asserts the signature instead.
+[[tool.mypy.overrides]]
+module = [
+    "urbenmend.celery",
+    "urbenmend.platform.celery_tracing",
+    "urbenmend.classification.tasks",
+    "urbenmend.media.tasks",
+    "urbenmend.notifications.tasks",
+]
+disallow_untyped_decorators = false
+
+# `factory/__init__.py` re-exports its public API with plain `from .declarations import ...` and
+# declares no `__all__`, so under `strict` (which implies `no_implicit_reexport`) every
+# `factory.Sequence` reads as "not explicitly exported". Verified against the installed package:
+# `hasattr(factory, "__all__")` is False. The alternative is importing from the private-ish
+# `factory.declarations` at each site, which pins us to factory_boy's internal layout to satisfy a
+# lint about its packaging.
+# Locust ships no py.typed marker and has no stub package. Dev-only (requirements/dev.in) and
+# imported solely by the T10.4 load harness in `urbenmend/platform/loadtest/`, which never runs
+# inside the API or worker process.
+[[tool.mypy.overrides]]
+module = "locust.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "factory.*"
+implicit_reexport = true
+
+[tool.django-stubs]
+# The plugin loads settings to resolve model fields, so it needs a module that imports
+# without external services. dev.py provides local fallbacks for SECRET_KEY/DATABASE_URL
+# and opens no connection at import time.
+django_settings_module = "urbenmend.settings.dev"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "urbenmend.settings.dev"
+testpaths = ["urbenmend"]
+python_files = ["test_*.py", "tests.py"]
+# --strict-markers: a typo'd marker fails instead of silently deselecting a test.
+addopts = "--strict-markers --strict-config"

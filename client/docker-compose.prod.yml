@@ -1,0 +1,18 @@
+# Production-style run of the client (static build served by nginx).
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Backend assumed reachable at the API_UPSTREAM address.
+name: urbanmend-client-prod
+
+services:
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    image: urbanmend-client:prod
+    ports:
+      - "8081:80"
+    environment:
+      API_UPSTREAM: http://host.docker.internal:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
