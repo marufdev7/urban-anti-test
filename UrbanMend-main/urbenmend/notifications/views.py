@@ -8,6 +8,7 @@ from typing import cast
 from uuid import UUID
 
 from django.conf import settings
+from django.db import close_old_connections
 from django.db.models import Q
 from django.http import StreamingHttpResponse
 from rest_framework import status
@@ -118,32 +119,36 @@ class NotificationStreamView(APIView):
             last_heartbeat = started
             cursor = None
 
-            while time.monotonic() - started < settings.NOTIFICATION_STREAM_MAX_SECONDS:
-                items = selectors.list_notifications(actor=actor).order_by("created_at", "pk")
-                if cursor is not None:
-                    created_at, notification_id = cursor
-                    items = items.filter(
-                        Q(created_at__gt=created_at)
-                        | Q(created_at=created_at, pk__gt=notification_id)
-                    )
+            try:
+                while time.monotonic() - started < settings.NOTIFICATION_STREAM_MAX_SECONDS:
+                    items = selectors.list_notifications(actor=actor).order_by("created_at", "pk")
+                    if cursor is not None:
+                        created_at, notification_id = cursor
+                        items = items.filter(
+                            Q(created_at__gt=created_at)
+                            | Q(created_at=created_at, pk__gt=notification_id)
+                        )
 
-                emitted = False
-                for notification in items[:100]:
-                    cursor = (notification.created_at, notification.pk)
-                    payload = {"notificationId": str(notification.pk)}
-                    yield f"event: notification\ndata: {json.dumps(payload)}\n\n"
-                    emitted = True
+                    emitted = False
+                    for notification in items[:100]:
+                        cursor = (notification.created_at, notification.pk)
+                        payload = {"notificationId": str(notification.pk)}
+                        yield f"event: notification\ndata: {json.dumps(payload)}\n\n"
+                        emitted = True
 
-                now = time.monotonic()
-                if (
-                    cursor is None
-                    or now - last_heartbeat >= settings.NOTIFICATION_STREAM_HEARTBEAT_SECONDS
-                ):
-                    yield ": heartbeat\n\n"
-                    last_heartbeat = now
+                    now = time.monotonic()
+                    if (
+                        cursor is None
+                        or now - last_heartbeat >= settings.NOTIFICATION_STREAM_HEARTBEAT_SECONDS
+                    ):
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = now
 
-                if not emitted:
-                    time.sleep(max(0, settings.NOTIFICATION_STREAM_POLL_SECONDS))
+                    if not emitted:
+                        close_old_connections()
+                        time.sleep(max(0, settings.NOTIFICATION_STREAM_POLL_SECONDS))
+            finally:
+                close_old_connections()
 
         response = StreamingHttpResponse(events(), content_type="text/event-stream")
         response["Cache-Control"] = "no-cache"

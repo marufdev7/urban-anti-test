@@ -36,6 +36,19 @@ DATABASES["default"]["OPTIONS"]["sslmode"] = env(  # noqa: F405
     "DATABASE_SSLMODE", default="require"
 )
 
+# When running on serverless / connection-pooled infrastructure (e.g. Supabase pooler):
+# 1. Close connections after each request to avoid pool starvation
+DATABASES["default"]["CONN_MAX_AGE"] = 0
+
+# 2. If connecting to Supabase pooler, automatically route to port 6543 (Transaction Mode)
+# instead of port 5432 (Session Mode which is capped at 15 concurrent clients).
+db_host = str(DATABASES["default"].get("HOST", ""))
+if "pooler.supabase.com" in db_host:
+    current_port = str(DATABASES["default"].get("PORT", ""))
+    if current_port in ("5432", ""):
+        DATABASES["default"]["PORT"] = 6543
+
+
 # --------------------------------------------------------------------------------------
 # Cache & Sessions (Use LocMemCache & DB sessions when Redis is not provided)
 # --------------------------------------------------------------------------------------
