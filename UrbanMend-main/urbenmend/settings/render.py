@@ -37,6 +37,30 @@ DATABASES["default"]["OPTIONS"]["sslmode"] = env(  # noqa: F405
 )
 
 # --------------------------------------------------------------------------------------
+# Cache & Sessions (Use LocMemCache & DB sessions when Redis is not provided)
+# --------------------------------------------------------------------------------------
+REDIS_URL = env("REDIS_URL", default="")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            },
+        }
+    }
+    SESSION_ENGINE = "django.contrib.sessions.backends.cached_db"
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "urbanmend-locmem-cache",
+        }
+    }
+    SESSION_ENGINE = "django.contrib.sessions.backends.db"
+
+# --------------------------------------------------------------------------------------
 # Object storage fallback
 # --------------------------------------------------------------------------------------
 if env("STORAGE_ACCESS_KEY", default=""):
