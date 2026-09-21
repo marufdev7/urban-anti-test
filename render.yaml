@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: urbanmend-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: ./UrbanMend-main
+    plan: free
+    region: singapore
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: DJANGO_SETTINGS_MODULE
+        value: urbenmend.settings.render
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: "https://*.vercel.app,https://*.onrender.com"
+      - key: DATABASE_URL
+        value: "postgis://postgres.cpgikbhihatrmvtoaffo:urbanmend%40test@aws-0-ap-south-1.pooler.supabase.com:5432/postgres"
+      - key: DATABASE_SSLMODE
+        value: "require"

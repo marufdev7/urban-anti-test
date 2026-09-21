@@ -1,0 +1,17 @@
+{
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://urbanmend-api.onrender.com/api/v1/:path*"
+    },
+    {
+      "source": "/nominatim-proxy/:path*",
+      "destination": "https://nominatim.openstreetmap.org/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

@@ -46,6 +46,15 @@ def _load_multipolygon() -> Any:
 
 def seed_boundary(apps: Any, schema_editor: Any) -> None:
     CityBoundary = apps.get_model("geo", "CityBoundary")
+    if not BOUNDARY_FILE.exists():
+        from django.contrib.gis.geos import MultiPolygon, Polygon
+        poly = Polygon(((90.3, 23.7), (90.5, 23.7), (90.5, 23.9), (90.3, 23.9), (90.3, 23.7)))
+        CityBoundary.objects.update_or_create(
+            name=BOUNDARY_NAME,
+            defaults={"area": MultiPolygon(poly), "is_active": True},
+        )
+        return
+
     CityBoundary.objects.update_or_create(
         name=BOUNDARY_NAME,
         defaults={"area": _load_multipolygon(), "is_active": True},
