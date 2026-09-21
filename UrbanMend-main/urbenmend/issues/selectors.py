@@ -367,6 +367,13 @@ def list_issues(
             # "unrestricted" would promote an empty-scope Authority to Admin (T1.5: empty grants
             # nothing).
             queryset = queryset.filter(primary_category_id__in=scoped_category_ids(actor) or set())
+            assigned_area = getattr(actor, "assigned_area", "")
+            if assigned_area:
+                from urbenmend.geo.selectors import get_area_bbox_polygon
+
+                area_poly = get_area_bbox_polygon(assigned_area)
+                if area_poly is not None:
+                    queryset = queryset.filter(representative_location__bboverlaps=area_poly)
         # Citizen (or a suspended/deprovisioned account) falls through to the public list.
 
     if category_slugs:

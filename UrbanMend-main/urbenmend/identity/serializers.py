@@ -138,6 +138,7 @@ class LoginResponseSerializer(CamelCaseSerializer):
             "id": str(obj.id),
             "role": obj.role,
             "preferredLanguage": obj.preferred_language,
+            "assignedArea": getattr(obj, "assigned_area", "") or "",
         }
 
     def get_requires2fa(self, obj: User) -> bool:
@@ -158,29 +159,24 @@ class LoginResponseSerializer(CamelCaseSerializer):
 
 
 class ProvisionAuthoritySerializer(CamelCaseSerializer):
-    """POST /users/authorities request body (API §6.2, FR-2, BR-25).
-
-    Spec body: `{ "email":"...", "categoryScope":["roads"], "requireTwoFactor": true }`.
-
-    ⚠️ **No `role` field, and no `password`.** The role is not a caller choice — the endpoint's
-    entire purpose is to create an *Authority*, so accepting `role` would let an Admin provision
-    another Admin through a URL that is not documented to do that. The password is absent because
-    the spec's body has none; see `provision_authority` for why generating one is worse.
-
-    ⚠️ **`status` is not accepted either.** The service pins `registered` so the work address must
-    be verified before the account is live — a caller-supplied `active` would skip that.
-
-    ⚠️ **Shape validation only; every rule is re-checked in the service.** The `categoryScope`
-    values are validated against the taxonomy in `_resolve_category_scope`, not here — a
-    `ChoiceField` built from a queryset at import time would freeze the seven current nodes into
-    the process and start rejecting any category a later migration adds until the pod restarts.
-    """
+    """POST /users/authorities request body (API §6.2, FR-2, BR-25)."""
 
     email = serializers.EmailField(required=True, allow_blank=False)
     phone = serializers.CharField(required=False, allow_blank=False, max_length=16)
-    # `allow_empty=True`: an Authority provisioned with no scope can act on nothing, which is a
-    # valid parked state (see `has_category_scope`). `required=False` because the spec marks
-    # nothing in this body mandatory; absent means the same as `[]`.
+    password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        min_length=8,
+        max_length=128,
+        trim_whitespace=False,
+    )
+    assigned_area = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=64,
+        default="",
+    )
     category_scope = serializers.ListField(
         child=serializers.SlugField(max_length=50),
         required=False,
@@ -190,12 +186,7 @@ class ProvisionAuthoritySerializer(CamelCaseSerializer):
     require_two_factor = serializers.BooleanField(required=False, default=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """At least one contact method (data-model §1) — the same rule as registration.
-
-        Duplicated in `provision_authority` on purpose: this copy produces the field-level
-        `VALIDATION_FAILED` detail the spec asks for, while the service copy holds when the
-        function is called from a management command with no serializer in sight (FR-3).
-        """
+        """At least one contact method (data-model §1) — the same rule as registration."""
         if not attrs.get("email"):
             raise serializers.ValidationError(
                 "An authority account requires an email address.",
@@ -205,23 +196,7 @@ class ProvisionAuthoritySerializer(CamelCaseSerializer):
 
 
 class UserSerializer(CamelCaseModelSerializer):
-    """User resource shape for API responses (API §6.2).
-
-    ✅ **The T1.6 ❓ is resolved: API §6.2 was amended (2026-08-07, T1.9) before `GET /users/me`
-    shipped**, per the spec-first rule. The amendment fixes one response shape for all three
-    roles, with `categoryScope` always an array.
-
-    ⚠️ **`categoryScope` is the stored BR-26 rows, which is NOT the effective permission for two
-    of the three roles.** It reads `[]` for a Citizen (scope does not gate them) and `[]` for an
-    Admin — who bypasses scope entirely, `scoped_category_ids()` returning `None` for "apply no
-    filter". So an Admin's `[]` and an unscoped Authority's `[]` are byte-identical JSON meaning
-    opposite things: unrestricted, versus permitted nothing until an Admin scopes them. `role`
-    disambiguates; the spec now says so explicitly and warns clients not to derive capability
-    from this field alone.
-
-    It is emitted for every role rather than omitted or `null` so the shape stays stable — the
-    alternative makes a client branch on `role` before it can parse the body.
-    """
+    """User resource shape for API responses (API §6.2)."""
 
     verified = serializers.SerializerMethodField()
     category_scope = serializers.SerializerMethodField()
@@ -235,6 +210,7 @@ class UserSerializer(CamelCaseModelSerializer):
             "role",
             "status",
             "preferred_language",
+            "assigned_area",
             "verified",
             "category_scope",
             "date_joined",
@@ -249,12 +225,7 @@ class UserSerializer(CamelCaseModelSerializer):
         }
 
     def get_category_scope(self, obj: User) -> list[str]:
-        """API §6.2 `categoryScope: ["roads","water_drainage"]` — slugs, not labels or ids.
-
-        Goes through the T1.5 selector rather than `obj.category_scope.all()` so the ordering is
-        the one `category_scope_for` documents; two responses differing in array order for no
-        reason a client could explain is a contract defect, not a cosmetic one.
-        """
+        """API §6.2 `categoryScope: ["roads","water_drainage"]` — slugs, not labels or ids."""
         from urbenmend.identity.selectors import category_scope_for
 
         return [category.slug for category in category_scope_for(obj)]
@@ -271,8 +242,14 @@ class AdminUserListQuerySerializer(CamelCaseSerializer):
 
 
 class AdminUserUpdateSerializer(CamelCaseSerializer):
+    email = serializers.EmailField(required=False, allow_blank=False)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=16)
     role = serializers.ChoiceField(choices=Role.choices, required=False)
     status = serializers.ChoiceField(choices=UserStatus.choices, required=False)
+    assigned_area = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    password = serializers.CharField(
+        required=False, allow_blank=True, write_only=True, min_length=8, max_length=128
+    )
     category_scope = serializers.ListField(
         child=serializers.SlugField(max_length=50), required=False, allow_empty=True
     )

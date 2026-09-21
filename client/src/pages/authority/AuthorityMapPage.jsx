@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { FilterX, Layers, MapPin, ShieldCheck, UserCheck } from 'lucide-react'
@@ -6,6 +6,7 @@ import { api } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
 import { categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
 import { boundaryBBox, DHAKA_CENTER } from '../../lib/geo'
+import { BANGLADESH_CITIES, getJurisdictionLabel } from '../../lib/zones'
 import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -49,8 +50,25 @@ export default function AuthorityMapPage() {
   const [viewport, setViewport] = useState(null)
   const [selectedIssue, setSelectedIssue] = useState(null)
 
-  const activeBBox = viewport?.bbox || (boundaryFeature ? boundaryBBox(boundaryFeature) : '90.30,23.65,90.52,23.90')
-  const activeZoom = viewport?.zoom ?? 13
+  const assignedCity = useMemo(() => {
+    if (!user?.assignedArea) return null
+    return BANGLADESH_CITIES.find(
+      (c) => c.id.toLowerCase() === user.assignedArea.toLowerCase(),
+    )
+  }, [user?.assignedArea])
+
+  const mapCenter = assignedCity ? [assignedCity.center.lat, assignedCity.center.lng] : (center || DHAKA_CENTER)
+  const mapZoom = assignedCity ? assignedCity.zoom : 13
+  const mapPolygons = assignedCity?.boundaryPolygon ? [assignedCity.boundaryPolygon] : polygons
+
+  const activeBBox =
+    viewport?.bbox ||
+    (assignedCity
+      ? assignedCity.bbox
+      : boundaryFeature
+        ? boundaryBBox(boundaryFeature)
+        : '90.30,23.65,90.52,23.90')
+  const activeZoom = viewport?.zoom ?? mapZoom
 
   const queryParams = new URLSearchParams({
     bbox: activeBBox,
@@ -93,13 +111,22 @@ export default function AuthorityMapPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Jurisdiction Map"
-        subtitle={`Live incident map for municipal authority teams. Scope: ${
+        subtitle={`Live incident map for municipal authority teams. Jurisdiction: ${getJurisdictionLabel(
+          user?.assignedArea,
+        )} • Scope: ${
           user?.categoryScope?.length ? user.categoryScope.join(', ') : 'All categories'
         }`}
       />
 
       <Card className="p-3 sm:p-4">
         <div className="flex flex-wrap items-center gap-3">
+          {user?.assignedArea && (
+            <span className="inline-flex items-center gap-1 rounded border border-emerald-200/80 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+              <MapPin className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+              <span>{getJurisdictionLabel(user.assignedArea)}</span>
+            </span>
+          )}
+
           <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted">
             <Layers className="h-4 w-4 text-primary" aria-hidden="true" />
             <span>Filters:</span>
@@ -162,9 +189,9 @@ export default function AuthorityMapPage() {
 
       <div className="relative h-[650px] w-full overflow-hidden rounded-panel border border-line bg-surface-panel shadow-panel">
         <InteractiveMap
-          center={center || DHAKA_CENTER}
-          zoom={13}
-          polygons={polygons}
+          center={mapCenter}
+          zoom={mapZoom}
+          polygons={mapPolygons}
           features={features}
           onViewportChange={setViewport}
           onSelectIssue={(f) => setSelectedIssue(f)}

@@ -205,6 +205,14 @@ class User(AbstractBaseUser, PermissionsMixin):
             "Categories an Authority may view and act on (BR-26). Ignored for other roles."
         ),
     )
+    assigned_area = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=_(
+            "Assigned city corporation or geographical jurisdiction (e.g. 'dhaka', 'chattogram', etc.)."
+        ),
+    )
 
     # ⚠️ The T1/T2 reporter trust signal is likewise absent by design. T2 defines it as
     # "newer/unverified accounts weigh less", which is computable from date_joined plus the

@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ExternalLink, FilterX, Image, Search } from 'lucide-react'
+import { ExternalLink, FilterX, Image, Search, ShieldCheck } from 'lucide-react'
 import { api, normalizeMediaUrl } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
 import { badgeFor, categoryLabel, useCategories } from '../../hooks/data'
 import { formatDateTime, shortId } from '../../lib/format'
+import { getJurisdictionLabel } from '../../lib/zones'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
@@ -71,7 +72,15 @@ export default function AuthorityReportsPage() {
     <div>
       <PageHeader
         title="Citizen Reports"
-        subtitle="Review raw citizen submissions across your authority's category scope."
+        subtitle={`Review raw citizen submissions across ${user?.assignedArea ? getJurisdictionLabel(user.assignedArea) : "your authority's operational scope"}.`}
+        action={
+          user?.assignedArea ? (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <span>Jurisdiction: {getJurisdictionLabel(user.assignedArea)}</span>
+            </div>
+          ) : null
+        }
       />
 
       <Card className="mb-4 p-4">

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   AlertCircle,
@@ -5,12 +6,15 @@ import {
   ClipboardList,
   Flame,
   MapPin,
+  ShieldCheck,
   Timer,
 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { useAnalyticsSummary, useIssues } from '../../hooks/issues'
 import { useCategories, categoryLabel, useCityBoundary } from '../../hooks/data'
 import { formatAge, formatHours, shortId, timeAgo } from '../../lib/format'
+import { DHAKA_CENTER } from '../../lib/geo'
+import { BANGLADESH_CITIES, getJurisdictionLabel } from '../../lib/zones'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
 import MapPanel from '../../components/MapPanel'
 import PageHeader from '../../components/ui/PageHeader'
@@ -57,11 +61,28 @@ export default function AuthorityDashboardPage() {
   const activeCasesCount = metrics?.open ?? (queuedCount + assessingCount + onSiteCount)
   const recent = queue?.data ?? []
 
+  const assignedCity = useMemo(() => {
+    if (!user?.assignedArea) return null
+    return BANGLADESH_CITIES.find(
+      (c) => c.id.toLowerCase() === user.assignedArea.toLowerCase(),
+    )
+  }, [user?.assignedArea])
+
+  const mapCenter = assignedCity ? [assignedCity.center.lat, assignedCity.center.lng] : (center || DHAKA_CENTER)
+
   return (
     <div>
       <PageHeader
         title="Authority Dashboard"
         subtitle={`Operational overview for ${user?.department || (user?.categoryScope?.length ? user.categoryScope.join(', ') : 'Municipal Operations')}.`}
+        action={
+          user?.assignedArea ? (
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              <span>Jurisdiction: {getJurisdictionLabel(user.assignedArea)}</span>
+            </div>
+          ) : null
+        }
       />
 
       {summary.isLoading ? (
@@ -203,10 +224,10 @@ export default function AuthorityDashboardPage() {
               <div className="overflow-hidden rounded-panel border border-line bg-surface-panel shadow-panel">
                 <div className="h-44 w-full">
                   <MapPanel
-                    center={center}
+                    center={mapCenter}
                     polygons={polygons}
                     interactive={false}
-                    zoom={12}
+                    zoom={assignedCity ? 12 : 11}
                     className="h-full w-full"
                   />
                 </div>
@@ -235,14 +256,14 @@ export default function AuthorityDashboardPage() {
                         </p>
                         <p className="mt-0.5 text-xs text-ink-muted">
                           {issue.representativeLocation
-                            ? `Sector 4, ${issue.representativeLocation.lat.toFixed(3)}, ${issue.representativeLocation.lng.toFixed(3)}`
-                            : 'Dhaka Municipal District'}
+                            ? `${issue.representativeLocation.lat.toFixed(3)}, ${issue.representativeLocation.lng.toFixed(3)}`
+                            : (user?.assignedArea ? getJurisdictionLabel(user.assignedArea) : 'Municipal District')}
                         </p>
                       </Link>
                     ))
                   ) : (
                     <div className="rounded-panel border border-dashed border-line p-6 text-center text-xs text-ink-muted">
-                      No recent civic issues reported in your district.
+                      No recent civic issues reported in your jurisdiction ({user?.assignedArea ? getJurisdictionLabel(user.assignedArea) : 'all areas'}).
                     </div>
                   )}
                 </CardBody>

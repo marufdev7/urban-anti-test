@@ -157,6 +157,13 @@ def list_reports(
         pass  # No filter at all — §6.3 "Admin: all".
     elif has_role(actor, Role.AUTHORITY):
         queryset = queryset.filter(category_id__in=scoped_category_ids(actor) or set())
+        assigned_area = getattr(actor, "assigned_area", "")
+        if assigned_area:
+            from urbenmend.geo.selectors import get_area_bbox_polygon
+
+            area_poly = get_area_bbox_polygon(assigned_area)
+            if area_poly is not None:
+                queryset = queryset.filter(location__bboverlaps=area_poly)
     else:
         queryset = queryset.filter(author=actor)
 

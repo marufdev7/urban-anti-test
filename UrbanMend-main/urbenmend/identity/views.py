@@ -18,6 +18,7 @@ from typing import Any, cast
 
 from django.core.exceptions import PermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.http import Http404
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -40,7 +41,7 @@ from urbenmend.api.throttling import (
     clear_identity_throttle,
 )
 from urbenmend.identity import selectors, services
-from urbenmend.identity.models import Channel, User
+from urbenmend.identity.models import Channel, Role, User
 from urbenmend.identity.serializers import (
     AdminUserListQuerySerializer,
     AdminUserUpdateSerializer,
@@ -338,6 +339,8 @@ class ProvisionAuthorityView(APIView):
                 actor=cast("User", request.user),
                 email=data.get("email"),
                 phone=data.get("phone"),
+                password=data.get("password"),
+                assigned_area=data.get("assigned_area", ""),
                 category_slugs=data["category_scope"],
                 require_two_factor=data["require_two_factor"],
             )
@@ -376,6 +379,125 @@ class UserCollectionView(APIView):
 
 class UserAdminDetailView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, user_id) -> Response:
+        actor = cast("User", request.user)
+        if not (actor.is_staff or actor.role == Role.ADMIN):
+            raise PermissionDenied("Only administrators may view user details and performance metrics.")
+
+        try:
+            target = User.objects.get(pk=user_id)
+        except (User.DoesNotExist, ValueError, TypeError) as exc:
+            raise Http404("User not found.") from exc
+
+        user_data = UserSerializer(target).data
+
+        performance_data = {
+            "totalAssigned": 0,
+            "totalResolved": 0,
+            "totalInProgress": 0,
+            "totalAcknowledged": 0,
+            "resolutionRate": 0.0,
+            "assignedIssues": [],
+        }
+
+        if target.role == Role.AUTHORITY:
+            from urbenmend.issues.models import Issue, IssueStatus
+
+            assigned_qs = (
+                Issue.objects.filter(assignee=target)
+                .select_related("primary_category")
+                .order_by("-updated_at")
+            )
+            total_assigned = assigned_qs.count()
+            total_resolved = assigned_qs.filter(
+                status__in=[IssueStatus.RESOLVED, IssueStatus.CLOSED]
+            ).count()
+            total_in_progress = assigned_qs.filter(status=IssueStatus.IN_PROGRESS).count()
+            total_acknowledged = assigned_qs.filter(status=IssueStatus.ACKNOWLEDGED).count()
+            resolution_rate = (
+                round((total_resolved / total_assigned) * 100, 1) if total_assigned > 0 else 0.0
+            )
+
+            issues_list = []
+            for issue in assigned_qs[:100]:
+                issues_list.append(
+                    {
+                        "id": str(issue.id),
+                        "shortId": str(issue.id)[:8],
+                        "status": issue.status,
+                        "severity": issue.current_severity,
+                        "category": issue.primary_category.slug if issue.primary_category else "other",
+                        "categoryName": (
+                            issue.primary_category.name_en if issue.primary_category else "Other"
+                        ),
+                        "openedAt": issue.opened_at.isoformat() if issue.opened_at else None,
+                        "updatedAt": issue.updated_at.isoformat() if issue.updated_at else None,
+                        "location": (
+                            {
+                                "lat": issue.representative_location.y,
+                                "lng": issue.representative_location.x,
+                            }
+                            if issue.representative_location
+                            else None
+                        ),
+                    }
+                )
+
+            performance_data = {
+                "totalAssigned": total_assigned,
+                "totalResolved": total_resolved,
+                "totalInProgress": total_in_progress,
+                "totalAcknowledged": total_acknowledged,
+                "resolutionRate": resolution_rate,
+                "assignedIssues": issues_list,
+            }
+
+        from django.db.models import Q
+        from urbenmend.audit.models import AuditEvent
+
+        events_qs = (
+            AuditEvent.objects.filter(Q(actor=target) | Q(target_object_id=str(target.id)))
+            .select_related("actor", "target_content_type")
+            .order_by("-created_at")[:100]
+        )
+
+        activity_log = []
+        for event in events_qs:
+            actor_name = "Automated System"
+            if event.actor:
+                actor_name = (
+                    event.actor.email.split("@")[0]
+                    if event.actor.email
+                    else event.actor.role
+                )
+            activity_log.append(
+                {
+                    "id": str(event.id),
+                    "action": event.action,
+                    "actorId": str(event.actor_id) if event.actor_id else None,
+                    "actorEmail": event.actor.email if event.actor else None,
+                    "actorName": actor_name,
+                    "targetType": (
+                        event.target_content_type.model
+                        if event.target_content_type
+                        else None
+                    ),
+                    "targetId": event.target_object_id,
+                    "before": event.before,
+                    "after": event.after,
+                    "metadata": event.metadata,
+                    "at": event.created_at.isoformat() if event.created_at else None,
+                }
+            )
+
+        return Response(
+            {
+                "user": user_data,
+                "performance": performance_data,
+                "activityLog": activity_log,
+            }
+        )
 
     def patch(self, request: Request, user_id) -> Response:
         serializer = AdminUserUpdateSerializer(data=request.data)

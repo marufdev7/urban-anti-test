@@ -1,19 +1,28 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  ArrowRight,
   Download,
   FileText,
+  Lock,
+  MapPin,
+  Pencil,
   Search,
+  ShieldCheck,
   UserCheck,
   UserPlus,
 } from 'lucide-react'
-import { useAuthorities } from '../../hooks/admin'
+import { useAuthorities, useAdminUpdateUser } from '../../hooks/admin'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { exportAuthoritiesPdf } from '../../lib/pdfExport'
+import { JURISDICTION_AREAS, getJurisdictionLabel } from '../../lib/zones'
 import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card, { CardBody } from '../../components/ui/Card'
+import Dialog from '../../components/ui/Dialog'
 import EmptyState from '../../components/ui/EmptyState'
+import Input from '../../components/ui/Input'
+import Select from '../../components/ui/Select'
 import Skeleton from '../../components/ui/Skeleton'
 
 function formatAuthority(user, categories) {
@@ -92,6 +101,9 @@ function formatAuthority(user, categories) {
     scope,
     status,
     avatar: initials,
+    assignedArea: user.assignedArea || '',
+    areaLabel: getJurisdictionLabel(user.assignedArea),
+    rawUser: user,
   }
 }
 
@@ -103,6 +115,252 @@ const ROLE_COLORS = [
   'bg-[#38bdf8]',
 ]
 
+function EditAuthorityModal({ authority, onClose, categories }) {
+  const adminUpdate = useAdminUpdateUser()
+  const [email, setEmail] = useState(authority?.email || '')
+  const [phone, setPhone] = useState(authority?.phone || '')
+  const [assignedArea, setAssignedArea] = useState(authority?.assignedArea || '')
+  const [status, setStatus] = useState(authority?.status || 'active')
+  const [categoryScope, setCategoryScope] = useState(authority?.categoryScope || [])
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.active), [categories])
+
+  const toggleCategory = (slug) => {
+    setCategoryScope((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug],
+    )
+  }
+
+  const selectAllCategories = () => {
+    if (categoryScope.length === activeCategories.length) {
+      setCategoryScope([])
+    } else {
+      setCategoryScope(activeCategories.map((c) => c.key))
+    }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError(null)
+    setSuccess(false)
+
+    if (password) {
+      if (password.length < 8) {
+        setError('Password must be at least 8 characters.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.')
+        return
+      }
+    }
+
+    try {
+      const payload = {
+        userId: authority.id,
+        assignedArea,
+        status,
+        categoryScope,
+      }
+      if (email && email !== authority.email) payload.email = email
+      if (phone !== (authority.phone ?? '')) payload.phone = phone
+      if (password) payload.password = password
+
+      await adminUpdate.mutateAsync(payload)
+      setSuccess(true)
+      setTimeout(() => {
+        onClose()
+      }, 600)
+    } catch (err) {
+      setError(err.message || 'Failed to update authority.')
+    }
+  }
+
+  return (
+    <Dialog
+      open={Boolean(authority)}
+      onClose={onClose}
+      title="Edit Authority Officer"
+      className="max-w-xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Officer name & ID badge */}
+        <div className="flex items-center justify-between rounded-panel bg-surface-sunken/60 p-3">
+          <div>
+            <p className="text-xs font-semibold text-ink-muted">Authority Account</p>
+            <p className="text-sm font-bold text-ink">{authority?.email}</p>
+          </div>
+          <span className="rounded border border-line bg-surface-panel px-2 py-0.5 text-xs text-ink-muted font-mono">
+            ID: {shortId(authority?.id)}
+          </span>
+        </div>
+
+        {/* Email & Phone */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Input
+            label="Email Address"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Input
+            label="Phone Number"
+            type="tel"
+            placeholder="+8801700000000"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </div>
+
+        {/* Jurisdiction Area & Status */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink">
+              Jurisdiction Area
+            </label>
+            <Select
+              options={JURISDICTION_AREAS}
+              value={assignedArea}
+              onChange={(e) => setAssignedArea(e.target.value)}
+            />
+            <p className="mt-1 text-2xs text-ink-muted">
+              Limits this officer's queue &amp; map to this city/zone.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-semibold text-ink">
+              Account Status
+            </label>
+            <select
+              aria-label="Account status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className="w-full rounded-panel border border-line bg-surface-panel px-3 py-2 text-sm focus:border-primary"
+            >
+              <option value="active">Active</option>
+              <option value="verified">Verified</option>
+              <option value="registered">Registered</option>
+              <option value="suspended">Suspended</option>
+              <option value="deprovisioned">Deprovisioned</option>
+            </select>
+            <p className="mt-1 text-2xs text-ink-muted">
+              Suspended accounts cannot log in or take actions.
+            </p>
+          </div>
+        </div>
+
+        {/* Category Scope */}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label className="text-xs font-semibold text-ink">
+              Departmental Category Scope
+            </label>
+            <button
+              type="button"
+              onClick={selectAllCategories}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 rounded-panel border border-line p-2.5 bg-surface-sunken/30 max-h-36 overflow-y-auto">
+            {activeCategories.map((cat) => {
+              const checked = categoryScope.includes(cat.key)
+              return (
+                <label
+                  key={cat.key}
+                  className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs transition ${
+                    checked
+                      ? 'bg-primary-soft/50 font-semibold text-primary-dark'
+                      : 'hover:bg-surface-sunken text-ink'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleCategory(cat.key)}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  <span className="truncate">{cat.label.en}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Set / Reset Password */}
+        <div className="rounded-panel border border-line bg-surface-sunken/40 p-3 space-y-2.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+            <Lock className="h-3.5 w-3.5 text-primary" />
+            <span>Set New Login Password (Optional)</span>
+          </div>
+          <p className="text-2xs text-ink-muted">
+            Leave blank if you do not want to change the officer's password.
+          </p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Input
+              type="password"
+              placeholder="New password (min 8 chars)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+            <Input
+              type="password"
+              placeholder="Confirm new password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-xs font-medium text-status-critical" role="alert">
+            {error}
+          </p>
+        )}
+
+        {success && (
+          <p className="text-xs font-semibold text-status-resolved" role="status">
+            ✓ Authority updated successfully!
+          </p>
+        )}
+
+        <div className="flex items-center justify-between pt-2 border-t border-line">
+          <Link
+            to={`/admin/authorities/${authority?.id}`}
+            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+          >
+            <span>Full Profile &amp; Audit Log</span>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" type="button" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              loading={adminUpdate.isPending}
+              disabled={adminUpdate.isPending}
+            >
+              Save Changes
+            </Button>
+          </div>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
 /**
  * Authority provisioning table and stats with 100% actual database data.
  */
@@ -110,6 +368,7 @@ export default function AuthoritiesPage() {
   const { data: categories } = useCategories()
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState('')
+  const [editingAuthority, setEditingAuthority] = useState(null)
 
   const { data, isLoading, isError, error } = useAuthorities({
     cursor: cursor || undefined,
@@ -254,10 +513,16 @@ export default function AuthoritiesPage() {
                         Role
                       </th>
                       <th scope="col" className="px-4 py-3.5">
+                        Jurisdiction Area
+                      </th>
+                      <th scope="col" className="px-4 py-3.5">
                         Category Scope
                       </th>
                       <th scope="col" className="px-4 py-3.5">
                         Status
+                      </th>
+                      <th scope="col" className="px-4 py-3.5 text-right">
+                        Actions
                       </th>
                     </tr>
                   </thead>
@@ -284,13 +549,14 @@ export default function AuthoritiesPage() {
                                 {item.avatar}
                               </div>
                               <div>
-                                <p
-                                  className={`font-bold ${
+                                <Link
+                                  to={`/admin/authorities/${item.fullId}`}
+                                  className={`font-bold hover:text-primary hover:underline ${
                                     isRevoked ? 'text-ink-muted line-through' : 'text-ink'
                                   }`}
                                 >
                                   {item.name}
-                                </p>
+                                </Link>
                                 <p className="text-xs text-ink-faint">
                                   {item.email} &bull; ID: {item.id}
                                 </p>
@@ -303,6 +569,14 @@ export default function AuthoritiesPage() {
                             <span className="inline-flex items-center gap-1 rounded border border-sky-200/60 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
                               <UserCheck className="h-3 w-3 text-sky-600" aria-hidden="true" />
                               {item.role}
+                            </span>
+                          </td>
+
+                          {/* Jurisdiction Area */}
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                              <MapPin className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                              {item.areaLabel}
                             </span>
                           </td>
 
@@ -339,6 +613,28 @@ export default function AuthoritiesPage() {
                                 {item.status}
                               </span>
                             </span>
+                          </td>
+
+                          {/* Actions */}
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setEditingAuthority(item.rawUser)}
+                                className="inline-flex items-center gap-1.5 py-1 px-2.5 text-xs font-semibold hover:border-primary hover:text-primary"
+                              >
+                                <Pencil className="h-3 w-3 text-primary" aria-hidden="true" />
+                                <span>Edit</span>
+                              </Button>
+                              <Link
+                                to={`/admin/authorities/${item.fullId}`}
+                                className="rounded-panel border border-line p-1.5 text-ink-muted transition hover:border-primary hover:text-primary hover:bg-slate-50"
+                                title="View details & audit"
+                              >
+                                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -453,6 +749,14 @@ export default function AuthoritiesPage() {
           </Card>
         </div>
       </div>
+
+      {editingAuthority && (
+        <EditAuthorityModal
+          authority={editingAuthority}
+          onClose={() => setEditingAuthority(null)}
+          categories={categories}
+        />
+      )}
     </div>
   )
 }

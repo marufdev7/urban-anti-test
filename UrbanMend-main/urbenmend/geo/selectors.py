@@ -77,8 +77,7 @@ def is_within_city(point: Point) -> bool:
     if not CityBoundary.objects.filter(is_active=True).exists():
         return False
 
-    # Supported Bangladesh City Corporation geographical boundaries
-    CITY_ENVELOPES = [
+    AREA_ENVELOPES_LIST = [
         (22.15, 91.65, 22.55, 91.95),  # Chattogram (CCC)
         (24.28, 88.48, 24.48, 88.72),  # Rajshahi (RCC)
         (22.68, 89.45, 22.95, 89.65),  # Khulna (KCC)
@@ -89,11 +88,40 @@ def is_within_city(point: Point) -> bool:
         (23.88, 90.30, 24.15, 90.52),  # Gazipur (GCC)
         (23.38, 91.10, 23.55, 91.26),  # Cumilla (CuCC)
     ]
-    for min_lat, min_lng, max_lat, max_lng in CITY_ENVELOPES:
+    for min_lat, min_lng, max_lat, max_lng in AREA_ENVELOPES_LIST:
         if min_lat <= point.y <= max_lat and min_lng <= point.x <= max_lng:
             return True
 
     return False
+
+
+AREA_ENVELOPES: dict[str, tuple[float, float, float, float]] = {
+    # area_key: (min_lng, min_lat, max_lng, max_lat) in WGS84
+    "dhaka": (90.32, 23.68, 90.52, 23.90),
+    "dncc": (90.33, 23.765, 90.45, 23.90),
+    "dscc": (90.355, 23.68, 90.445, 23.765),
+    "chattogram": (91.65, 22.15, 91.95, 22.55),
+    "rajshahi": (88.48, 24.28, 88.72, 24.48),
+    "khulna": (89.45, 22.68, 89.65, 22.95),
+    "sylhet": (91.78, 24.78, 91.98, 25.02),
+    "barishal": (90.28, 22.62, 90.46, 22.80),
+    "rangpur": (89.15, 25.65, 89.35, 25.85),
+    "mymensingh": (90.32, 24.68, 90.49, 24.85),
+    "gazipur": (90.30, 23.88, 90.52, 24.15),
+    "cumilla": (91.10, 23.38, 91.26, 23.55),
+}
+
+
+def get_area_bbox_polygon(area_id: str | None):
+    """Return a 4326 Polygon for the given area key, or None if unknown/unrestricted."""
+    if not area_id:
+        return None
+    key = str(area_id).lower().strip()
+    if key in AREA_ENVELOPES:
+        from django.contrib.gis.geos import Polygon
+
+        return Polygon.from_bbox(AREA_ENVELOPES[key])
+    return None
 
 
 def nearby_pois(*, point: Point, radius_m: float, limit: int = 5) -> QuerySet[POI]:

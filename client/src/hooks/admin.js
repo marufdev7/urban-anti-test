@@ -39,8 +39,32 @@ export function useUpdateUser(userId) {
     mutationFn: (body) => api(`/users/${userId}`, { method: 'PATCH', body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['authority-profile', userId] })
       queryClient.invalidateQueries({ queryKey: ['session'] })
     },
+  })
+}
+
+/** Dynamic Admin edit of any user (PATCH /users/{id}). */
+export function useAdminUpdateUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, ...body }) => api(`/users/${userId}`, { method: 'PATCH', body }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['authority-profile', variables?.userId] })
+      queryClient.invalidateQueries({ queryKey: ['session'] })
+    },
+  })
+}
+
+/** Fetch full authority profile, performance metrics, and activity log (GET /users/{id}). */
+export function useAuthorityProfile(userId, options = {}) {
+  return useQuery({
+    queryKey: ['authority-profile', userId],
+    queryFn: () => api(`/users/${userId}`),
+    enabled: !!userId,
+    ...options,
   })
 }
 

@@ -3,6 +3,28 @@
  * Contains official municipal boundaries and ward/jurisdiction polygons for all 10 City Corporations.
  */
 
+export const JURISDICTION_AREAS = [
+  { value: '', label: 'All Jurisdictions / Metropolitan (Unrestricted)', shortLabel: 'All Areas' },
+  { value: 'dhaka', label: 'Dhaka — Entire Metro (DNCC & DSCC)', shortLabel: 'Dhaka Metro' },
+  { value: 'dncc', label: 'Dhaka North City Corporation (DNCC)', shortLabel: 'DNCC (North)' },
+  { value: 'dscc', label: 'Dhaka South City Corporation (DSCC)', shortLabel: 'DSCC (South)' },
+  { value: 'chattogram', label: 'Chattogram City Corporation (CCC)', shortLabel: 'Chattogram' },
+  { value: 'rajshahi', label: 'Rajshahi City Corporation (RCC)', shortLabel: 'Rajshahi' },
+  { value: 'khulna', label: 'Khulna City Corporation (KCC)', shortLabel: 'Khulna' },
+  { value: 'sylhet', label: 'Sylhet City Corporation (SCC)', shortLabel: 'Sylhet' },
+  { value: 'barishal', label: 'Barishal City Corporation (BCC)', shortLabel: 'Barishal' },
+  { value: 'rangpur', label: 'Rangpur City Corporation (RpCC)', shortLabel: 'Rangpur' },
+  { value: 'mymensingh', label: 'Mymensingh City Corporation (MCC)', shortLabel: 'Mymensingh' },
+  { value: 'gazipur', label: 'Gazipur City Corporation (GCC)', shortLabel: 'Gazipur' },
+  { value: 'cumilla', label: 'Cumilla City Corporation (CuCC)', shortLabel: 'Cumilla' },
+]
+
+export function getJurisdictionLabel(areaId) {
+  if (!areaId) return 'All Areas'
+  const match = JURISDICTION_AREAS.find((a) => a.value === String(areaId).toLowerCase())
+  return match ? match.shortLabel : areaId
+}
+
 export const BANGLADESH_CITIES = [
   {
     id: 'dhaka',

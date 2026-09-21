@@ -7,12 +7,14 @@ import {
   ClipboardList,
   Filter,
   Info,
+  MapPin,
   Plus,
   Search,
   UserCheck,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
+import { getJurisdictionLabel } from '../../lib/zones'
 import {
   ISSUE_SORTS,
   ISSUE_STATUSES,
@@ -245,10 +247,16 @@ export default function QueuePage() {
 
       {/* Header with Dynamic Title & Description */}
       <div className="mb-6">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold tracking-tight text-ink">
             {isMyIssues ? 'My Assigned Issues' : 'Work Queue'}
           </h1>
+          {user?.assignedArea && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+              <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+              <span>{getJurisdictionLabel(user.assignedArea)}</span>
+            </span>
+          )}
           {isMyIssues && (
             <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
               <UserCheck className="h-3.5 w-3.5" />
@@ -258,8 +266,8 @@ export default function QueuePage() {
         </div>
         <p className="mt-1 text-sm text-ink-muted">
           {isMyIssues
-            ? 'Municipal incidents assigned directly to you for municipal response, dispatch, and resolution.'
-            : 'Manage and review active municipal reports across your jurisdiction.'}
+            ? `Municipal incidents assigned directly to you${user?.assignedArea ? ` in ${getJurisdictionLabel(user.assignedArea)}` : ''} for municipal response, dispatch, and resolution.`
+            : `Manage and review active municipal reports across ${getJurisdictionLabel(user?.assignedArea)}.`}
         </p>
       </div>
 

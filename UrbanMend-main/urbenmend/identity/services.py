@@ -966,48 +966,12 @@ def provision_authority(
     actor: User,
     email: str | None = None,
     phone: str | None = None,
+    password: str | None = None,
+    assigned_area: str = "",
     category_slugs: Sequence[str],
     require_two_factor: bool = False,
 ) -> User:
-    """Create an Authority account with its category scope (FR-2, BR-25, API §6.2).
-
-    Args:
-        actor: The Admin performing the grant. **Authorized here, in the service** (FR-3).
-        email: Work address for the new account. At least one contact is required.
-        phone: Alternative contact.
-        category_slugs: The BR-26 scope. Machine keys from `Category.slug`, as the spec's
-            `"categoryScope": ["roads"]` sends them.
-        require_two_factor: Stored now, enforced by T1.7 (FR-4).
-
-    Returns:
-        The new Authority, scope already attached.
-
-    Raises:
-        AuthorizationError: `403` — `actor` is not an Admin. **BR-25 is this line.**
-        ProvisioningError: `409` — the contact is already in use.
-        ValidationError: `422` — no contact given, or a slug does not resolve to an active
-            Category.
-
-    ⚠️ **`require_role(actor, Role.ADMIN)` is the first statement, and BR-25 lives or dies on it.**
-    "An Authority role can be granted only by an Admin" is not enforceable in a view: a Celery
-    task or management command calling this function would bypass a permission class entirely.
-
-    ⚠️ **The account gets no password** — `create_user(password=None)` sets an unusable one. The
-    spec's body carries no password field, and inventing one would mean either an Admin choosing
-    another person's credential or a generated secret travelling back through the API response.
-    Neither is acceptable; the authority establishes their own via the reset flow (T1.7).
-    ⚠️ Until T1.7 ships that flow, a provisioned authority **cannot yet log in**. The account,
-    role and scope are all real; only the credential path is missing. Recorded, not hidden.
-
-    ⚠️ **`status` stays `REGISTERED`, not `ACTIVE`.** The work address is unproven until someone
-    reading that mailbox verifies it, and BR-30 bars notifications to an unverified channel. An
-    Admin typo would otherwise create a live Authority whose owner never learns the account
-    exists.
-
-    ⚠️ **Scope is resolved and validated before the user is created**, so an unknown slug fails
-    with nothing written. Inside `atomic` a later failure would roll back anyway, but ordering it
-    this way keeps the error about the request rather than about a half-built account.
-    """
+    """Create an Authority account with its category scope (FR-2, BR-25, API §6.2)."""
     from urbenmend.identity.models import Channel, Role, User, UserStatus
 
     require_role(actor, Role.ADMIN)
@@ -1017,10 +981,6 @@ def provision_authority(
 
     categories = _resolve_category_scope(category_slugs)
 
-    # ⚠️ Normalized exactly as `User._normalize_contact()` does it, because the point of the check
-    # is to predict what the UNIQUE index will see. `BaseUserManager.normalize_email` lowercases
-    # only the domain, so `Admin@x.com` would pass this check and then be stored as `admin@x.com`
-    # — the collision would surface as an IntegrityError instead of the 409 the spec asks for.
     normalized_email = email.strip().lower() if email else None
     normalized_phone = phone.strip() if phone else None
 
@@ -1029,24 +989,32 @@ def provision_authority(
     if normalized_phone and User.objects.filter(phone=normalized_phone).exists():
         raise ProvisioningError("An account with that phone number already exists.")
 
+    initial_status = UserStatus.ACTIVE if password else UserStatus.REGISTERED
+
     try:
         authority = User.objects.create_user(
             email=normalized_email,
             phone=normalized_phone,
-            password=None,
+            password=password,
             role=Role.AUTHORITY,
-            status=UserStatus.REGISTERED,
+            status=initial_status,
             require_two_factor=require_two_factor,
         )
     except IntegrityError as exc:
-        # ⚠️ Not redundant with the `exists()` checks above — it closes the window between them
-        # and this INSERT. Two Admins provisioning the same address concurrently both pass the
-        # check; without this the loser gets a `500` instead of the documented `409`. The checks
-        # remain because they distinguish *which* field collided, which the constraint error only
-        # reports in a message no caller should be parsing.
         raise ProvisioningError(
             "An account with that email or phone number already exists."
         ) from exc
+
+    update_fields = []
+    if password:
+        authority.email_verified_at = timezone.now()
+        update_fields.append("email_verified_at")
+    if assigned_area:
+        authority.assigned_area = assigned_area.strip()
+        update_fields.append("assigned_area")
+
+    if update_fields:
+        authority.save(update_fields=update_fields)
 
     if categories:
         authority.category_scope.set(categories)
@@ -1056,9 +1024,11 @@ def provision_authority(
         action="authority.provisioned",
         target=authority,
         category_scope=sorted(category.slug for category in categories),
+        assigned_area=authority.assigned_area,
         require_two_factor=require_two_factor,
     )
-    send_verification_code(user=authority, channel=Channel.EMAIL)
+    if not password:
+        send_verification_code(user=authority, channel=Channel.EMAIL)
     return authority
 
 
@@ -1119,8 +1089,11 @@ def update_user_by_admin(*, actor: User, user_id, **changes: Any) -> User:
 
         raise Http404("User not found.") from exc
     before = {
+        "email": target.email,
+        "phone": target.phone,
         "role": target.role,
         "status": target.status,
+        "assigned_area": getattr(target, "assigned_area", "") or "",
         "require_two_factor": target.require_two_factor,
         "category_scope": sorted(target.category_scope.values_list("slug", flat=True)),
     }
@@ -1130,6 +1103,42 @@ def update_user_by_admin(*, actor: User, user_id, **changes: Any) -> User:
     if "category_scope" in changes:
         scope = _resolve_category_scope(changes.pop("category_scope"))
         target.category_scope.set(scope)
+    
+    update_fields = ["role", "status", "require_two_factor"]
+    if "email" in changes:
+        new_email = (changes.pop("email") or "").strip().lower()
+        if new_email and new_email != (target.email or "").lower():
+            if User.objects.filter(email__iexact=new_email).exclude(pk=target.pk).exists():
+                raise ValidationError("A user with this email address already exists.")
+            target.email = new_email
+            target.email_verified_at = timezone.now()
+            update_fields.append("email")
+            update_fields.append("email_verified_at")
+
+    if "phone" in changes:
+        new_phone = (changes.pop("phone") or "").strip() or None
+        if new_phone and new_phone != target.phone:
+            if User.objects.filter(phone=new_phone).exclude(pk=target.pk).exists():
+                raise ValidationError("A user with this phone number already exists.")
+            target.phone = new_phone
+            target.phone_verified_at = timezone.now()
+            update_fields.append("phone")
+            update_fields.append("phone_verified_at")
+        elif new_phone is None and target.phone is not None:
+            target.phone = None
+            target.phone_verified_at = None
+            update_fields.append("phone")
+            update_fields.append("phone_verified_at")
+
+    if "assigned_area" in changes:
+        target.assigned_area = (changes.pop("assigned_area") or "").strip()
+        update_fields.append("assigned_area")
+    if "password" in changes:
+        new_password = changes.pop("password")
+        if new_password:
+            target.set_password(new_password)
+            update_fields.append("password")
+
     for field in ("role", "status", "require_two_factor"):
         if field in changes:
             setattr(target, field, changes.pop(field))
@@ -1137,15 +1146,18 @@ def update_user_by_admin(*, actor: User, user_id, **changes: Any) -> User:
         target.category_scope.clear()
     if changes:
         raise ValidationError("Unsupported user update field.")
-    target.save(update_fields=["role", "status", "require_two_factor"])
+    target.save(update_fields=update_fields)
     # Suspension and deprovisioning must invalidate already-issued sessions immediately.
     # Checking the resulting status also handles an idempotent PATCH where the status was
     # already blocked, keeping the operation fail-closed if a stale session exists.
     if target.status in {UserStatus.SUSPENDED, UserStatus.DEPROVISIONED, UserStatus.DELETED}:
         revoke_all_sessions(user=target)
     after = {
+        "email": target.email,
+        "phone": target.phone,
         "role": target.role,
         "status": target.status,
+        "assigned_area": getattr(target, "assigned_area", "") or "",
         "require_two_factor": target.require_two_factor,
         "category_scope": sorted(target.category_scope.values_list("slug", flat=True)),
     }

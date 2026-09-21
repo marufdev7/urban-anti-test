@@ -166,6 +166,7 @@ urlpatterns = [
     path("map/issues", issue_views.IssueMapView.as_view(), name="map-issues"),
     path("analytics/summary", issue_views.AnalyticsSummaryView.as_view(), name="analytics-summary"),
     path("audit-events", audit_views.AuditEventCollectionView.as_view(), name="audit-events"),
+    path("audit/events", audit_views.AuditEventCollectionView.as_view(), name="audit-events-slash"),
     path("categories", classification_views.CategoryCollectionView.as_view(), name="categories"),
     path(
         "categories/<slug:key>",
