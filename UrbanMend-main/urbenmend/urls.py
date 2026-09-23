@@ -8,9 +8,11 @@ repeats it [doc: API §5].
 `docs/04-api-specification.md`, which is authoritative over the implementation.
 """
 
+from django.conf import settings
 from django.contrib import admin
-from django.urls import URLPattern, URLResolver, include, path
+from django.urls import URLPattern, URLResolver, include, path, re_path
 from django.views.generic import RedirectView
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 # Annotated because mypy cannot infer the element type from a heterogeneous list.
@@ -23,6 +25,7 @@ urlpatterns: list[URLPattern | URLResolver] = [
         name="swagger-ui",
     ),
     path("api/v1/", include("urbenmend.api.urls")),
+    re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
     # FR-30/FR-31 — reference data and moderation are surfaced through Django admin
     # [doc: Arch §2.4]. This is also the only consumer of `PermissionsMixin` on the user model.
     path("admin/", admin.site.urls),

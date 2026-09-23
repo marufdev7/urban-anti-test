@@ -36,6 +36,11 @@ export default defineConfig({
         changeOrigin: false,
         secure: false,
       },
+      '/media': {
+        target: apiTarget,
+        changeOrigin: false,
+        secure: false,
+      },
       // Proxies MinIO S3 media requests preserving Host: storage:9000 for SigV4 compliance
       '/urbenmend-media': {
         target: storageTarget,

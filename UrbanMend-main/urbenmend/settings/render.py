@@ -74,12 +74,36 @@ else:
     SESSION_ENGINE = "django.contrib.sessions.backends.db"
 
 # --------------------------------------------------------------------------------------
+# Celery (Run synchronously in-process when Redis is not provided)
+# --------------------------------------------------------------------------------------
+if not REDIS_URL:
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = False
+
+# --------------------------------------------------------------------------------------
 # Object storage fallback
 # --------------------------------------------------------------------------------------
 if env("STORAGE_ACCESS_KEY", default=""):
     AWS_ACCESS_KEY_ID = env("STORAGE_ACCESS_KEY")
     AWS_SECRET_ACCESS_KEY = env("STORAGE_SECRET_KEY")
     AWS_S3_ADDRESSING_STYLE = "path"
+else:
+    try:
+        MEDIA_ROOT = BASE_DIR / "mediafiles"
+        MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+    except (PermissionError, OSError):
+        from pathlib import Path
+        MEDIA_ROOT = Path("/tmp/mediafiles")
+        MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 # --------------------------------------------------------------------------------------
 # Email fallback

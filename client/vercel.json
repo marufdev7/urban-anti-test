@@ -6,6 +6,10 @@
       "destination": "https://urbanmend-api.onrender.com/api/v1/:path*"
     },
     {
+      "source": "/media/:path*",
+      "destination": "https://urbanmend-api.onrender.com/media/:path*"
+    },
+    {
       "source": "/nominatim-proxy/:path*",
       "destination": "https://nominatim.openstreetmap.org/:path*"
     },

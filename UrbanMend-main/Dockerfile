@@ -70,6 +70,8 @@ COPY . .
 RUN DJANGO_SETTINGS_MODULE=urbenmend.settings.build \
     python manage.py collectstatic --noinput
 
+RUN mkdir -p /app/mediafiles /tmp/mediafiles && chown -R app:app /app/mediafiles /tmp/mediafiles
+
 # Non-root from here on [doc: DevOps §2.2, NFR-5].
 USER app
 
