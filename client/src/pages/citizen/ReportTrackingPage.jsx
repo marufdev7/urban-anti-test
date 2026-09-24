@@ -89,6 +89,90 @@ const FALLBACK_REPORTS_BY_ID = {
   },
 }
 
+function ReportMediaItem({ media, index, total }) {
+  const [photoError, setPhotoError] = useState(false)
+  const [useThumbFallback, setUseThumbFallback] = useState(false)
+
+  const currentPhotoSrc = useThumbFallback
+    ? normalizeMediaUrl(media?.thumbnailUrl)
+    : normalizeMediaUrl(media?.url || media?.thumbnailUrl)
+
+  if (!media || (!currentPhotoSrc && !photoError)) return null
+
+  if (photoError || !currentPhotoSrc) {
+    return (
+      <div className="flex h-44 w-full flex-col items-center justify-center rounded-panel border border-line bg-surface-sunken p-4 text-center text-ink-muted">
+        <ImageOff className="mb-2 h-6 w-6 text-ink-faint" aria-hidden="true" />
+        <p className="text-xs font-medium">Photo #{index + 1} unavailable or expired</p>
+      </div>
+    )
+  }
+
+  return (
+    <figure className="group relative overflow-hidden rounded-panel border border-line bg-surface-sunken shadow-xs">
+      <img
+        src={currentPhotoSrc}
+        alt={`Report photo ${index + 1}`}
+        className={`w-full object-cover transition-transform duration-200 group-hover:scale-[1.02] ${
+          total === 1 ? 'max-h-[440px]' : 'h-52 sm:h-60'
+        }`}
+        onError={() => {
+          if (!useThumbFallback && media?.thumbnailUrl && media?.url && media.url !== media.thumbnailUrl) {
+            setUseThumbFallback(true)
+          } else {
+            setPhotoError(true)
+          }
+        }}
+      />
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-slate-900/80 px-3.5 py-2 text-xs font-medium text-white backdrop-blur-sm">
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+          <span className="text-[11px] font-semibold">Photo #{index + 1} · Verified</span>
+        </div>
+        <a
+          href={normalizeMediaUrl(media?.url || media?.thumbnailUrl)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] text-white/80 hover:text-white hover:underline"
+        >
+          View Full
+        </a>
+      </div>
+    </figure>
+  )
+}
+
+function ReportMediaGallery({ media }) {
+  const mediaList = Array.isArray(media) ? media : []
+  if (mediaList.length === 0) return null
+
+  return (
+    <div className="mt-5">
+      <div className="mb-2.5 flex items-center justify-between border-b border-line/60 pb-1.5">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-ink">
+          Attached Evidence Photos ({mediaList.length})
+        </h3>
+        <span className="text-[11px] text-ink-muted">
+          All images EXIF-sanitized
+        </span>
+      </div>
+      <div
+        className={`grid gap-4 ${
+          mediaList.length === 1
+            ? 'grid-cols-1'
+            : mediaList.length === 2
+              ? 'grid-cols-1 sm:grid-cols-2'
+              : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3'
+        }`}
+      >
+        {mediaList.map((m, idx) => (
+          <ReportMediaItem key={m.id || idx} media={m} index={idx} total={mediaList.length} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /**
  * Citizen status-tracking page (citizen-report-status-tracking.png).
  * Polls while classification is pending so the AI triage card fills in live.
@@ -183,13 +267,8 @@ export default function ReportTrackingPage() {
     ? report.description.trim().split(/\s+/).slice(0, 8).join(' ') +
       (report.description.trim().split(/\s+/).length > 8 ? '…' : '')
     : categoryName
-  const photo = report.media?.find((m) => m.url) ?? report.media?.find((m) => m.thumbnailUrl)
-  const [photoError, setPhotoError] = useState(false)
-  const [useThumbFallback, setUseThumbFallback] = useState(false)
-  const currentPhotoSrc = useThumbFallback
-    ? normalizeMediaUrl(photo?.thumbnailUrl)
-    : normalizeMediaUrl(photo?.url || photo?.thumbnailUrl)
   const position = report.location
+
 
   const isAssigned = !!issueId
   const isResolved =
@@ -302,31 +381,7 @@ export default function ReportTrackingPage() {
                 </p>
               )}
 
-              {photo && !photoError && currentPhotoSrc ? (
-                <figure className="relative mt-4 overflow-hidden rounded-panel border border-line">
-                  <img
-                    src={currentPhotoSrc}
-                    alt="Reported issue"
-                    className="w-full max-h-[400px] object-cover"
-                    onError={() => {
-                      if (!useThumbFallback && photo?.thumbnailUrl && photo?.url && photo.url !== photo.thumbnailUrl) {
-                        setUseThumbFallback(true)
-                      } else {
-                        setPhotoError(true)
-                      }
-                    }}
-                  />
-                  <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-slate-900/80 px-3.5 py-2.5 text-xs font-medium text-white backdrop-blur-sm">
-                    <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-                    <span>EXIF Data Stripped &amp; Verified</span>
-                  </div>
-                </figure>
-              ) : photo && photoError ? (
-                <div className="mt-4 flex h-36 w-full flex-col items-center justify-center rounded-panel border border-line bg-surface-sunken p-4 text-center text-ink-muted">
-                  <ImageOff className="mb-2 h-6 w-6 text-ink-faint" aria-hidden="true" />
-                  <p className="text-xs font-medium">Attachment image unavailable or expired from cache</p>
-                </div>
-              ) : null}
+              <ReportMediaGallery media={report.media} />
             </CardBody>
           </Card>
 

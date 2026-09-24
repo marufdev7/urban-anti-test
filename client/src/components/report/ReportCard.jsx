@@ -78,6 +78,13 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
               }`}
             />
           </div>
+
+          {/* Multiple Photos Count Indicator */}
+          {report.media && report.media.length > 1 && (
+            <div className="absolute bottom-2.5 right-2.5 rounded-full bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-xs shadow-xs">
+              +{report.media.length - 1} photos
+            </div>
+          )}
         </div>
 
         <div className="p-4">

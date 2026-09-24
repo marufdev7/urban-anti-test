@@ -376,7 +376,7 @@ export default function IssueDetailPage() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {reports.length > 0 ? (
                   reports.map((report, idx) => {
-                    const photo = report.media?.find((m) => m.url || m.thumbnailUrl)
+                    const mediaList = Array.isArray(report.media) ? report.media : []
                     const sev = report.classification?.severitySignal
                     return (
                       <div
@@ -396,7 +396,15 @@ export default function IssueDetailPage() {
                             &ldquo;{report.description || '(Report description)'}&rdquo;
                           </p>
                           <div className="mt-3">
-                            <IssueReportPhoto photo={photo} />
+                            {mediaList.length > 1 ? (
+                              <div className="grid grid-cols-2 gap-2">
+                                {mediaList.map((m, mIdx) => (
+                                  <IssueReportPhoto key={m.id || mIdx} photo={m} />
+                                ))}
+                              </div>
+                            ) : (
+                              <IssueReportPhoto photo={mediaList[0]} />
+                            )}
                           </div>
                         </div>
 
