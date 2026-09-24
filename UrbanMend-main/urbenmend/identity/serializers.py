@@ -107,6 +107,16 @@ class LoginSerializer(CamelCaseSerializer):
     password = serializers.CharField(write_only=True, max_length=128, trim_whitespace=False)
 
 
+class FirebaseLoginSerializer(CamelCaseSerializer):
+    """POST /auth/firebase-login request body."""
+
+    id_token = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        help_text="Firebase ID token (JWT) returned from Google Sign-In.",
+    )
+
+
 class LoginResponseSerializer(CamelCaseSerializer):
     """POST /auth/login 200 response (API §6.1).
 

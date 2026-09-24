@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
 import { queryClient } from '../lib/queryClient'
+import { firebaseSignOut } from '../lib/firebase'
 
 const AuthContext = createContext(null)
 
@@ -30,6 +31,11 @@ export function AuthProvider({ children }) {
       api('/auth/login', { method: 'POST', body: credentials }),
   })
 
+  const firebaseLogin = useMutation({
+    mutationFn: (payload) =>
+      api('/auth/firebase-login', { method: 'POST', body: payload }),
+  })
+
   const verifyTwoFactor = useMutation({
     mutationFn: (code) =>
       api('/auth/2fa/verify', { method: 'POST', body: { code } }),
@@ -41,7 +47,10 @@ export function AuthProvider({ children }) {
   }
 
   const logout = useMutation({
-    mutationFn: () => api('/auth/logout', { method: 'POST' }),
+    mutationFn: async () => {
+      await firebaseSignOut()
+      return await api('/auth/logout', { method: 'POST' })
+    },
     // Even a failed logout call (expired session, network drop) must leave the
     // UI logged out; the cookie can be cleaned up later.
     onSettled: () => {
@@ -57,6 +66,7 @@ export function AuthProvider({ children }) {
     isLoading: session.isLoading,
     isAuthenticated: !!user,
     login,
+    firebaseLogin,
     verifyTwoFactor,
     completeLogin,
     logout,

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -5,6 +6,7 @@ import {
   ArrowLeft,
   Clock3,
   Compass,
+  ImageOff,
   Info,
   MapPin,
   ShieldCheck,
@@ -182,6 +184,11 @@ export default function ReportTrackingPage() {
       (report.description.trim().split(/\s+/).length > 8 ? '…' : '')
     : categoryName
   const photo = report.media?.find((m) => m.url) ?? report.media?.find((m) => m.thumbnailUrl)
+  const [photoError, setPhotoError] = useState(false)
+  const [useThumbFallback, setUseThumbFallback] = useState(false)
+  const currentPhotoSrc = useThumbFallback
+    ? normalizeMediaUrl(photo?.thumbnailUrl)
+    : normalizeMediaUrl(photo?.url || photo?.thumbnailUrl)
   const position = report.location
 
   const isAssigned = !!issueId
@@ -295,19 +302,31 @@ export default function ReportTrackingPage() {
                 </p>
               )}
 
-              {photo && (
+              {photo && !photoError && currentPhotoSrc ? (
                 <figure className="relative mt-4 overflow-hidden rounded-panel border border-line">
                   <img
-                    src={normalizeMediaUrl(photo.url ?? photo.thumbnailUrl)}
+                    src={currentPhotoSrc}
                     alt="Reported issue"
                     className="w-full max-h-[400px] object-cover"
+                    onError={() => {
+                      if (!useThumbFallback && photo?.thumbnailUrl && photo?.url && photo.url !== photo.thumbnailUrl) {
+                        setUseThumbFallback(true)
+                      } else {
+                        setPhotoError(true)
+                      }
+                    }}
                   />
                   <div className="absolute inset-x-0 bottom-0 flex items-center gap-2 bg-slate-900/80 px-3.5 py-2.5 text-xs font-medium text-white backdrop-blur-sm">
                     <ShieldCheck className="h-4 w-4 text-emerald-400" aria-hidden="true" />
                     <span>EXIF Data Stripped &amp; Verified</span>
                   </div>
                 </figure>
-              )}
+              ) : photo && photoError ? (
+                <div className="mt-4 flex h-36 w-full flex-col items-center justify-center rounded-panel border border-line bg-surface-sunken p-4 text-center text-ink-muted">
+                  <ImageOff className="mb-2 h-6 w-6 text-ink-faint" aria-hidden="true" />
+                  <p className="text-xs font-medium">Attachment image unavailable or expired from cache</p>
+                </div>
+              ) : null}
             </CardBody>
           </Card>
 

@@ -132,9 +132,28 @@ export async function apiUpload(path, file) {
  */
 export function normalizeMediaUrl(url) {
   if (!url) return ''
+  // Strip internal MinIO Docker storage host for Vite proxying
   if (url.startsWith('http://storage:9000/')) {
     return url.replace('http://storage:9000', '')
   }
+  // Strip direct Render host so it routes through Vercel rewrite / same-origin proxy
+  if (url.startsWith('http://urbanmend-api.onrender.com/')) {
+    return url.replace('http://urbanmend-api.onrender.com', '')
+  }
+  if (url.startsWith('https://urbanmend-api.onrender.com/')) {
+    return url.replace('https://urbanmend-api.onrender.com', '')
+  }
+  // Upgrade any non-localhost HTTP URL to HTTPS if the frontend is served over HTTPS
+  if (
+    url.startsWith('http://') &&
+    !url.includes('localhost') &&
+    !url.includes('127.0.0.1') &&
+    typeof window !== 'undefined' &&
+    window.location?.protocol === 'https:'
+  ) {
+    return url.replace(/^http:\/\//i, 'https://')
+  }
   return url
 }
+
 

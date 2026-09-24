@@ -45,6 +45,7 @@ from urbenmend.identity.models import Channel, Role, User
 from urbenmend.identity.serializers import (
     AdminUserListQuerySerializer,
     AdminUserUpdateSerializer,
+    FirebaseLoginSerializer,
     LoginResponseSerializer,
     LoginSerializer,
     PasswordForgotSerializer,
@@ -299,6 +300,48 @@ class LoginView(RateLimitHeadersMixin, APIView):
         # throttle is counting, and every existing test would still pass because the happy path
         # never observes it. The per-IP bucket is deliberately left alone: see the docstring.
         clear_identity_throttle(request=request)
+
+        return Response(
+            LoginResponseSerializer(user).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class FirebaseLoginView(RateLimitHeadersMixin, APIView):
+    """`POST /auth/firebase-login` — authenticate or provision a Citizen user via Firebase ID Token."""
+
+    permission_classes = [AllowAny]
+    authentication_classes: list[Any] = []
+    throttle_classes = [AuthAnonRateThrottle]
+
+    @extend_schema(
+        request=FirebaseLoginSerializer,
+        responses={
+            200: LoginResponseSerializer,
+            401: OpenApiResponse(description="Invalid or expired token."),
+            403: OpenApiResponse(description="Account locked or inactive."),
+        },
+        tags=["Authentication"],
+        operation_id="firebaseLogin",
+    )
+    def post(self, request: Request) -> Response:
+        serializer = FirebaseLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            user = services.authenticate_or_create_firebase_user(
+                id_token=data["id_token"],
+            )
+        except services.AccountLockedError as exc:
+            raise AccountLocked(str(exc)) from exc
+        except services.AuthenticationError as exc:
+            raise InvalidCredentials(str(exc)) from exc
+
+        if services.requires_two_factor(user=user):
+            services.start_partial_session(request=request._request, user=user)
+        else:
+            services.start_session(request=request._request, user=user)
 
         return Response(
             LoginResponseSerializer(user).data,

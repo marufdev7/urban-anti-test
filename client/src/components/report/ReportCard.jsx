@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CheckCircle2, Clock, ImageOff, MapPin } from 'lucide-react'
 import Card from '../ui/Card'
@@ -16,21 +17,35 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
   const sevBadge = severityBadgeFor(report)
   const isSolved = isReportSolved(report)
   const photo = report.media?.find((m) => m.thumbnailUrl || m.url)
+  const [imgFailed, setImgFailed] = useState(false)
+  const [useOriginal, setUseOriginal] = useState(false)
+
   const title =
     truncate(report.description, 45) ||
     categoryLabel(categories, report.classification?.category)
   const place = report.location?.address?.trim() || 'Dhaka Sector'
 
+  const imageSrc = useOriginal
+    ? normalizeMediaUrl(photo?.url)
+    : normalizeMediaUrl(photo?.thumbnailUrl || photo?.url)
+
   return (
     <Card className={`overflow-hidden transition-all hover:shadow-md ${isSolved ? 'border-status-resolved/50 ring-1 ring-status-resolved/30 bg-status-resolved/[0.02]' : ''}`}>
       <Link to={`${linkBase}/${report.id}`} className="block">
         <div className="relative h-40 bg-surface-sunken">
-          {photo ? (
+          {photo && !imgFailed && imageSrc ? (
             <img
-              src={normalizeMediaUrl(photo.thumbnailUrl || photo.url)}
+              src={imageSrc}
               alt=""
               className="h-full w-full object-cover"
               loading="lazy"
+              onError={() => {
+                if (!useOriginal && photo?.url && photo?.thumbnailUrl && photo.url !== photo.thumbnailUrl) {
+                  setUseOriginal(true)
+                } else {
+                  setImgFailed(true)
+                }
+              }}
             />
           ) : (
             <div className="flex h-full items-center justify-center text-ink-faint">

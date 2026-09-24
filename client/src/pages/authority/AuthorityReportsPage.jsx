@@ -244,12 +244,24 @@ export default function AuthorityReportsPage() {
                             src={normalizeMediaUrl(photo.thumbnailUrl || photo.url)}
                             alt=""
                             className="h-9 w-9 rounded object-cover border border-line"
+                            onError={(e) => {
+                              if (photo.url && e.currentTarget.src !== normalizeMediaUrl(photo.url)) {
+                                e.currentTarget.src = normalizeMediaUrl(photo.url)
+                              } else {
+                                e.currentTarget.style.display = 'none'
+                                if (e.currentTarget.nextElementSibling) {
+                                  e.currentTarget.nextElementSibling.style.display = 'flex'
+                                }
+                              }
+                            }}
                           />
-                        ) : (
-                          <div className="flex h-9 w-9 items-center justify-center rounded border border-line bg-surface-sunken text-ink-faint">
-                            <Image className="h-4 w-4" />
-                          </div>
-                        )}
+                        ) : null}
+                        <div
+                          className="flex h-9 w-9 items-center justify-center rounded border border-line bg-surface-sunken text-ink-faint"
+                          style={{ display: photo ? 'none' : 'flex' }}
+                        >
+                          <Image className="h-4 w-4" />
+                        </div>
                         <div className="min-w-0">
                           <span className="font-mono text-xs font-bold text-ink">
                             #{shortId(r.id)}

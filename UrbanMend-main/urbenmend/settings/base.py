@@ -713,3 +713,7 @@ structlog.configure(
     logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
+
+# Firebase Authentication (Google SSO)
+FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="urbanmend-app-7a")
+

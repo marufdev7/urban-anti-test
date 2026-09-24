@@ -37,6 +37,11 @@ urlpatterns = [
     path("auth/register", identity_views.RegisterView.as_view(), name="auth-register"),
     path("auth/verify", identity_views.VerifyView.as_view(), name="auth-verify"),
     path("auth/login", identity_views.LoginView.as_view(), name="auth-login"),
+    path(
+        "auth/firebase-login",
+        identity_views.FirebaseLoginView.as_view(),
+        name="auth-firebase-login",
+    ),
     # ⚠️ Both accept a *partial* post-password session, which is not an authenticated request —
     # see the T1.7 header in `identity/services.py`. They are the only two routes in the project
     # that do; anything else added under `auth/2fa/` needs that decision made deliberately.

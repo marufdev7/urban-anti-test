@@ -1,0 +1,15 @@
+{
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "UrbanMend",
+        "supportEmail": "mrf.hmd7@gmail.com",
+        "authorizedRedirectUris": [
+          "http://localhost",
+          "https://urbanmend-app-7a.firebaseapp.com/__/auth/handler",
+          "https://urbanmend-123.vercel.app"
+        ]
+      }
+    }
+  }
+}

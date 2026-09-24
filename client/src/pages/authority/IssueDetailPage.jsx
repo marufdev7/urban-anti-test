@@ -64,6 +64,36 @@ const UNIT_OPTIONS = [
   { value: 'Squad 7 (Roadworks)', label: 'Squad 7 (Roadworks)' },
 ]
 
+function IssueReportPhoto({ photo }) {
+  const [failed, setFailed] = useState(false)
+  const [useThumb, setUseThumb] = useState(false)
+  if (!photo || failed) {
+    return (
+      <div className="flex h-32 w-full items-center justify-center rounded border border-dashed border-sky-200 bg-sky-50/50 text-xs font-semibold text-sky-700">
+        {failed ? 'Media Expired / Unavailable' : 'No Media Attached'}
+      </div>
+    )
+  }
+  const src = useThumb
+    ? normalizeMediaUrl(photo.thumbnailUrl)
+    : normalizeMediaUrl(photo.url || photo.thumbnailUrl)
+
+  return (
+    <img
+      src={src}
+      alt="Report attachment"
+      className="h-32 w-full rounded object-cover"
+      onError={() => {
+        if (!useThumb && photo.thumbnailUrl && photo.url && photo.url !== photo.thumbnailUrl) {
+          setUseThumb(true)
+        } else {
+          setFailed(true)
+        }
+      }}
+    />
+  )
+}
+
 /**
  * Incident detail (authority-issu-details.png): coordinates map, bundled reports,
  * lifecycle actions (status / unit assignment / severity override), internal
@@ -366,17 +396,7 @@ export default function IssueDetailPage() {
                             &ldquo;{report.description || '(Report description)'}&rdquo;
                           </p>
                           <div className="mt-3">
-                            {photo ? (
-                              <img
-                                src={normalizeMediaUrl(photo.url || photo.thumbnailUrl)}
-                                alt="Report attachment"
-                                className="h-32 w-full rounded object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-32 w-full items-center justify-center rounded border border-dashed border-sky-200 bg-sky-50/50 text-xs font-semibold text-sky-700">
-                                No Media Attached
-                              </div>
-                            )}
+                            <IssueReportPhoto photo={photo} />
                           </div>
                         </div>
 

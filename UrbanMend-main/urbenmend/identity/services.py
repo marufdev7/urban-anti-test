@@ -432,6 +432,59 @@ def authenticate_user(*, identifier: str, password: str) -> User:
     return user
 
 
+def authenticate_or_create_firebase_user(*, id_token: str) -> User:
+    """Verify a Firebase ID token and authenticate or auto-provision a Citizen user.
+
+    Uses google.oauth2.id_token.verify_firebase_token against Google's public keys
+    and settings.FIREBASE_PROJECT_ID.
+    """
+    from google.auth.transport import requests as google_requests
+    from google.oauth2.id_token import verify_firebase_token
+
+    from urbenmend.identity.models import Role, User, UserStatus
+
+    project_id = getattr(settings, "FIREBASE_PROJECT_ID", "urbanmend-app-7a")
+
+    try:
+        payload = verify_firebase_token(
+            id_token,
+            google_requests.Request(),
+            audience=project_id,
+        )
+    except Exception as exc:
+        logger.warning("firebase_token_verification_failed", error=str(exc))
+        raise AuthenticationError("Invalid or expired authentication token.") from exc
+
+    email = payload.get("email")
+    if not email:
+        raise AuthenticationError("Google account must provide an email address.")
+
+    email = email.strip().lower()
+    email_verified = bool(payload.get("email_verified", False))
+
+    user = User.objects.filter(email=email).first()
+    if user:
+        if not user.is_active:
+            raise AccountLockedError("This account is not permitted to sign in.")
+
+        if email_verified and not user.email_verified_at:
+            user.email_verified_at = timezone.now()
+            if user.status == UserStatus.REGISTERED:
+                user.status = UserStatus.VERIFIED
+            user.save(update_fields=["email_verified_at", "status"])
+        return user
+
+    # Auto-provision new Citizen account
+    user = User.objects.create_user(
+        email=email,
+        role=Role.CITIZEN,
+        status=UserStatus.VERIFIED if email_verified else UserStatus.REGISTERED,
+        email_verified_at=timezone.now() if email_verified else None,
+    )
+    logger.info("firebase_citizen_provisioned", user_id=str(user.id), email=email)
+    return user
+
+
 def start_session(*, request: HttpRequest, user: User) -> None:
     """Attach a server-validated session to `request` for `user` (T1.3).
 
