@@ -10,12 +10,22 @@ import Button from '../../components/ui/Button'
 function loginErrorMessage(error) {
   if (!(error instanceof ApiError)) return error?.message || 'Sign-in failed. Please try again.'
   if (error.status === 0) return 'Cannot reach the server. Check your connection and try again.'
-  if (error.status === 401) return 'Incorrect email/phone or password.'
+  if (error.status === 401) {
+    return error.message && error.message !== 'Invalid credentials.'
+      ? error.message
+      : 'Incorrect email/phone or password.'
+  }
   if (error.status === 403 && error.code === 'ACCOUNT_LOCKED') {
     return 'This account is temporarily locked. Please try again later.'
   }
   if (error.status === 429) return 'Too many attempts. Please wait a moment and retry.'
-  return error.message
+  if ([502, 503, 504].includes(error.status)) {
+    return 'Server is starting up (cold start). Please wait 10-20 seconds and click again.'
+  }
+  if (error.status === 500) {
+    return 'Server encountered an error. Please try again shortly.'
+  }
+  return error.message || 'Sign-in failed. Please try again.'
 }
 
 export default function LoginPage() {

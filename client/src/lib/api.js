@@ -61,7 +61,13 @@ export async function api(path, { method = 'GET', body, headers = {} } = {}) {
     try {
       payload = JSON.parse(text)
     } catch {
-      throw new ApiError(response.status, 'INVALID_RESPONSE', 'Unexpected server response.')
+      let friendlyMessage = 'Unexpected server response.'
+      if ([502, 503, 504].includes(response.status)) {
+        friendlyMessage = 'Server is waking up. Please wait 10-20 seconds and try again.'
+      } else if (response.status === 500) {
+        friendlyMessage = 'Server encountered an error. Please try again shortly.'
+      }
+      throw new ApiError(response.status, 'INVALID_RESPONSE', friendlyMessage)
     }
   }
 
@@ -107,7 +113,13 @@ export async function apiUpload(path, file) {
     try {
       payload = JSON.parse(text)
     } catch {
-      throw new ApiError(response.status, 'INVALID_RESPONSE', 'Unexpected server response.')
+      let friendlyMessage = 'Unexpected server response.'
+      if ([502, 503, 504].includes(response.status)) {
+        friendlyMessage = 'Server is waking up. Please wait 10-20 seconds and try again.'
+      } else if (response.status === 500) {
+        friendlyMessage = 'Server encountered an error. Please try again shortly.'
+      }
+      throw new ApiError(response.status, 'INVALID_RESPONSE', friendlyMessage)
     }
   }
 

@@ -104,11 +104,39 @@ def test_firebase_login_view_invalid_token_returns_401(client: Client) -> None:
         "google.oauth2.id_token.verify_firebase_token",
         side_effect=ValueError("Signature verification failed"),
     ):
-        response = client.post(
-            reverse("api:auth-firebase-login"),
-            data={"idToken": "bad_token"},
-            content_type="application/json",
-        )
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = False
+            mock_post.return_value.status_code = 400
+            mock_post.return_value.text = '{"error": "INVALID_ID_TOKEN"}'
+            response = client.post(
+                reverse("api:auth-firebase-login"),
+                data={"idToken": "bad_token"},
+                content_type="application/json",
+            )
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "UNAUTHENTICATED"
+
+
+def test_authenticate_or_create_firebase_user_rest_fallback(client: Client) -> None:
+    with patch(
+        "google.oauth2.id_token.verify_firebase_token",
+        side_effect=ImportError("No module named 'google'"),
+    ):
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.ok = True
+            mock_post.return_value.json.return_value = {
+                "users": [
+                    {
+                        "email": "rest.fallback@example.com",
+                        "emailVerified": True,
+                        "localId": "rest-uid-123",
+                    }
+                ]
+            }
+            user = services.authenticate_or_create_firebase_user(id_token="token_for_rest")
+
+    assert user is not None
+    assert user.email == "rest.fallback@example.com"
+    assert user.role == Role.CITIZEN
+    assert user.status == UserStatus.VERIFIED

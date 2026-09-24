@@ -716,4 +716,5 @@ structlog.configure(
 
 # Firebase Authentication (Google SSO)
 FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="urbanmend-app-7a")
+FIREBASE_WEB_API_KEY = env("FIREBASE_WEB_API_KEY", default="AIzaSyBm_HMv_zKDvhgZr5s8f1UdFHnnqzNF7SQ")
 

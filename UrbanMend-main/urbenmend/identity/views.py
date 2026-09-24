@@ -337,6 +337,8 @@ class FirebaseLoginView(RateLimitHeadersMixin, APIView):
             raise AccountLocked(str(exc)) from exc
         except services.AuthenticationError as exc:
             raise InvalidCredentials(str(exc)) from exc
+        except Exception as exc:
+            raise InvalidCredentials("Invalid or expired authentication token.") from exc
 
         if services.requires_two_factor(user=user):
             services.start_partial_session(request=request._request, user=user)

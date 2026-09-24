@@ -432,28 +432,77 @@ def authenticate_user(*, identifier: str, password: str) -> User:
     return user
 
 
+def _verify_firebase_token_via_rest(id_token: str, api_key: str) -> dict[str, Any]:
+    """Verify Firebase ID token against Google Identity Toolkit REST API."""
+    import requests
+
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:lookup?key={api_key}"
+    try:
+        resp = requests.post(url, json={"idToken": id_token}, timeout=10)
+    except Exception as exc:
+        logger.warning("firebase_rest_lookup_connection_failed", error=str(exc))
+        raise AuthenticationError("Could not connect to authentication service.") from exc
+
+    if not resp.ok:
+        logger.warning("firebase_rest_lookup_rejected", status=resp.status_code, body=resp.text)
+        raise AuthenticationError("Invalid or expired authentication token.")
+
+    data = resp.json()
+    users = data.get("users", [])
+    if not users:
+        raise AuthenticationError("No user profile found for authentication token.")
+
+    user_info = users[0]
+    return {
+        "email": user_info.get("email"),
+        "email_verified": bool(user_info.get("emailVerified", False)),
+        "sub": user_info.get("localId"),
+    }
+
+
 def authenticate_or_create_firebase_user(*, id_token: str) -> User:
     """Verify a Firebase ID token and authenticate or auto-provision a Citizen user.
 
-    Uses google.oauth2.id_token.verify_firebase_token against Google's public keys
-    and settings.FIREBASE_PROJECT_ID.
+    Uses google.oauth2.id_token.verify_firebase_token if installed, with an
+    automatic fallback to Google's official Identity Toolkit REST endpoint.
     """
-    from google.auth.transport import requests as google_requests
-    from google.oauth2.id_token import verify_firebase_token
-
     from urbenmend.identity.models import Role, User, UserStatus
 
     project_id = getattr(settings, "FIREBASE_PROJECT_ID", "urbanmend-app-7a")
+    api_key = getattr(
+        settings,
+        "FIREBASE_WEB_API_KEY",
+        "AIzaSyBm_HMv_zKDvhgZr5s8f1UdFHnnqzNF7SQ",
+    )
 
+    payload = None
+
+    # Primary: verify with google.oauth2 if installed
     try:
+        from google.auth.transport import requests as google_requests
+        from google.oauth2.id_token import verify_firebase_token
+
         payload = verify_firebase_token(
             id_token,
             google_requests.Request(),
             audience=project_id,
         )
+    except (ImportError, ModuleNotFoundError):
+        logger.info("google_auth_not_installed_using_rest_fallback")
+        payload = None
     except Exception as exc:
-        logger.warning("firebase_token_verification_failed", error=str(exc))
-        raise AuthenticationError("Invalid or expired authentication token.") from exc
+        logger.warning("google_oauth_verify_failed_trying_rest", error=str(exc))
+        payload = None
+
+    # Fallback: Google Identity Toolkit REST API
+    if not payload:
+        try:
+            payload = _verify_firebase_token_via_rest(id_token, api_key)
+        except AuthenticationError:
+            raise
+        except Exception as exc:
+            logger.warning("firebase_token_verification_failed", error=str(exc))
+            raise AuthenticationError("Invalid or expired authentication token.") from exc
 
     email = payload.get("email")
     if not email:

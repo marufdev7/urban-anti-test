@@ -61,7 +61,8 @@ COPY --from=deps /wheels /wheels
 COPY requirements/base.txt requirements/base.txt
 # --no-index: install strictly from the wheels built in stage 1, never from the network.
 RUN pip install --no-index --find-links=/wheels -r requirements/base.txt \
-    && rm -rf /wheels
+    && rm -rf /wheels \
+    && pip install --no-cache-dir google-auth requests
 
 COPY . .
 
