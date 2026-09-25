@@ -10,10 +10,12 @@ import {
   PlusCircle,
 } from 'lucide-react'
 import { api } from '../../lib/api'
+import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import PageHeader from '../../components/ui/PageHeader'
 import ReportCard from '../../components/report/ReportCard'
+import CommunityIssueCard from '../../components/issue/CommunityIssueCard'
 
 /** Haversine distance in km between two {lat, lng} points. */
 function haversineKm(a, b) {
@@ -113,39 +115,55 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Nearby Activity: 1 km first, fallback to 5 km if nothing within 1 km
-  const { nearbyReports, nearbyRadiusKm } = useMemo(() => {
-    if (!userLocation || reports.length === 0) {
-      return { nearbyReports: reports.slice(0, 6), nearbyRadiusKm: null }
+  // Nearby Activity: computed from community issues so other citizens' reports appear!
+  const { nearbyItems, nearbyRadiusKm } = useMemo(() => {
+    const list = issues.length > 0 ? issues : []
+    if (list.length === 0) {
+      return { nearbyItems: [], nearbyRadiusKm: null }
     }
 
-    // Attach distance to each report that has coordinates
-    const withDistance = reports
-      .map((r) => {
-        const loc = r.location
+    if (!userLocation) {
+      return {
+        nearbyItems: list.slice(0, 6).map((issue) => ({ issue, distance: null })),
+        nearbyRadiusKm: null,
+      }
+    }
+
+    // Attach distance to each issue that has representativeLocation
+    const withDistance = list
+      .map((issue) => {
+        const loc = issue.representativeLocation
         if (loc?.lat && loc?.lng) {
-          return { report: r, distance: haversineKm(userLocation, { lat: loc.lat, lng: loc.lng }) }
+          return {
+            issue,
+            distance: haversineKm(userLocation, { lat: loc.lat, lng: loc.lng }),
+          }
         }
-        return null
+        return { issue, distance: 9999 }
       })
-      .filter(Boolean)
       .sort((a, b) => a.distance - b.distance)
 
     // Try 1 km first
-    const within1km = withDistance.filter((r) => r.distance <= 1)
+    const within1km = withDistance.filter((item) => item.distance <= 1)
     if (within1km.length > 0) {
-      return { nearbyReports: within1km.slice(0, 6).map((r) => r.report), nearbyRadiusKm: 1 }
+      return { nearbyItems: within1km.slice(0, 6), nearbyRadiusKm: 1 }
     }
 
     // Fallback to 5 km
-    const within5km = withDistance.filter((r) => r.distance <= 5)
+    const within5km = withDistance.filter((item) => item.distance <= 5)
     if (within5km.length > 0) {
-      return { nearbyReports: within5km.slice(0, 6).map((r) => r.report), nearbyRadiusKm: 5 }
+      return { nearbyItems: within5km.slice(0, 6), nearbyRadiusKm: 5 }
     }
 
-    // Nothing within 5 km — show nearest available
-    return { nearbyReports: withDistance.slice(0, 6).map((r) => r.report), nearbyRadiusKm: null }
-  }, [reports, userLocation])
+    // Fallback to closest available
+    return {
+      nearbyItems: withDistance.slice(0, 6).map((item) => ({
+        issue: item.issue,
+        distance: item.distance < 9000 ? item.distance : null,
+      })),
+      nearbyRadiusKm: null,
+    }
+  }, [issues, userLocation])
 
   return (
     <div>
@@ -230,10 +248,10 @@ export default function DashboardPage() {
           </div>
           <p className="text-xs text-ink-muted">
             {nearbyRadiusKm === 1
-              ? 'Reports within 1 km of your location.'
+              ? 'Community issues within 1 km of your location.'
               : nearbyRadiusKm === 5
-                ? 'No reports within 1 km — showing reports within 5 km.'
-                : 'Recent infrastructure reports in your area.'}
+                ? 'No issues within 1 km — showing community issues within 5 km.'
+                : 'Recent community infrastructure issues reported in your district.'}
           </p>
         </div>
         <Link
@@ -245,27 +263,27 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {nearbyReports.length === 0 ? (
+      {nearbyItems.length === 0 ? (
         <Card className="p-8 text-center">
           <EmptyState
-            title="No reports found"
-            message="Reports you submit in your district will appear here."
+            title="No nearby issues found"
+            message="Civic infrastructure issues reported in your district will appear here."
+            action={
+              <Link to="/citizen/reports/new">
+                <Button size="sm">Report a Problem</Button>
+              </Link>
+            }
           />
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {nearbyReports.map((report) => {
-            const linkedIssue = issueById.get(report.issueId)
-            const resolved =
-              linkedIssue?.status === 'resolved' ||
-              linkedIssue?.status === 'closed' ||
-              report.status === 'resolved'
-            const reportWithIssue = {
-              ...report,
-              ...(resolved ? { status: 'resolved' } : {}),
-            }
-            return <ReportCard key={report.id} report={reportWithIssue} />
-          })}
+          {nearbyItems.map(({ issue, distance }) => (
+            <CommunityIssueCard
+              key={issue.id}
+              issue={issue}
+              distanceKm={distance}
+            />
+          ))}
         </div>
       )}
     </div>

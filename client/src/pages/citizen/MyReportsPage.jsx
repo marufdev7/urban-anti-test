@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -8,8 +8,10 @@ import {
   Clock3,
   FileText,
   FilterX,
+  MapPin,
   Plus,
   Search,
+  Users,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { isReportSolved } from '../../hooks/data'
@@ -20,6 +22,18 @@ import PageHeader from '../../components/ui/PageHeader'
 import Select from '../../components/ui/Select'
 import { SkeletonCards } from '../../components/ui/Skeleton'
 import ReportCard from '../../components/report/ReportCard'
+import CommunityIssueCard from '../../components/issue/CommunityIssueCard'
+
+function haversineKm(a, b) {
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const R = 6371
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -37,10 +51,21 @@ export default function MyReportsPage() {
   const [q, setQ] = useState('')
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
-  // active tab: 'all' | 'queue' | 'solved'
+  // active tab: 'all' | 'queue' | 'solved' | 'community'
   const [activeTab, setActiveTab] = useState(isQueueRoute ? 'queue' : 'all')
   const [cursor, setCursor] = useState(null)
   const [stale, setStale] = useState([]) // accumulated earlier pages
+  const [userLocation, setUserLocation] = useState(null)
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => {},
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60_000 }
+      )
+    }
+  }, [])
 
   const params = new URLSearchParams({ limit: '50' })
   if (search) params.set('q', search)
@@ -56,6 +81,56 @@ export default function MyReportsPage() {
     placeholderData: (prev) => prev,
     staleTime: 15_000,
   })
+
+  // Community issues query (unresolved issues across neighborhood)
+  const { data: communityData, isLoading: isCommunityLoading } = useQuery({
+    queryKey: ['issues', 'community', 'unresolved'],
+    queryFn: () => api('/issues?limit=100'),
+    staleTime: 15_000,
+    refetchInterval: 10_000,
+  })
+
+  const rawCommunityIssues = communityData?.data ?? []
+  const unresolvedCommunityIssues = useMemo(() => {
+    const list = rawCommunityIssues.filter((i) => i.status !== 'resolved' && i.status !== 'closed')
+    if (!userLocation) return list.map((issue) => ({ ...issue, distance: null }))
+
+    return list
+      .map((issue) => {
+        const loc = issue.representativeLocation
+        const dist =
+          loc?.lat && loc?.lng
+            ? haversineKm(userLocation, { lat: loc.lat, lng: loc.lng })
+            : null
+        return { ...issue, distance: dist }
+      })
+      .sort((a, b) => {
+        if (a.distance === null) return 1
+        if (b.distance === null) return -1
+        return a.distance - b.distance
+      })
+  }, [rawCommunityIssues, userLocation])
+
+  const communityCount = unresolvedCommunityIssues.length
+
+  const filteredCommunityIssues = useMemo(() => {
+    return unresolvedCommunityIssues.filter((issue) => {
+      if (search) {
+        const term = search.toLowerCase()
+        const desc = (issue.description || '').toLowerCase()
+        const cat = (issue.primaryCategory || '').toLowerCase()
+        const id = (issue.id || '').toLowerCase()
+        if (!desc.includes(term) && !cat.includes(term) && !id.includes(term)) {
+          return false
+        }
+      }
+      if (status) {
+        if (status === 'in_progress' && issue.status !== 'in_progress') return false
+        if (status !== 'in_progress' && issue.status !== status) return false
+      }
+      return true
+    })
+  }, [unresolvedCommunityIssues, search, status])
 
   const allRawReports = cursor ? [...stale, ...(data?.data ?? [])] : data?.data ?? []
   const nextCursor = data?.page?.nextCursor
@@ -95,6 +170,7 @@ export default function MyReportsPage() {
     setActiveTab(tab)
     if (tab === 'solved') setStatus('solved')
     else if (tab === 'queue') setStatus('')
+    else if (tab === 'community') setStatus('')
     else setStatus('')
   }
 
@@ -124,7 +200,33 @@ export default function MyReportsPage() {
       />
 
       {/* TOP PIPELINE HUD BANNER */}
-      {isQueueRoute ? (
+      {activeTab === 'community' ? (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-[#005a4c]/40 bg-[#005a4c]/5 p-4 text-xs shadow-xs">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#005a4c] text-white">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-ink">Nearby Community Issues (আমার এলাকার অন্যান্য নাগরিকদের সমস্যা)</span>
+                <span className="rounded bg-[#005a4c]/15 px-2 py-0.5 text-[10px] font-bold text-[#005a4c] uppercase">
+                  {communityCount} Active in District
+                </span>
+              </div>
+              <p className="mt-0.5 text-ink-muted text-xs">
+                Active municipal infrastructure issues reported by other citizens in your area. Click &quot;Me Too / Confirm&quot; to corroborate problems and speed up municipal resolution.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link to="/citizen/map">
+              <Button variant="secondary" size="sm" className="text-xs">
+                View on Live Map
+              </Button>
+            </Link>
+          </div>
+        </div>
+      ) : isQueueRoute ? (
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-primary/40 bg-primary-soft/50 p-4 text-xs shadow-xs">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white">
@@ -218,6 +320,18 @@ export default function MyReportsPage() {
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
               Solved / Resolved ({solvedCount})
             </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('community')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition-all ${
+                activeTab === 'community'
+                  ? 'bg-[#005a4c] text-white shadow-xs'
+                  : 'bg-[#005a4c]/10 text-[#005a4c] hover:bg-[#005a4c]/20 border border-[#005a4c]/30'
+              }`}
+            >
+              <Users className="h-3.5 w-3.5" />
+              Nearby Community Issues ({communityCount})
+            </button>
 
             {(search || status) && (
               <Button
@@ -252,7 +366,7 @@ export default function MyReportsPage() {
                 type="search"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Search report description, ID or address location…"
+                placeholder="Search description, ID, category or address location…"
                 className="w-full rounded-panel border border-line bg-surface-panel py-2 pl-9 pr-4 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />
             </div>
@@ -264,7 +378,9 @@ export default function MyReportsPage() {
                 const val = e.target.value
                 setStatus(val)
                 if (val === 'solved') setActiveTab('solved')
-                else if (val) setActiveTab('all')
+                else if (val) {
+                  if (activeTab === 'solved') setActiveTab('all')
+                }
               }}
               className="w-48 text-xs"
             />
@@ -275,60 +391,96 @@ export default function MyReportsPage() {
         </div>
       </Card>
 
-      {/* SKELETON LOADER */}
-      {isLoading && <SkeletonCards count={6} className="mt-2" />}
-
-      {/* ERROR CARD */}
-      {isError && (
-        <Card className="p-6">
-          <p className="text-sm text-status-critical" role="alert">
-            Could not load reports: {error.message}
-          </p>
-        </Card>
-      )}
-
-      {/* EMPTY STATE */}
-      {!isLoading && !isError && filteredReports.length === 0 && (
-        <Card>
-          <EmptyState
-            title={
-              activeTab === 'solved'
-                ? 'No solved reports found'
-                : activeTab === 'queue'
-                ? 'No active reports in queue'
-                : 'No reports found'
-            }
-            message={
-              search || status
-                ? 'Try a different search query or clear the filters.'
-                : activeTab === 'solved'
-                ? 'Reports that have been resolved and verified will appear here.'
-                : 'Reports you submit will appear here as they are processed.'
-            }
-            action={
-              <Link to="/citizen/reports/new">
-                <Button size="sm">Submit a Report</Button>
-              </Link>
-            }
-          />
-        </Card>
-      )}
-
-      {/* REPORT CARDS GRID */}
-      {filteredReports.length > 0 && (
+      {/* TAB CONTENT: COMMUNITY ISSUES */}
+      {activeTab === 'community' ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredReports.map((report) => (
-              <ReportCard key={report.id} report={report} />
-            ))}
-          </div>
+          {isCommunityLoading && <SkeletonCards count={6} className="mt-2" />}
 
-          {nextCursor && (
-            <div className="mt-6 text-center">
-              <Button variant="secondary" onClick={loadMore} loading={isFetching && !!cursor}>
-                Load more reports
-              </Button>
+          {!isCommunityLoading && filteredCommunityIssues.length === 0 && (
+            <Card>
+              <EmptyState
+                title="No community issues found"
+                message={
+                  search || status
+                    ? 'No unresolved community issues match your search criteria. Try clearing filters.'
+                    : 'There are currently no active unresolved community issues in your district.'
+                }
+                action={
+                  <Link to="/citizen/reports/new">
+                    <Button size="sm">Report a Problem</Button>
+                  </Link>
+                }
+              />
+            </Card>
+          )}
+
+          {!isCommunityLoading && filteredCommunityIssues.length > 0 && (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredCommunityIssues.map((issue) => (
+                <CommunityIssueCard
+                  key={issue.id}
+                  issue={issue}
+                  distanceKm={issue.distance}
+                />
+              ))}
             </div>
+          )}
+        </>
+      ) : (
+        /* TAB CONTENT: CITIZEN PERSONAL REPORTS */
+        <>
+          {isLoading && <SkeletonCards count={6} className="mt-2" />}
+
+          {isError && (
+            <Card className="p-6">
+              <p className="text-sm text-status-critical" role="alert">
+                Could not load reports: {error.message}
+              </p>
+            </Card>
+          )}
+
+          {!isLoading && !isError && filteredReports.length === 0 && (
+            <Card>
+              <EmptyState
+                title={
+                  activeTab === 'solved'
+                    ? 'No solved reports found'
+                    : activeTab === 'queue'
+                    ? 'No active reports in queue'
+                    : 'No reports found'
+                }
+                message={
+                  search || status
+                    ? 'Try a different search query or clear the filters.'
+                    : activeTab === 'solved'
+                    ? 'Reports that have been resolved and verified will appear here.'
+                    : 'Reports you submit will appear here as they are processed.'
+                }
+                action={
+                  <Link to="/citizen/reports/new">
+                    <Button size="sm">Submit a Report</Button>
+                  </Link>
+                }
+              />
+            </Card>
+          )}
+
+          {filteredReports.length > 0 && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {filteredReports.map((report) => (
+                  <ReportCard key={report.id} report={report} />
+                ))}
+              </div>
+
+              {nextCursor && (
+                <div className="mt-6 text-center">
+                  <Button variant="secondary" onClick={loadMore} loading={isFetching && !!cursor}>
+                    Load more reports
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </>
       )}

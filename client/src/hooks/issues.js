@@ -161,3 +161,28 @@ export function useAnalyticsSummary(params, queryOptions = {}) {
     ...queryOptions,
   })
 }
+
+/** POST /issues/{issueId}/confirmations — citizen "Me Too / Confirm" (API §6.6, FR-16). */
+export function useConfirmIssue(issueId) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api(`/issues/${issueId}/confirmations`, { method: 'POST', body: {} }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+    },
+  })
+}
+
+/** DELETE /issues/{issueId}/confirmations/me — revoke citizen confirmation. */
+export function useWithdrawConfirmation(issueId) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api(`/issues/${issueId}/confirmations/me`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+    },
+  })
+}
+

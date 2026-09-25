@@ -194,7 +194,7 @@ class IssueCollectionView(APIView):
 
         # ⚠️ **One `now` for the whole page**, so two Issues opened in the same instant cannot report
         # different ages — which an `?sort=age` page would render as non-monotonic.
-        serializer = IssueQueueItemSerializer(rows, many=True, context={"now": timezone.now()})
+        serializer = IssueQueueItemSerializer(rows, many=True, context={"now": timezone.now(), "request": request})
         return paginator.get_paginated_response(serializer.data)
 
 
@@ -274,7 +274,7 @@ class IssueDetailView(APIView):
         if issue is None:
             raise Http404("Issue not found.")
         selectors.attach_proximity([issue])
-        payload = IssueQueueItemSerializer(issue, context={"now": timezone.now()}).data
+        payload = IssueQueueItemSerializer(issue, context={"now": timezone.now(), "request": request}).data
         comments = issue.comments.filter(removed_at__isnull=True, visibility="public")
         if isinstance(request.user, User) and request.user.role in {Role.AUTHORITY, Role.ADMIN}:
             comments = issue.comments.filter(removed_at__isnull=True)

@@ -346,13 +346,9 @@ def list_issues(
     and the cursor's key set are one decision.
     """
     queryset = annotate_queue_fields(
-        Issue.objects.exclude(status__in=MODERATED_ISSUE_STATUSES).select_related(
-            # ⚠️ `primary_category` only. `assignee` is deliberately **not** joined: §6.5's
-            # `assignedTo` is the assignee's opaque id, which the serializer reads off the
-            # `assignee_id` column — a join to fetch a row whose columns are never read is cost with
-            # no output. A later task that renders the assignee's *name* has to add the join with it.
-            "primary_category"
-        )
+        Issue.objects.exclude(status__in=MODERATED_ISSUE_STATUSES)
+        .select_related("primary_category")
+        .prefetch_related("reports__media", "confirmations")
     )
 
     # ⚠️ `isinstance(actor, User)`, not `actor.is_authenticated`, only because the other member of

@@ -21,6 +21,7 @@ import MapPanel from '../../components/MapPanel'
 import { SkeletonDetail } from '../../components/ui/Skeleton'
 import StatusBadge from '../../components/ui/StatusBadge'
 import StatusTimeline from '../../components/report/StatusTimeline'
+import ConfirmIssueButton from '../../components/issue/ConfirmIssueButton'
 
 function sevLabel(sev) {
   return { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }[sev] ?? null
@@ -332,6 +333,14 @@ export default function ReportTrackingPage() {
             label={badge.label}
             className={`font-bold text-black ${isResolved ? 'bg-emerald-100 text-black border-emerald-400' : 'text-black'}`}
           />
+          {!isResolved && (issueId || report.issueId || report.id) && (
+            <ConfirmIssueButton
+              issueId={issueId || report.issueId || report.id}
+              initialCount={issue?.corroborationCount || 1}
+              initialConfirmed={issue?.hasConfirmed || false}
+              size="sm"
+            />
+          )}
         </div>
       </div>
 
@@ -382,6 +391,28 @@ export default function ReportTrackingPage() {
               )}
 
               <ReportMediaGallery media={report.media} />
+
+              {!isResolved && (issueId || report.issueId || report.id) && (
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-[#005a4c]/30 bg-[#005a4c]/5 p-3.5 text-xs shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#005a4c]/15 text-[#005a4c] font-bold text-base">
+                      👍
+                    </span>
+                    <div>
+                      <p className="font-bold text-ink">Does this problem affect your area too?</p>
+                      <p className="text-ink-muted text-[11px]">
+                        Click &quot;Me Too / Confirm&quot; to corroborate this civic report and alert municipal responders.
+                      </p>
+                    </div>
+                  </div>
+                  <ConfirmIssueButton
+                    issueId={issueId || report.issueId || report.id}
+                    initialCount={issue?.corroborationCount || 1}
+                    initialConfirmed={issue?.hasConfirmed || false}
+                    size="sm"
+                  />
+                </div>
+              )}
             </CardBody>
           </Card>
 

@@ -304,6 +304,9 @@ class IssueQueueItemSerializer(CamelCaseSerializer):
     report_count = serializers.SerializerMethodField()
     opened_at = serializers.DateTimeField(read_only=True)
     age_seconds = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+    media = serializers.SerializerMethodField()
+    has_confirmed = serializers.SerializerMethodField()
 
     def get_severity(self, issue: Issue) -> dict[str, Any]:
         """§6.5's four keys — `{current, computed, overridden, rationale}` and nothing else.
@@ -382,6 +385,25 @@ class IssueQueueItemSerializer(CamelCaseSerializer):
         """
         now = self.context.get("now") or timezone.now()
         return int((now - issue.opened_at).total_seconds())
+
+    def get_description(self, issue: Issue) -> str:
+        reports = list(issue.reports.all())
+        return reports[0].description if reports else ""
+
+    def get_media(self, issue: Issue) -> list[dict[str, Any]]:
+        reports = list(issue.reports.all())
+        if not reports:
+            return []
+        from urbenmend.media.serializers import MediaResponseSerializer
+        return list(MediaResponseSerializer(reports[0].media.all(), many=True).data)
+
+    def get_has_confirmed(self, issue: Issue) -> bool:
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        if user and getattr(user, "is_authenticated", False):
+            return issue.confirmations.filter(citizen=user).exists()
+        return False
+
 
 
 class IssueListQuerySerializer(CamelCaseSerializer):
