@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardList,
-  FileText,
   Filter,
   Info,
   MapPin,
@@ -328,14 +327,13 @@ export default function QueuePage() {
                   <th className="w-10 px-4 py-3"></th>
                   <th className="px-4 py-3">Severity</th>
                   <th className="px-4 py-3">Issue Title &amp; ID</th>
-                  <th className="px-4 py-3">Reports</th>
                   <th className="px-4 py-3">Location</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned To</th>
                   <th className="px-4 py-3 text-right">Time Elapsed</th>
                 </tr>
               </thead>
-              <SkeletonRows cols={8} rows={10} />
+              <SkeletonRows cols={7} rows={10} />
             </table>
           </Card>
         </>
@@ -410,13 +408,7 @@ export default function QueuePage() {
                   <p className="mt-2 text-sm font-bold text-ink">
                     {categoryLabel(categories, issue.primaryCategory)}
                   </p>
-                  <div className="flex items-center justify-between text-xs text-ink-muted">
-                    <span>#UM-{shortId(issue.id)}</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100/70 px-2 py-0.5 text-2xs font-semibold text-sky-800">
-                      <FileText className="h-3 w-3 text-sky-600" />
-                      {issue.reportCount ?? 1} {issue.reportCount === 1 ? 'Report' : 'Reports'}
-                    </span>
-                  </div>
+                  <p className="text-xs text-ink-muted">#UM-{shortId(issue.id)}</p>
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-xs text-ink-muted">
                     <div className="flex items-center gap-2">
                       <span>
@@ -475,7 +467,6 @@ export default function QueuePage() {
                   </th>
                   <th scope="col" className="px-4 py-3.5">Severity</th>
                   <th scope="col" className="px-4 py-3.5">Issue Title &amp; ID</th>
-                  <th scope="col" className="px-4 py-3.5">Reports</th>
                   <th scope="col" className="px-4 py-3.5">Location</th>
                   <th scope="col" className="px-4 py-3.5">Status</th>
                   <th scope="col" className="px-4 py-3.5">Assigned To</th>
@@ -528,14 +519,6 @@ export default function QueuePage() {
                           {categoryLabel(categories, issue.primaryCategory)}
                         </p>
                         <p className="text-xs text-ink-muted">#UM-{shortId(issue.id)}</p>
-                      </td>
-
-                      {/* Reports count */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-800">
-                          <FileText className="h-3.5 w-3.5 text-sky-600" />
-                          <span>{issue.reportCount ?? 1} {issue.reportCount === 1 ? 'Report' : 'Reports'}</span>
-                        </span>
                       </td>
 
                       {/* Location */}
