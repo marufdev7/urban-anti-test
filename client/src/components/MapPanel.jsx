@@ -1,7 +1,32 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { MapContainer, Marker, Polygon, TileLayer, useMap, useMapEvents, ZoomControl } from 'react-leaflet'
+import { MapContainer, Marker, Polygon, Popup, TileLayer, useMap, useMapEvents, ZoomControl } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+
+function getSeverityPinIcon(severity = 'medium') {
+  const colors = {
+    critical: '#dc2626',
+    high: '#ea580c',
+    medium: '#d97706',
+    low: '#16a34a',
+  }
+  const color = colors[severity] || colors.medium
+  return L.divIcon({
+    className: 'custom-severity-pin',
+    html: `
+      <div style="position: relative; width: 24px; height: 30px; transform: translate(-12px, -30px); cursor: pointer;">
+        <svg width="24" height="30" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.37 0 0 5.37 0 12C0 21 12 30 12 30C12 30 24 21 24 12C24 5.37 18.63 0 12 0Z" fill="${color}"/>
+          <circle cx="12" cy="12" r="5" fill="#ffffff"/>
+          <circle cx="12" cy="12" r="2.5" fill="${color}"/>
+        </svg>
+      </div>
+    `,
+    iconSize: [24, 30],
+    iconAnchor: [12, 30],
+    popupAnchor: [0, -28],
+  })
+}
 
 // Custom vector teardrop pin matching media_1789770150954.png
 const customPinIcon = L.divIcon({
@@ -69,6 +94,7 @@ function MapRecenter({ center, zoom }) {
 export default function MapPanel({
   center,
   marker,
+  markers = [],
   onMarkerChange,
   polygons = [],
   boundaryPolygon = null,
@@ -135,6 +161,31 @@ export default function MapPanel({
           eventHandlers={interactive ? { dragend: onDragEnd } : undefined}
         />
       )}
+      {markers.map((m) => (
+        <Marker
+          key={m.id || `${m.lat}-${m.lng}`}
+          position={[m.lat, m.lng]}
+          icon={getSeverityPinIcon(m.severity)}
+          eventHandlers={m.onClick ? { click: m.onClick } : undefined}
+        >
+          {m.title && (
+            <Popup>
+              <div className="p-1 text-xs">
+                <p className="font-bold text-slate-900 leading-tight">{m.title}</p>
+                {m.subtitle && <p className="text-slate-500 text-[10px] mt-0.5">{m.subtitle}</p>}
+                {m.link && (
+                  <a
+                    href={m.link}
+                    className="inline-block mt-1.5 font-semibold text-[#005a4c] hover:underline text-[11px]"
+                  >
+                    View Details &rarr;
+                  </a>
+                )}
+              </div>
+            </Popup>
+          )}
+        </Marker>
+      ))}
     </MapContainer>
   )
 }
