@@ -27,7 +27,6 @@ const STATUSES = [
   { value: '', label: 'All Statuses' },
   { value: 'triaged', label: 'Under Review' },
   { value: 'acknowledged', label: 'Acknowledged' },
-  { value: 'dispatched', label: 'Dispatched' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'closed', label: 'Closed' },
