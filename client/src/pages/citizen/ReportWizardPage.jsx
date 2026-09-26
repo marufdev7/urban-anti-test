@@ -2,18 +2,25 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import {
+  AlertCircle,
   AlertTriangle,
   Building2,
   Camera,
   Check,
+  CheckCircle2,
+  Clipboard,
   Crosshair,
+  FolderOpen,
   Leaf,
   Loader2,
   MapPin,
   Shield,
   ShieldCheck,
   Sparkles,
+  SwitchCamera,
+  Trash2,
   X,
+  ZoomIn,
 } from 'lucide-react'
 import { api, apiUpload, ApiError } from '../../lib/api'
 import { mediaErrorMessage, useCategories, useCityBoundary } from '../../hooks/data'
@@ -28,6 +35,7 @@ import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import MapPanel from '../../components/MapPanel'
+import Spinner from '../../components/ui/Spinner'
 
 const MIN_DESCRIPTION = 15
 const STEPS = ['Category', 'Details', 'Review']
@@ -35,6 +43,274 @@ const STEPS = ['Category', 'Details', 'Review']
 const CATEGORY_MAP = {
   infrastructure: 'roads',
   environmental: 'water_drainage',
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
+}
+
+function CameraCaptureModal({ isOpen, onClose, onCapture }) {
+  const videoRef = useRef(null)
+  const streamRef = useRef(null)
+  const [facingMode, setFacingMode] = useState('environment')
+  const [cameraError, setCameraError] = useState(null)
+  const [isInitializing, setIsInitializing] = useState(true)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    let isMounted = true
+    setIsInitializing(true)
+    setCameraError(null)
+
+    async function startCamera() {
+      try {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop())
+          streamRef.current = null
+        }
+
+        const constraints = {
+          video: {
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        }
+
+        const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+        if (!isMounted) {
+          mediaStream.getTracks().forEach((track) => track.stop())
+          return
+        }
+
+        streamRef.current = mediaStream
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream
+        }
+      } catch (err) {
+        console.warn('Camera initialization failed:', err)
+        if (isMounted) {
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            setCameraError('Camera access was denied. Please allow camera permissions in your browser address bar.')
+          } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+            setCameraError('No camera found on this device.')
+          } else {
+            setCameraError('Camera unavailable or in use by another application.')
+          }
+        }
+      } finally {
+        if (isMounted) setIsInitializing(false)
+      }
+    }
+
+    startCamera()
+
+    return () => {
+      isMounted = false
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop())
+        streamRef.current = null
+      }
+    }
+  }, [isOpen, facingMode])
+
+  const handleCapture = () => {
+    if (!videoRef.current) return
+    const video = videoRef.current
+    if (video.videoWidth === 0 || video.videoHeight === 0) return
+
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const file = new File([blob], `citizen_camera_${Date.now()}.jpg`, {
+            type: 'image/jpeg',
+          })
+          onCapture(file)
+          onClose()
+        }
+      },
+      'image/jpeg',
+      0.92,
+    )
+  }
+
+  const toggleFacingMode = () => {
+    setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'))
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line px-4 py-3 bg-surface-sunken">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#005a4c] text-white">
+              <Camera className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-ink leading-tight">Live Evidence Camera</h3>
+              <p className="text-[10px] text-ink-muted">Snap instant photo proof directly from your camera</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-ink-muted hover:bg-surface-panel hover:text-ink transition cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Viewport */}
+        <div className="relative aspect-video w-full bg-black flex items-center justify-center overflow-hidden">
+          {cameraError ? (
+            <div className="p-6 text-center text-rose-300 space-y-2 max-w-sm">
+              <AlertCircle className="h-8 w-8 mx-auto text-rose-400" />
+              <p className="text-xs">{cameraError}</p>
+            </div>
+          ) : (
+            <>
+              {isInitializing && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white z-10 gap-2">
+                  <Spinner className="h-5 w-5" />
+                  <span className="text-xs">Initializing camera feed...</span>
+                </div>
+              )}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="h-full w-full object-cover"
+              />
+              <div className="pointer-events-none absolute inset-6 border border-white/25 rounded-xl flex items-center justify-center">
+                <div className="h-3 w-3 rounded-full border border-white/40" />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Controls */}
+        <div className="flex items-center justify-between border-t border-line bg-surface-sunken px-4 py-3">
+          <button
+            type="button"
+            onClick={toggleFacingMode}
+            disabled={!!cameraError}
+            className="flex items-center gap-1.5 rounded-lg border border-line bg-surface-panel px-3 py-1.5 text-xs font-semibold text-ink hover:border-line-focus transition disabled:opacity-40 cursor-pointer"
+            title="Switch front / rear camera"
+          >
+            <SwitchCamera className="h-4 w-4 text-ink-muted" />
+            <span>Switch</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCapture}
+            disabled={isInitializing || !!cameraError}
+            className="flex items-center gap-2 rounded-full bg-[#005a4c] hover:bg-[#00483c] px-6 py-2 text-xs font-bold text-white shadow-md transition disabled:opacity-40 active:scale-95 cursor-pointer"
+          >
+            <Camera className="h-4 w-4" />
+            <span>Snap Photo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-line bg-surface-panel px-3 py-1.5 text-xs font-medium text-ink hover:border-line-focus transition cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PhotoLightboxModal({ photo, onClose, onRemove }) {
+  if (!photo) return null
+
+  return (
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-3 sm:p-6 backdrop-blur-md animate-fade-in"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-[90vh] max-w-3xl w-full flex flex-col rounded-2xl bg-surface-panel border border-line shadow-2xl overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line px-4 py-3 bg-surface-sunken">
+          <div className="min-w-0 pr-3">
+            <h4 className="text-xs font-bold text-ink truncate">{photo.name || 'Evidence Photo'}</h4>
+            <div className="flex items-center gap-2 text-[10px] text-ink-muted mt-0.5">
+              {photo.sizeFormatted && <span>{photo.sizeFormatted}</span>}
+              <span>•</span>
+              {photo.state === 'ready' && (
+                <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Uploaded to Server
+                </span>
+              )}
+              {photo.state === 'uploading' && (
+                <span className="text-primary font-semibold flex items-center gap-1">
+                  <Spinner className="h-3 w-3" /> Uploading...
+                </span>
+              )}
+              {photo.state === 'error' && (
+                <span className="text-rose-600 font-semibold flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> Upload Failed
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {onRemove && (
+              <button
+                type="button"
+                onClick={() => {
+                  onRemove(photo.localId)
+                  onClose()
+                }}
+                className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Remove Photo</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-ink-muted hover:bg-surface-sunken hover:text-ink transition cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Large Image View */}
+        <div className="flex flex-1 items-center justify-center bg-black/90 p-2 sm:p-4 overflow-hidden max-h-[75vh]">
+          <img
+            src={photo.preview}
+            alt={photo.name || 'Evidence preview'}
+            className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-lg"
+          />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /**
@@ -45,7 +321,7 @@ const CATEGORY_MAP = {
  * - Split-screen layout: left form card, right interactive pinpoint map.
  * - Issue Category tiles: Infrastructure Hazard & Environmental.
  * - Description input with BR-3 validation.
- * - Upload dropzone with camera icon + Privacy Protection Active box.
+ * - Multi-modal photo upload: drag & drop, live camera capture, clipboard paste (Ctrl+V), and lightbox inspection.
  */
 export default function ReportWizardPage() {
   const navigate = useNavigate()
@@ -179,7 +455,11 @@ export default function ReportWizardPage() {
     }
   }
 
-  const [photos, setPhotos] = useState([]) // [{localId, preview, mediaId, state, error}]
+  const [photos, setPhotos] = useState([]) // [{localId, name, size, sizeFormatted, preview, mediaId, state, error, file}]
+  const [isDragging, setIsDragging] = useState(false)
+  const [isCameraOpen, setIsCameraOpen] = useState(false)
+  const [activeLightboxPhoto, setActiveLightboxPhoto] = useState(null)
+  const [pasteNotice, setPasteNotice] = useState(null)
   const [submitError, setSubmitError] = useState(null)
   const [submitted, setSubmitted] = useState(null) // 202 acknowledgement
 
@@ -363,45 +643,183 @@ export default function ReportWizardPage() {
     setIsGeocoding(false)
   }
 
-  const addPhotos = (files) => {
+  // Multi-intake Photo Handlers (Browse, Camera, Drag & Drop, Paste)
+  const addPhotoFiles = (fileList) => {
+    const validImages = Array.from(fileList || []).filter(
+      (f) => f.type && f.type.startsWith('image/'),
+    )
+    if (!validImages.length) return
+
     const room = 3 - photos.length
     if (room <= 0) return
-    files.slice(0, Math.max(0, room)).forEach((file) => {
-      const localId = crypto.randomUUID()
-      const entry = {
-        localId,
-        preview: URL.createObjectURL(file),
-        mediaId: null,
-        state: 'uploading',
-        error: null,
-      }
-      setPhotos((list) => [...list, entry])
-      apiUpload('/media', file)
-        .then((media) =>
-          setPhotos((list) =>
-            list.map((p) =>
-              p.localId === localId ? { ...p, mediaId: media.id, state: 'ready' } : p,
+
+    const toAdd = validImages.slice(0, room)
+    const newEntries = toAdd.map((file) => ({
+      localId: crypto.randomUUID(),
+      name: file.name || `evidence_${Date.now()}.jpg`,
+      size: file.size,
+      sizeFormatted: formatFileSize(file.size),
+      preview: URL.createObjectURL(file),
+      mediaId: null,
+      state: 'uploading',
+      error: null,
+      file,
+    }))
+
+    setPhotos((prev) => [...prev, ...newEntries])
+
+    newEntries.forEach((entry) => {
+      apiUpload('/media', entry.file)
+        .then((media) => {
+          setPhotos((prev) =>
+            prev.map((p) =>
+              p.localId === entry.localId ? { ...p, mediaId: media.id, state: 'ready' } : p,
             ),
-          ),
-        )
-        .catch((err) =>
-          setPhotos((list) =>
-            list.map((p) =>
-              p.localId === localId
+          )
+        })
+        .catch((err) => {
+          setPhotos((prev) =>
+            prev.map((p) =>
+              p.localId === entry.localId
                 ? { ...p, state: 'error', error: mediaErrorMessage(err) }
                 : p,
             ),
-          ),
-        )
+          )
+        })
     })
   }
 
-  const removePhoto = (index) => {
-    setPhotos((list) => {
-      const removed = list[index]
-      if (removed?.preview) URL.revokeObjectURL(removed.preview)
-      return list.filter((_, i) => i !== index)
+  const addPhotos = (files) => addPhotoFiles(files)
+
+  const retryUpload = (localId) => {
+    const target = photos.find((p) => p.localId === localId)
+    if (!target || !target.file) return
+    setPhotos((prev) =>
+      prev.map((p) =>
+        p.localId === localId ? { ...p, state: 'uploading', error: null } : p,
+      ),
+    )
+    apiUpload('/media', target.file)
+      .then((media) => {
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.localId === localId ? { ...p, mediaId: media.id, state: 'ready' } : p,
+          ),
+        )
+      })
+      .catch((err) => {
+        setPhotos((prev) =>
+          prev.map((p) =>
+            p.localId === localId
+              ? { ...p, state: 'error', error: mediaErrorMessage(err) }
+              : p,
+          ),
+        )
+      })
+  }
+
+  const removePhoto = (targetIdOrIndex) => {
+    setPhotos((prev) => {
+      let target
+      if (typeof targetIdOrIndex === 'number') {
+        target = prev[targetIdOrIndex]
+      } else {
+        target = prev.find((p) => p.localId === targetIdOrIndex)
+      }
+      if (target?.preview) URL.revokeObjectURL(target.preview)
+      return prev.filter((p, i) =>
+        typeof targetIdOrIndex === 'number' ? i !== targetIdOrIndex : p.localId !== targetIdOrIndex,
+      )
     })
+    if (activeLightboxPhoto && (activeLightboxPhoto.localId === targetIdOrIndex || activeLightboxPhoto === targetIdOrIndex)) {
+      setActiveLightboxPhoto(null)
+    }
+  }
+
+  // Drag and drop handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragging) setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    if (e.dataTransfer?.files) {
+      addPhotoFiles(e.dataTransfer.files)
+    }
+  }
+
+  // Clipboard paste support (Ctrl+V) anywhere on the page
+  useEffect(() => {
+    const handleWindowPaste = (e) => {
+      const items = e.clipboardData?.items
+      if (!items || items.length === 0) return
+
+      const imageFiles = []
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item.type && item.type.startsWith('image/')) {
+          const blob = item.getAsFile()
+          if (blob) {
+            imageFiles.push(
+              new File([blob], `clipboard_${Date.now()}.png`, { type: blob.type }),
+            )
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        e.preventDefault()
+        addPhotoFiles(imageFiles)
+        setPasteNotice('Image pasted from clipboard!')
+        setTimeout(() => setPasteNotice(null), 3000)
+      }
+    }
+
+    window.addEventListener('paste', handleWindowPaste)
+    return () => window.removeEventListener('paste', handleWindowPaste)
+  }, [photos.length])
+
+  const handleClipboardClick = async () => {
+    try {
+      if (navigator.clipboard?.read) {
+        const items = await navigator.clipboard.read()
+        const files = []
+        for (const item of items) {
+          const imageType = item.types.find((t) => t.startsWith('image/'))
+          if (imageType) {
+            const blob = await item.getType(imageType)
+            files.push(new File([blob], `clipboard_${Date.now()}.png`, { type: imageType }))
+          }
+        }
+        if (files.length > 0) {
+          addPhotoFiles(files)
+          setPasteNotice('Image pasted from clipboard!')
+          setTimeout(() => setPasteNotice(null), 3000)
+          return
+        }
+      }
+      setPasteNotice('Press Ctrl+V to paste a copied image or screenshot.')
+      setTimeout(() => setPasteNotice(null), 3500)
+    } catch {
+      setPasteNotice('Press Ctrl+V anywhere in this window to paste.')
+      setTimeout(() => setPasteNotice(null), 3500)
+    }
   }
 
   const submit = useMutation({
@@ -687,58 +1105,171 @@ export default function ReportWizardPage() {
                 )}
               </div>
 
-              {/* Photos Dropzone */}
-              <div>
-                <label className="mb-1.5 block text-sm font-semibold text-ink">Photos</label>
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    if (e.dataTransfer.files) addPhotos(Array.from(e.dataTransfer.files))
-                  }}
-                  className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-6 text-center hover:bg-slate-50 cursor-pointer transition-colors"
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept="image/jpeg,image/png,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files) addPhotos(Array.from(e.target.files))
-                    }}
-                  />
-                  <div className="flex h-10 w-10 items-center justify-center text-slate-600 mb-2">
-                    <Camera className="h-6 w-6 text-slate-700" />
+              {/* Photos Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-ink uppercase tracking-wider flex items-center gap-1.5">
+                    <Camera className="h-3.5 w-3.5 text-[#005a4c]" />
+                    <span>Attach Evidence Photos</span>
+                    <span className="text-[11px] font-normal text-ink-muted">({photos.length}/3)</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {pasteNotice && (
+                      <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full animate-fade-in">
+                        {pasteNotice}
+                      </span>
+                    )}
+                    <span className="hidden sm:inline-flex text-[10px] text-ink-muted">
+                      Drop, Paste (Ctrl+V), or Camera
+                    </span>
                   </div>
-                  <p className="text-xs font-semibold text-slate-800">
-                    Drag & Drop or Click to Upload
-                  </p>
-                  <p className="mt-1 text-[11px] text-slate-400">
-                    Max 3 photos (JPG, PNG)
-                  </p>
                 </div>
 
-                {/* Uploaded photo thumbnails */}
+                {/* Drop Zone & Action Buttons */}
+                {photos.length < 3 && (
+                  <div
+                    onDragEnter={handleDragEnter}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`relative rounded-xl border-2 border-dashed p-4 transition-all text-center flex flex-col items-center justify-center ${
+                      isDragging
+                        ? 'border-[#005a4c] bg-[#005a4c]/10 scale-[1.01] shadow-inner'
+                        : 'border-slate-300 bg-slate-50/50 hover:border-[#005a4c] hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files) addPhotoFiles(e.target.files)
+                        e.target.value = ''
+                      }}
+                    />
+
+                    <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-[#005a4c] hover:text-[#005a4c] transition cursor-pointer"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5 text-primary" />
+                        <span>Browse Files</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsCameraOpen(true)}
+                        className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-[#005a4c] hover:text-[#005a4c] transition cursor-pointer"
+                      >
+                        <Camera className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Live Camera</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleClipboardClick}
+                        className="flex items-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-2xs hover:border-[#005a4c] hover:text-[#005a4c] transition cursor-pointer"
+                        title="Paste image directly or press Ctrl+V"
+                      >
+                        <Clipboard className="h-3.5 w-3.5 text-sky-600" />
+                        <span>Paste (Ctrl+V)</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[11px] text-ink-muted leading-tight">
+                      {isDragging ? (
+                        <strong className="text-[#005a4c]">Drop image files here to upload</strong>
+                      ) : (
+                        <>
+                          Drag &amp; drop photos, paste screenshot with <kbd className="rounded bg-white border border-line px-1 py-0.2 font-mono text-[9px] text-ink">Ctrl+V</kbd>, or snap with camera
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                {/* Attached Photos Thumbnail Cards */}
                 {photos.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2.5">
+                  <div className="grid grid-cols-3 gap-2 pt-1">
                     {photos.map((p, idx) => (
-                      <div key={p.localId} className="relative h-16 w-16 rounded-lg overflow-hidden border border-line bg-slate-100">
-                        <img src={p.preview} alt="" className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            removePhoto(idx)
-                          }}
-                          className="absolute top-1 right-1 rounded-full bg-black/60 text-white p-0.5 hover:bg-black/80"
-                          aria-label="Remove photo"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
+                      <div
+                        key={p.localId}
+                        className="group relative flex flex-col rounded-xl border border-line bg-white overflow-hidden shadow-xs hover:shadow-sm transition"
+                      >
+                        {/* Thumbnail preview */}
+                        <div className="relative aspect-video w-full bg-slate-900/10 overflow-hidden">
+                          <img
+                            src={p.preview}
+                            alt={p.name || `Evidence ${idx + 1}`}
+                            className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-105 cursor-pointer"
+                            onClick={() => setActiveLightboxPhoto(p)}
+                          />
+
+                          {/* Hover overlay with zoom and delete */}
+                          <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setActiveLightboxPhoto(p)}
+                              className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-ink hover:bg-slate-100 transition shadow-xs cursor-pointer"
+                              title="View full photo"
+                            >
+                              <ZoomIn className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removePhoto(p.localId)}
+                              className="flex h-6 w-6 items-center justify-center rounded-full bg-rose-600 text-white hover:bg-rose-700 transition shadow-xs cursor-pointer"
+                              title="Remove photo"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+
+                          {/* State indicators */}
+                          {p.state === 'uploading' && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white text-[10px] gap-1">
+                              <Spinner className="h-3.5 w-3.5" />
+                              <span>Uploading...</span>
+                            </div>
+                          )}
+                          {p.state === 'error' && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-rose-950/85 text-white p-1 text-center">
+                              <span className="text-[10px] font-semibold text-rose-200">Failed</span>
+                              <button
+                                type="button"
+                                onClick={() => retryUpload(p.localId)}
+                                className="mt-0.5 text-[9px] underline font-bold text-white hover:text-rose-100 cursor-pointer"
+                              >
+                                Retry
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Card footer details */}
+                        <div className="flex items-center justify-between px-2 py-1 bg-slate-50 text-[10px]">
+                          <span className="truncate max-w-[70px] text-ink font-medium" title={p.name}>
+                            {p.sizeFormatted || `#${idx + 1}`}
+                          </span>
+                          {p.state === 'ready' && (
+                            <span className="flex items-center gap-0.5 text-emerald-700 font-semibold">
+                              <Check className="h-3 w-3" /> Ready
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {photos.length === 3 && (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] text-emerald-800">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span>Maximum 3 evidence photos attached. Ready for submission.</span>
                   </div>
                 )}
 
@@ -934,8 +1465,16 @@ export default function ReportWizardPage() {
               {readyPhotos.length > 0 && (
                 <div className="mt-3 flex gap-2.5">
                   {readyPhotos.map((p) => (
-                    <div key={p.localId} className="h-16 w-16 rounded-lg overflow-hidden border border-line">
-                      <img src={p.preview} alt="" className="h-full w-full object-cover" />
+                    <div
+                      key={p.localId}
+                      className="group relative h-16 w-16 rounded-lg overflow-hidden border border-line cursor-pointer"
+                      onClick={() => setActiveLightboxPhoto(p)}
+                      title="Click to preview full size"
+                    >
+                      <img src={p.preview} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <ZoomIn className="h-4 w-4" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1070,6 +1609,20 @@ export default function ReportWizardPage() {
           />
         </div>
       </div>
+
+      {/* Live Camera Capture Modal */}
+      <CameraCaptureModal
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onCapture={(file) => addPhotoFiles([file])}
+      />
+
+      {/* Photo Lightbox Modal */}
+      <PhotoLightboxModal
+        photo={activeLightboxPhoto}
+        onClose={() => setActiveLightboxPhoto(null)}
+        onRemove={removePhoto}
+      />
     </div>
   )
 }
