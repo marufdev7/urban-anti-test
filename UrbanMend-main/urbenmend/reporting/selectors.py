@@ -169,7 +169,15 @@ def list_reports(
         queryset = queryset.filter(author=actor)
 
     if statuses:
-        queryset = queryset.filter(status__in=statuses)
+        status_q = Q()
+        standard_statuses = [s for s in statuses if s not in ("solved", "resolved", "in_progress")]
+        if standard_statuses:
+            status_q |= Q(status__in=standard_statuses)
+        if any(s in ("solved", "resolved") for s in statuses):
+            status_q |= Q(issue__status__in=["resolved", "closed"]) | Q(status__in=["resolved", "closed"])
+        if "in_progress" in statuses:
+            status_q |= Q(issue__status__in=["in_progress", "acknowledged", "dispatched"]) | Q(status="processing")
+        queryset = queryset.filter(status_q)
 
     if category_slugs:
         # Slug, not id: `?category=roads` is what §6.2/§6.3 document, and the slug is the machine

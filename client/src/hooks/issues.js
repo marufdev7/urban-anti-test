@@ -19,7 +19,7 @@ export const ISSUE_STATUSES = [
   { value: 'triaged', label: 'Under Review' },
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'in_progress', label: 'In Progress' },
-  { value: 'resolved', label: 'Resolved' },
+  { value: 'resolved', label: 'Solved' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'insufficient_info', label: 'Needs More Info' },
 ]

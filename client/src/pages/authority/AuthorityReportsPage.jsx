@@ -18,9 +18,10 @@ import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModa
 
 const STATUSES = [
   { value: '', label: 'All Statuses' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'processing', label: 'In Progress' },
+  { value: 'solved', label: 'Solved' },
+  { value: 'in_progress', label: 'In Progress' },
   { value: 'triaged', label: 'Under Review' },
+  { value: 'submitted', label: 'Submitted' },
 ]
 
 export default function AuthorityReportsPage() {
@@ -65,6 +66,7 @@ export default function AuthorityReportsPage() {
 
   const reports = data?.data ?? []
   const nextCursor = data?.page?.nextCursor
+  const prevCursor = data?.page?.prevCursor
 
   const scopeSet = new Set(user?.categoryScope ?? [])
   const availableCategories = (categories ?? []).filter(
@@ -348,16 +350,51 @@ export default function AuthorityReportsPage() {
             </tbody>
           </table>
 
-          {nextCursor && (
-            <div className="border-t border-line p-3 text-center">
+          {/* Pagination Footer */}
+          <div className="flex flex-wrap items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted bg-surface-sunken/40">
+            <div className="flex items-center gap-2">
+              <span>
+                Showing <strong className="font-semibold text-ink">{reports.length}</strong> reports
+                {cursor ? ' (Paged view)' : ''}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
               <Button
                 variant="secondary"
-                onClick={() => setFilter('cursor', nextCursor)}
+                size="sm"
+                disabled={!cursor}
+                onClick={() => setFilter('cursor', '')}
+                className="text-xs"
+                title="Return to the first page"
               >
-                Load Next Page
+                First Page
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!cursor && !prevCursor}
+                onClick={() => {
+                  if (prevCursor) setFilter('cursor', prevCursor)
+                  else setFilter('cursor', '')
+                }}
+                className="text-xs flex items-center gap-1"
+                title="Go to previous page"
+              >
+                &larr; Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!nextCursor}
+                onClick={() => nextCursor && setFilter('cursor', nextCursor)}
+                className="text-xs font-semibold text-primary flex items-center gap-1"
+                title="Go to next page"
+              >
+                Next &rarr;
               </Button>
             </div>
-          )}
+          </div>
         </Card>
       )}
       {removeTarget && (

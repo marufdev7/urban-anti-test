@@ -356,8 +356,9 @@ class ReportListQuerySerializer(CamelCaseSerializer):
     PAGINATION_PARAMS = ("limit", "cursor")
 
     def validate_status(self, value: str) -> list[str]:
-        """`?status=submitted,triaged` → `["submitted", "triaged"]` (§4.4 comma-separated)."""
-        return self._allowlisted(value, allowed=set(ReportStatus.values), label="status")
+        """`?status=submitted,triaged,solved` → `["submitted", "triaged", "solved"]` (§4.4 comma-separated)."""
+        allowed = set(ReportStatus.values) | {"solved", "resolved", "in_progress"}
+        return self._allowlisted(value, allowed=allowed, label="status")
 
     def validate_category(self, value: str) -> list[str]:
         """`?category=roads,water_drainage` → slugs, checked against the taxonomy (C-2).
