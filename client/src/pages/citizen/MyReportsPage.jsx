@@ -11,6 +11,7 @@ import {
   MapPin,
   Plus,
   Search,
+  Users,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { isReportSolved } from '../../hooks/data'
@@ -24,17 +25,16 @@ import ReportCard from '../../components/report/ReportCard'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'All Statuses' },
-  { value: 'solved', label: 'Solved / Resolved' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'triaged', label: 'Under Review' },
-  { value: 'processing', label: 'In Progress' },
   { value: 'submitted', label: 'Submitted' },
+  { value: 'solved', label: 'Solved / Resolved' },
 ]
 
 /**
  * Citizen personal submission archive (/citizen/reports).
  * Lists all reports filed by the logged-in citizen.
- * Distinct from the community-wide Processing Queue (/citizen/queue).
+ * Distinct from the community-wide Community Issues (/citizen/queue).
  */
 export default function MyReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -58,20 +58,17 @@ export default function MyReportsPage() {
 
   const params = new URLSearchParams({ limit: '50' })
   if (search) params.set('q', search)
-  // Backend recognizes submitted, processing, triaged
-  if (status && !['solved', 'in_progress'].includes(status)) {
-    params.set('status', status)
-  }
   if (cursor) params.set('cursor', cursor)
 
   const { data, isLoading, isFetching, isError, error } = useQuery({
-    queryKey: ['reports', 'mine', { search, status, cursor }],
+    queryKey: ['reports', 'mine', { search, cursor }],
     queryFn: () => api(`/reports?${params}`),
     placeholderData: (prev) => prev,
     staleTime: 15_000,
   })
 
-  const allRawReports = cursor ? [...stale, ...(data?.data ?? [])] : data?.data ?? []
+  const rawList = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
+  const allRawReports = cursor ? [...stale, ...rawList] : rawList
   const nextCursor = data?.page?.nextCursor
 
   // Tally counts across all loaded reports
@@ -89,11 +86,17 @@ export default function MyReportsPage() {
     if (activeTab === 'active' && isSolved) return false
 
     // 2. Status dropdown filter
+    const isInProgress =
+      !isSolved &&
+      (issStatus === 'in_progress' ||
+        issStatus === 'acknowledged' ||
+        issStatus === 'dispatched' ||
+        report.status === 'processing')
+
     if (status === 'solved' && !isSolved) return false
-    if (status === 'in_progress' && issStatus !== 'in_progress') return false
-    if (status && !['solved', 'in_progress'].includes(status) && report.status !== status) {
-      return false
-    }
+    if (status === 'in_progress' && !isInProgress) return false
+    if (status === 'triaged' && report.status !== 'triaged' && issStatus !== 'triaged') return false
+    if (status === 'submitted' && report.status !== 'submitted') return false
 
     return true
   })
