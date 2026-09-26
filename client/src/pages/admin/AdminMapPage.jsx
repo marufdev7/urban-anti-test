@@ -56,7 +56,6 @@ const STATUSES = [
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
 ]
 
 const RADIUS_OPTIONS = [
@@ -127,7 +126,7 @@ export default function AdminMapPage() {
   })
   if (category) queryParams.set('category', category)
   if (severity) queryParams.set('severity', severity)
-  if (status) queryParams.set('status', status)
+  if (status) queryParams.set('status', status === 'resolved' ? 'resolved,closed' : status)
 
   const { data: mapData, isLoading } = useQuery({
     queryKey: ['map-issues-admin', { bbox: activeBBox, zoom: activeZoom, category, severity, status }],

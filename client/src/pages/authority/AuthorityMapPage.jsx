@@ -29,7 +29,6 @@ const STATUSES = [
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
 ]
 
 const ASSIGNMENT_OPTIONS = [
@@ -75,7 +74,7 @@ export default function AuthorityMapPage() {
   })
   if (category) queryParams.set('category', category)
   if (severity) queryParams.set('severity', severity)
-  if (status) queryParams.set('status', status)
+  if (status) queryParams.set('status', status === 'resolved' ? 'resolved,closed' : status)
   if (assignedTo === 'me') queryParams.set('assignedTo', 'me')
 
   const { data: mapData, isLoading, isFetching } = useQuery({
