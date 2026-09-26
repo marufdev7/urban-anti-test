@@ -21,7 +21,6 @@ const STATUSES = [
   { value: 'solved', label: 'Solved' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'triaged', label: 'Under Review' },
-  { value: 'submitted', label: 'Submitted' },
 ]
 
 export default function AuthorityReportsPage() {
