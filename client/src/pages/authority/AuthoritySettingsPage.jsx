@@ -46,45 +46,18 @@ import PageHeader from '../../components/ui/PageHeader'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 
-const PRESET_AVATARS = [
-  {
-    id: 'official-shield',
-    name: 'Municipal Shield',
-    role: 'Official Insignia',
-    url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="%23005a4c" rx="64"/><path d="M64 28 L94 40 L94 72 C94 92 64 104 64 104 C64 104 34 92 34 72 L34 40 Z" fill="%23ffffff" opacity="0.95"/><path d="M54 64 L62 72 L76 56" fill="none" stroke="%23005a4c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-  },
-  {
-    id: 'officer-1',
-    name: 'Field Lead',
-    role: 'Operations Command',
-    url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=256&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'officer-2',
-    name: 'Operations Director',
-    role: 'Public Works Head',
-    url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=256&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'officer-3',
-    name: 'Safety Inspector',
-    role: 'Civic Triage Lead',
-    url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=256&auto=format&fit=crop&q=80',
-  },
-  {
-    id: 'officer-4',
-    name: 'Civic Coordinator',
-    role: 'Community Liaison',
-    url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256&auto=format&fit=crop&q=80',
-  },
-]
+const MUNICIPAL_SHIELD_AVATAR = {
+  id: 'official-shield',
+  name: 'Municipal Shield',
+  role: 'Official Insignia',
+  url: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="%23005a4c" rx="64"/><path d="M64 28 L94 40 L94 72 C94 92 64 104 64 104 C64 104 34 92 34 72 L34 40 Z" fill="%23ffffff" opacity="0.95"/><path d="M54 64 L62 72 L76 56" fill="none" stroke="%23005a4c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+}
 
 export default function AuthoritySettingsPage() {
   const { user, updateAvatar, updateDisplayName } = useAuth()
   const { data: categories } = useCategories()
   const queryClient = useQueryClient()
   const fileInputRef = useRef(null)
-  const inlineFileInputRef = useRef(null)
 
   // Active Settings Tab
   const [activeTab, setActiveTab] = useState('profile') // 'profile' | 'scope' | 'security' | 'notifications'
@@ -213,14 +186,14 @@ export default function AuthoritySettingsPage() {
 
   const handleSelectPreset = (url) => {
     updateAvatar(url)
-    setAvatarSuccess('Official avatar selected!')
+    setAvatarSuccess('Official Municipal Shield avatar selected!')
     setAvatarModalOpen(false)
     setTimeout(() => setAvatarSuccess(null), 3500)
   }
 
   const handleRemoveAvatar = () => {
     updateAvatar('')
-    setAvatarSuccess('Profile picture removed.')
+    setAvatarSuccess('Profile picture reset to default.')
     setAvatarModalOpen(false)
     setTimeout(() => setAvatarSuccess(null), 3500)
   }
@@ -323,7 +296,7 @@ export default function AuthoritySettingsPage() {
               className="gap-1.5"
             >
               <Camera className="h-3.5 w-3.5 text-[#005a4c]" />
-              <span>Change Photo</span>
+              <span>Update Photo</span>
             </Button>
           </div>
         }
@@ -345,7 +318,7 @@ export default function AuthoritySettingsPage() {
 
       {/* 2. EXECUTIVE HERO PROFILE CARD WITH AVATAR CONTROLS */}
       <div className="overflow-hidden rounded-2xl border border-line bg-surface-panel shadow-sm">
-        {/* Decorative Municipal Header Banner */}
+        {/* Decorative Municipal Header Banner - Clean, no text at bottom colliding with avatar */}
         <div className="relative h-36 sm:h-44 md:h-48 bg-gradient-to-r from-[#002d25] via-[#005043] to-[#087f6e] p-5 sm:p-6 overflow-hidden flex flex-col justify-between">
           {/* Subtle Geometric Dot Grid */}
           <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:20px_20px] opacity-15" />
@@ -369,13 +342,6 @@ export default function AuthoritySettingsPage() {
               <span>Active Operational Duty</span>
             </div>
           </div>
-
-          {/* Bottom subtle banner note */}
-          <div className="relative z-10 hidden sm:block">
-            <span className="text-[11px] font-medium text-white/70 tracking-wider uppercase">
-              UrbanMend Municipal Resilience &amp; Dispatch Authority
-            </span>
-          </div>
         </div>
 
         {/* Profile Details Bar - Generous spacing between banner and text */}
@@ -383,8 +349,8 @@ export default function AuthoritySettingsPage() {
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5">
             {/* Avatar & Personnel Identifiers */}
             <div className="flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left">
-              {/* Profile Avatar with Photo Edit Trigger (Only the avatar has negative margin) */}
-              <div className="-mt-14 sm:-mt-18 relative group shrink-0 self-center md:self-start">
+              {/* Profile Avatar with Photo Edit Trigger */}
+              <div className="-mt-14 sm:-mt-18 relative group shrink-0 flex flex-col items-center self-center md:self-start">
                 <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full border-4 border-surface-panel bg-surface-sunken shadow-xl overflow-hidden flex items-center justify-center ring-2 ring-black/5">
                   {userPhoto ? (
                     <img
@@ -422,9 +388,14 @@ export default function AuthoritySettingsPage() {
                 >
                   <Camera className="h-4 w-4" />
                 </button>
+
+                {/* Clear label placed under profile picture */}
+                <span className="mt-2 hidden sm:inline-block text-[10px] font-bold tracking-wider uppercase text-ink-faint">
+                  Municipal Official
+                </span>
               </div>
 
-              {/* Personnel Title & Badges with ample, clean breathing room below the banner */}
+              {/* Personnel Title & Badges with ample breathing room below the banner */}
               <div className="min-w-0 pt-3 sm:pt-4 text-center md:text-left flex-1">
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5">
                   <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-ink tracking-tight">
@@ -456,6 +427,11 @@ export default function AuthoritySettingsPage() {
                     </>
                   )}
                 </div>
+
+                {/* Subtitle placed cleanly below the credentials */}
+                <p className="mt-1 text-[11px] font-medium text-ink-faint">
+                  UrbanMend Municipal Resilience Authority
+                </p>
               </div>
             </div>
 
@@ -491,12 +467,13 @@ export default function AuthoritySettingsPage() {
                 {user?.categoryScope?.length ? `${user.categoryScope.length} Active Categories` : '7 Municipal Sectors'}
               </p>
             </div>
+            {/* Blue mark revised: Changed from "Triage, Dispatch & Resolve" to "Triage, Assign & Resolve" */}
             <div className="rounded-xl border border-line bg-surface-sunken/70 p-3 hover:bg-surface-sunken transition">
               <div className="flex items-center gap-2 text-ink-faint">
                 <Layers className="h-3.5 w-3.5 text-[#005a4c]" />
-                <span className="text-[10px] font-bold uppercase tracking-wider">Operational Mandate</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider">Incident Lifecycle</span>
               </div>
-              <p className="mt-1 font-bold text-sm text-ink truncate">Triage, Dispatch &amp; Resolve</p>
+              <p className="mt-1 font-bold text-sm text-ink truncate">Triage, Assign &amp; Resolve</p>
             </div>
             <div className="rounded-xl border border-line bg-surface-sunken/70 p-3 hover:bg-surface-sunken transition">
               <div className="flex items-center gap-2 text-ink-faint">
@@ -532,7 +509,7 @@ export default function AuthoritySettingsPage() {
                 <div className="truncate">
                   <p className="leading-tight font-bold">Profile &amp; Contact</p>
                   <p className={`text-[10px] font-normal leading-tight mt-0.5 ${activeTab === 'profile' ? 'text-white/80' : 'text-ink-faint'}`}>
-                    Credentials &amp; Avatar
+                    Personnel Credentials
                   </p>
                 </div>
               </div>
@@ -595,7 +572,7 @@ export default function AuthoritySettingsPage() {
                 <div className="truncate">
                   <p className="leading-tight font-bold">Notification Alerts</p>
                   <p className={`text-[10px] font-normal leading-tight mt-0.5 ${activeTab === 'notifications' ? 'text-white/80' : 'text-ink-faint'}`}>
-                    Live Dispatches &amp; Emails
+                    Live Alerts &amp; Updates
                   </p>
                 </div>
               </div>
@@ -639,10 +616,10 @@ export default function AuthoritySettingsPage() {
           <div className="rounded-2xl border border-[#005a4c]/20 bg-gradient-to-br from-[#005a4c]/5 to-teal-500/5 p-4 text-xs space-y-2.5">
             <div className="flex items-center gap-2">
               <Radio className="h-4 w-4 text-[#005a4c]" />
-              <h4 className="font-bold text-ink">Dispatch Central Hotline</h4>
+              <h4 className="font-bold text-ink">Municipal Operations Line</h4>
             </div>
             <p className="text-[11px] text-ink-muted leading-relaxed">
-              For urgent inter-agency cross-jurisdiction escalations or technical system interruptions:
+              For urgent inter-agency cross-jurisdiction escalations or technical system communications:
             </p>
             <div className="space-y-1 font-mono text-[11px] text-[#005a4c] font-bold">
               <p>Radio: VHF Channel 14</p>
@@ -653,121 +630,9 @@ export default function AuthoritySettingsPage() {
 
         {/* Right Rail: Settings Panels (lg:col-span-8 xl:col-span-9) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-6">
-          {/* TAB 1: PROFILE & CONTACT DETAILS */}
+          {/* TAB 1: PROFILE & CONTACT DETAILS (Red marked duplicate photo area removed!) */}
           {activeTab === 'profile' && (
             <div className="space-y-6 animate-fade-in">
-              {/* Photo & Avatar Customization Card (Inline Management) */}
-              <Card>
-                <CardHeader
-                  title={
-                    <span className="flex items-center gap-2">
-                      <Camera className="h-4 w-4 text-[#005a4c]" aria-hidden="true" />
-                      <span>Authority Profile Picture &amp; Visual Identity</span>
-                    </span>
-                  }
-                  action={
-                    userPhoto ? (
-                      <button
-                        type="button"
-                        onClick={handleRemoveAvatar}
-                        className="flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        <span>Reset to Initials</span>
-                      </button>
-                    ) : null
-                  }
-                />
-                <CardBody className="space-y-5">
-                  <div className="flex flex-col sm:flex-row items-center gap-5 p-4 rounded-xl border border-line bg-surface-sunken">
-                    <div className="relative group shrink-0">
-                      <div className="h-20 w-20 rounded-full border-2 border-[#005a4c] bg-surface-panel shadow-sm overflow-hidden flex items-center justify-center">
-                        {userPhoto ? (
-                          <img src={userPhoto} alt="Current profile" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-[#005a4c] text-white font-black text-2xl">
-                            {(user?.fullName || 'A').charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex-1 text-center sm:text-left space-y-1">
-                      <h4 className="text-sm font-bold text-ink">
-                        {userPhoto ? 'Custom Profile Photo Active' : 'Default Official Initials Avatar'}
-                      </h4>
-                      <p className="text-xs text-ink-muted">
-                        Upload a professional official headshot from your device, or choose from our verified municipal preset avatars below.
-                      </p>
-                      <div className="pt-2 flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-                        <input
-                          type="file"
-                          ref={inlineFileInputRef}
-                          onChange={handleFileUpload}
-                          accept="image/*"
-                          className="hidden"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => inlineFileInputRef.current?.click()}
-                          className="gap-1.5 text-xs shadow-xs"
-                        >
-                          <Upload className="h-3.5 w-3.5 text-[#005a4c]" />
-                          <span>Upload From Computer</span>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Preset Avatars Selection Row */}
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-bold uppercase tracking-wider text-ink">
-                        Or Select an Official Municipal Avatar
-                      </h5>
-                      <span className="text-[11px] text-ink-muted">Instant one-click activation</span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                      {PRESET_AVATARS.map((preset) => {
-                        const isSelected = userPhoto === preset.url
-                        return (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => handleSelectPreset(preset.url)}
-                            className={`group relative flex flex-col items-center gap-2 p-3 rounded-xl border text-center transition cursor-pointer hover:border-[#005a4c] hover:bg-[#005a4c]/5 ${
-                              isSelected
-                                ? 'border-[#005a4c] bg-[#005a4c]/10 ring-2 ring-[#005a4c]'
-                                : 'border-line bg-surface-panel'
-                            }`}
-                          >
-                            <div className="relative">
-                              <img
-                                src={preset.url}
-                                alt={preset.name}
-                                className="h-12 w-12 rounded-full object-cover shadow-2xs group-hover:scale-105 transition"
-                              />
-                              {isSelected && (
-                                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-[#005a4c] text-white">
-                                  <Check className="h-2.5 w-2.5 stroke-[3]" />
-                                </span>
-                              )}
-                            </div>
-                            <div className="min-w-0 w-full">
-                              <p className="text-xs font-bold text-ink truncate">{preset.name}</p>
-                              <p className="text-[10px] text-ink-muted truncate">{preset.role}</p>
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-
               {/* Personnel Credentials Form */}
               <Card>
                 <CardHeader
@@ -794,7 +659,7 @@ export default function AuthoritySettingsPage() {
                           className="mt-1"
                         />
                         <p className="mt-1 text-[11px] text-ink-muted">
-                          This official name is displayed in the top bar, incident work logs, and dispatch audit entries.
+                          This official name is displayed in the top bar, incident work logs, and operational audit entries.
                         </p>
                       </div>
 
@@ -814,7 +679,7 @@ export default function AuthoritySettingsPage() {
                         </p>
                       </div>
 
-                      {/* Phone / Emergency Hotline Contact */}
+                      {/* Phone / Emergency Contact */}
                       <div>
                         <label htmlFor="auth-phone" className="block text-xs font-semibold text-ink">
                           Duty Contact Phone Number
@@ -830,7 +695,7 @@ export default function AuthoritySettingsPage() {
                           />
                         </div>
                         <p className="mt-1 text-[11px] text-ink-muted">
-                          E.164 standard format (e.g. +8801712345678) used for urgent dispatch calls.
+                          E.164 standard format (e.g. +8801712345678) used for urgent field communications.
                         </p>
                       </div>
 
@@ -982,15 +847,15 @@ export default function AuthoritySettingsPage() {
                       </div>
                       <div className="flex items-center gap-2 rounded-lg bg-surface-panel border border-line p-2.5">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span><strong>Field Dispatch:</strong> Assign specialized repair and emergency teams</span>
+                        <span><strong>Field Assignment:</strong> Assign specialized repair and municipal response teams</span>
                       </div>
                       <div className="flex items-center gap-2 rounded-lg bg-surface-panel border border-line p-2.5">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span><strong>Hotline Intake:</strong> Manually log phone and radio dispatches</span>
+                        <span><strong>Hotline Intake:</strong> Manually log citizen calls and field reports</span>
                       </div>
                       <div className="flex items-center gap-2 rounded-lg bg-surface-panel border border-line p-2.5">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span><strong>Work Queue:</strong> Update incident status to In Progress &amp; Solved</span>
+                        <span><strong>Work Queue:</strong> Update incident status to In Progress &amp; Resolved</span>
                       </div>
                     </div>
                   </div>
@@ -1107,7 +972,7 @@ export default function AuthoritySettingsPage() {
                           className="mt-0.5 h-4 w-4 rounded border-line text-[#005a4c] focus:ring-[#005a4c]"
                         />
                         <div>
-                          <p className="text-sm font-bold text-ink">Email Dispatch Notifications</p>
+                          <p className="text-sm font-bold text-ink">Email Incident Notifications</p>
                           <p className="text-xs text-ink-muted mt-0.5">
                             Receive daily shift briefings and critical escalation emails directly to your verified address.
                           </p>
@@ -1141,7 +1006,7 @@ export default function AuthoritySettingsPage() {
       >
         <div className="space-y-4 py-2">
           {/* Current Avatar Preview */}
-          <div className="flex items-center gap-4 rounded-xl border border-line bg-surface-sunken p-3">
+          <div className="flex items-center gap-4 rounded-xl border border-line bg-surface-sunken p-3.5">
             <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-[#005a4c] bg-surface-panel shadow-sm shrink-0 flex items-center justify-center">
               {userPhoto ? (
                 <img src={userPhoto} alt="Preview" className="h-full w-full object-cover" />
@@ -1151,27 +1016,31 @@ export default function AuthoritySettingsPage() {
                 </div>
               )}
             </div>
-            <div>
+            <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-ink">Active Photo</h4>
-              <p className="text-[11px] text-ink-muted mt-0.5">
-                {userPhoto ? 'Custom official picture active' : 'Default initials avatar'}
+              <p className="text-[11px] text-ink-muted mt-0.5 truncate">
+                {userPhoto === MUNICIPAL_SHIELD_AVATAR.url
+                  ? 'Official Municipal Shield active'
+                  : userPhoto
+                  ? 'Custom personal photo active'
+                  : 'Default system initials avatar'}
               </p>
               {userPhoto && (
                 <button
                   type="button"
                   onClick={handleRemoveAvatar}
-                  className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:underline cursor-pointer"
+                  className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-rose-600 hover:underline cursor-pointer"
                 >
                   <Trash2 className="h-3 w-3" />
-                  <span>Remove Photo</span>
+                  <span>Reset to Initials</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Option 1: Upload from Computer */}
+          {/* Option 1: Upload from Device */}
           <div className="space-y-2">
-            <h4 className="text-xs font-bold text-ink">Upload From Device</h4>
+            <h4 className="text-xs font-bold text-ink">Upload Personal Photo</h4>
             <input
               type="file"
               ref={fileInputRef}
@@ -1188,33 +1057,46 @@ export default function AuthoritySettingsPage() {
               <Upload className="h-4 w-4 text-[#005a4c]" />
               <span>Browse Computer Photo (PNG, JPG, WebP)</span>
             </Button>
+            <p className="text-[11px] text-ink-muted">
+              Auto-optimized and resized directly in your browser (max 8MB).
+            </p>
           </div>
 
-          {/* Option 2: Select from Curated Official Avatars */}
-          <div className="space-y-2 pt-1 border-t border-line">
-            <h4 className="text-xs font-bold text-ink">Or Choose an Official Avatar</h4>
-            <div className="grid grid-cols-5 gap-2">
-              {PRESET_AVATARS.map((preset) => (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleSelectPreset(preset.url)}
-                  className={`group flex flex-col items-center gap-1 p-1.5 rounded-xl border transition cursor-pointer hover:border-[#005a4c] hover:bg-[#005a4c]/5 ${
-                    userPhoto === preset.url ? 'border-[#005a4c] bg-[#005a4c]/10' : 'border-line'
-                  }`}
-                  title={preset.name}
-                >
-                  <img
-                    src={preset.url}
-                    alt={preset.name}
-                    className="h-10 w-10 rounded-full object-cover shadow-2xs group-hover:scale-105 transition"
-                  />
-                  <span className="text-[9px] font-medium text-ink-muted truncate w-full text-center">
-                    {preset.name.split(' ')[0]}
-                  </span>
-                </button>
-              ))}
-            </div>
+          {/* Option 2: Use Official Municipal Shield */}
+          <div className="space-y-2 pt-2 border-t border-line">
+            <h4 className="text-xs font-bold text-ink">Official Municipal Insignia</h4>
+            <p className="text-[11px] text-ink-muted">
+              If you prefer not to use your personal photo, you can activate the official Municipal Shield.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => handleSelectPreset(MUNICIPAL_SHIELD_AVATAR.url)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition cursor-pointer hover:border-[#005a4c] hover:bg-[#005a4c]/5 ${
+                userPhoto === MUNICIPAL_SHIELD_AVATAR.url
+                  ? 'border-[#005a4c] bg-[#005a4c]/10 ring-2 ring-[#005a4c]'
+                  : 'border-line bg-surface-panel'
+              }`}
+            >
+              <img
+                src={MUNICIPAL_SHIELD_AVATAR.url}
+                alt="Municipal Shield"
+                className="h-12 w-12 rounded-full object-cover shadow-2xs shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-bold text-ink">Municipal Shield</p>
+                  {userPhoto === MUNICIPAL_SHIELD_AVATAR.url && (
+                    <span className="inline-flex items-center gap-1 rounded bg-[#005a4c] text-white px-1.5 py-0.2 text-[10px] font-bold">
+                      <Check className="h-2.5 w-2.5" /> Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-ink-muted mt-0.5">
+                  Official verified insignia for municipal authority staff
+                </p>
+              </div>
+            </button>
           </div>
 
           {avatarError && (
