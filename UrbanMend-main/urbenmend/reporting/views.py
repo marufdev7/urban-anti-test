@@ -199,7 +199,13 @@ class ReportCollectionView(RateLimitHeadersMixin, APIView):
         # an empty page is a visible bug, while silently streaming every report in the city is the
         # kind that only surfaces under load.
         rows = page or []
-        return paginator.get_paginated_response(ReportDetailSerializer(rows, many=True).data)
+        response = paginator.get_paginated_response(ReportDetailSerializer(rows, many=True).data)
+        try:
+            response["X-Total-Count"] = str(queryset.count())
+            response["Access-Control-Expose-Headers"] = "X-Total-Count"
+        except Exception:
+            pass
+        return response
 
 
 class ReportDetailView(APIView):

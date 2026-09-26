@@ -195,7 +195,13 @@ class IssueCollectionView(APIView):
         # ⚠️ **One `now` for the whole page**, so two Issues opened in the same instant cannot report
         # different ages — which an `?sort=age` page would render as non-monotonic.
         serializer = IssueQueueItemSerializer(rows, many=True, context={"now": timezone.now(), "request": request})
-        return paginator.get_paginated_response(serializer.data)
+        response = paginator.get_paginated_response(serializer.data)
+        try:
+            response["X-Total-Count"] = str(queryset.count())
+            response["Access-Control-Expose-Headers"] = "X-Total-Count"
+        except Exception:
+            pass
+        return response
 
 
 class IssueCommentsView(APIView):

@@ -101,6 +101,7 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
   })
 
   const reports = data?.data ?? []
+  const totalCount = data?.totalCount ?? data?.meta?.total
   const nextCursor = data?.page?.nextCursor
   const prevCursor = data?.page?.prevCursor
 
@@ -112,6 +113,20 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
           isDeletedTab
             ? 'Audit and inspect citizen reports that were removed or discarded by authorities, including removal notes.'
             : 'Search and inspect raw citizen reports submitted across the entire municipal system.'
+        }
+        action={
+          totalCount !== undefined ? (
+            <div
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold shadow-2xs ${
+                isDeletedTab
+                  ? 'border-rose-300 bg-rose-50 text-rose-800'
+                  : 'border-primary/30 bg-primary/10 text-primary'
+              }`}
+            >
+              {isDeletedTab ? <Trash2 className="h-4 w-4 text-rose-600" /> : <FileText className="h-4 w-4" />}
+              <span>{isDeletedTab ? `Deleted Reports: ${totalCount}` : `Total Reports: ${totalCount}`}</span>
+            </div>
+          ) : null
         }
       />
 
@@ -128,6 +143,11 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
         >
           <FileText className="h-4 w-4" />
           <span>Active Reports</span>
+          {!isDeletedTab && totalCount !== undefined && (
+            <span className="rounded-full bg-primary/15 px-2 py-0.5 text-2xs font-bold text-primary">
+              {totalCount}
+            </span>
+          )}
         </button>
 
         <button
@@ -141,9 +161,15 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
         >
           <Trash2 className="h-4 w-4" />
           <span>Deleted Reports</span>
-          <span className="rounded-full bg-rose-100 px-2 py-0.5 text-2xs font-bold text-rose-800">
-            Audit Archive
-          </span>
+          {isDeletedTab && totalCount !== undefined ? (
+            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-2xs font-bold text-rose-800">
+              {totalCount}
+            </span>
+          ) : (
+            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-2xs font-bold text-rose-800">
+              Audit Archive
+            </span>
+          )}
         </button>
       </div>
 
@@ -533,7 +559,10 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
           <div className="flex flex-wrap items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted bg-surface-sunken/40">
             <div className="flex items-center gap-2">
               <span>
-                Showing <strong className="font-semibold text-ink">{reports.length}</strong> {isDeletedTab ? 'deleted reports' : 'reports'}
+                Showing <strong className="font-semibold text-ink">{reports.length}</strong>
+                {totalCount !== undefined ? (
+                  <> of <strong className="font-semibold text-ink">{totalCount}</strong></>
+                ) : ''} {isDeletedTab ? 'deleted reports' : 'reports'}
                 {cursor ? ' (Paged view)' : ''}
               </span>
             </div>

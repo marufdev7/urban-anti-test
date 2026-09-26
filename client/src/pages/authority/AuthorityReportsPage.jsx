@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, FilterX, Image, Search, ShieldCheck, Trash2 } from 'lucide-react'
+import { ExternalLink, FileText, FilterX, Image, Search, ShieldCheck, Trash2 } from 'lucide-react'
 import { api, normalizeMediaUrl } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
 import { badgeFor, categoryLabel, useCategories } from '../../hooks/data'
@@ -64,6 +64,7 @@ export default function AuthorityReportsPage() {
   })
 
   const reports = data?.data ?? []
+  const totalCount = data?.totalCount ?? data?.meta?.total
   const nextCursor = data?.page?.nextCursor
   const prevCursor = data?.page?.prevCursor
 
@@ -78,12 +79,20 @@ export default function AuthorityReportsPage() {
         title="Citizen Reports"
         subtitle={`Review raw citizen submissions across ${user?.assignedArea ? getJurisdictionLabel(user.assignedArea) : "your authority's operational scope"}.`}
         action={
-          user?.assignedArea ? (
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs">
-              <ShieldCheck className="h-4 w-4 text-emerald-600" />
-              <span>Jurisdiction: {getJurisdictionLabel(user.assignedArea)}</span>
-            </div>
-          ) : null
+          <div className="flex flex-wrap items-center gap-2">
+            {totalCount !== undefined && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3.5 py-1.5 text-xs font-bold text-primary shadow-2xs">
+                <FileText className="h-4 w-4" />
+                <span>Total Reports: {totalCount}</span>
+              </span>
+            )}
+            {user?.assignedArea ? (
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 shadow-2xs">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                <span>Jurisdiction: {getJurisdictionLabel(user.assignedArea)}</span>
+              </div>
+            ) : null}
+          </div>
         }
       />
 
@@ -353,7 +362,10 @@ export default function AuthorityReportsPage() {
           <div className="flex flex-wrap items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted bg-surface-sunken/40">
             <div className="flex items-center gap-2">
               <span>
-                Showing <strong className="font-semibold text-ink">{reports.length}</strong> reports
+                Showing <strong className="font-semibold text-ink">{reports.length}</strong>
+                {totalCount !== undefined ? (
+                  <> of <strong className="font-semibold text-ink">{totalCount}</strong></>
+                ) : ''} reports
                 {cursor ? ' (Paged view)' : ''}
               </span>
             </div>

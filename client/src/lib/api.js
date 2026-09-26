@@ -82,6 +82,17 @@ export async function api(path, { method = 'GET', body, headers = {} } = {}) {
     )
   }
 
+  const totalHeader = response.headers.get('X-Total-Count')
+  if (totalHeader && payload && typeof payload === 'object') {
+    const total = parseInt(totalHeader, 10)
+    if (!isNaN(total)) {
+      payload.totalCount = total
+      if (payload.meta) {
+        payload.meta.total = total
+      }
+    }
+  }
+
   return payload
 }
 
