@@ -116,17 +116,97 @@ export function AuthProvider({ children }) {
     },
   })
 
+  const [customAvatar, setCustomAvatar] = useState(() => {
+    try {
+      return localStorage.getItem('urbanmend_custom_avatar') || ''
+    } catch {
+      return ''
+    }
+  })
+
+  const [customName, setCustomName] = useState(() => {
+    try {
+      return localStorage.getItem('urbanmend_custom_name') || ''
+    } catch {
+      return ''
+    }
+  })
+
+  const updateAvatar = (newAvatarUrl) => {
+    try {
+      if (rawUser?.id) {
+        if (newAvatarUrl) {
+          localStorage.setItem(`urbanmend_custom_avatar_${rawUser.id}`, newAvatarUrl)
+        } else {
+          localStorage.removeItem(`urbanmend_custom_avatar_${rawUser.id}`)
+        }
+      }
+      if (newAvatarUrl) {
+        localStorage.setItem('urbanmend_custom_avatar', newAvatarUrl)
+      } else {
+        localStorage.removeItem('urbanmend_custom_avatar')
+      }
+    } catch {
+      // ignore
+    }
+    setCustomAvatar(newAvatarUrl || '')
+  }
+
+  const updateDisplayName = (newName) => {
+    try {
+      if (rawUser?.id) {
+        if (newName) {
+          localStorage.setItem(`urbanmend_custom_name_${rawUser.id}`, newName)
+        } else {
+          localStorage.removeItem(`urbanmend_custom_name_${rawUser.id}`)
+        }
+      }
+      if (newName) {
+        localStorage.setItem('urbanmend_custom_name', newName)
+      } else {
+        localStorage.removeItem('urbanmend_custom_name')
+      }
+    } catch {
+      // ignore
+    }
+    setCustomName(newName || '')
+  }
+
   const rawUser = session.data ?? null
   const user = useMemo(() => {
     if (!rawUser) return null
+    let userSpecificAvatar = ''
+    let userSpecificName = ''
+    try {
+      if (rawUser.id) {
+        userSpecificAvatar = localStorage.getItem(`urbanmend_custom_avatar_${rawUser.id}`) || ''
+        userSpecificName = localStorage.getItem(`urbanmend_custom_name_${rawUser.id}`) || ''
+      }
+    } catch {
+      // ignore
+    }
+    const effectiveAvatar =
+      userSpecificAvatar ||
+      customAvatar ||
+      rawUser.avatarUrl ||
+      rawUser.photoUrl ||
+      googleProfile?.photoUrl ||
+      ''
+    const effectiveName =
+      userSpecificName ||
+      customName ||
+      rawUser.fullName ||
+      googleProfile?.fullName ||
+      ''
+
     return {
       ...rawUser,
-      fullName: rawUser.fullName || googleProfile?.fullName || '',
-      avatarUrl: rawUser.avatarUrl || rawUser.photoUrl || googleProfile?.photoUrl || '',
-      photoUrl: rawUser.photoUrl || rawUser.avatarUrl || googleProfile?.photoUrl || '',
+      fullName: effectiveName,
+      avatarUrl: effectiveAvatar,
+      photoUrl: effectiveAvatar,
       email: rawUser.email || googleProfile?.email || '',
     }
-  }, [rawUser, googleProfile])
+  }, [rawUser, googleProfile, customAvatar, customName])
 
   const value = {
     user,
@@ -138,6 +218,8 @@ export function AuthProvider({ children }) {
     verifyTwoFactor,
     completeLogin,
     logout,
+    updateAvatar,
+    updateDisplayName,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
