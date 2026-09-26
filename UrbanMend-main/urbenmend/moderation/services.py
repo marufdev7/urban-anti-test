@@ -34,7 +34,7 @@ from urbenmend.moderation.models import ModerationAction
 
 @transaction.atomic
 def moderate(*, actor: User, target: Any, action: str, reason: str) -> ModerationAction:
-    require_role(actor, Role.ADMIN)
+    require_role(actor, Role.ADMIN, Role.AUTHORITY)
     if action not in ModerationAction.Action.values:
         raise ValueError("Invalid moderation action.")
     reason = reason.strip()

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Activity,
@@ -11,6 +11,7 @@ import {
   MessageSquare,
   RotateCw,
   Send,
+  Trash2,
   Users,
 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
@@ -40,6 +41,7 @@ import Select from '../../components/ui/Select'
 import { SkeletonDetail } from '../../components/ui/Skeleton'
 import Spinner from '../../components/ui/Spinner'
 import StatusBadge from '../../components/ui/StatusBadge'
+import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModal'
 
 const SEV_TONES = { critical: 'critical', high: 'high', medium: 'medium', low: 'low' }
 const REASON_REQUIRED = new Set(['rejected', 'duplicate', 'insufficient_info', 'reopen'])
@@ -100,12 +102,15 @@ function IssueReportPhoto({ photo }) {
  * notes, and audit trail.
  */
 export default function IssueDetailPage() {
+  const navigate = useNavigate()
   const { reportId } = useParams()
   const issueId = reportId
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const { data: categories } = useCategories()
   const { polygons, center } = useCityBoundary()
+
+  const [removeModalOpen, setRemoveModalOpen] = useState(false)
 
   const backLink = user?.role === 'admin' ? '/admin/queue' : '/authority/queue'
   const backLabel = user?.role === 'admin' ? 'Back to Moderation Queue' : 'Back to the queue'
@@ -690,17 +695,18 @@ export default function IssueDetailPage() {
                 )}
               </div>
 
-              {/* Admin Moderation Button (FRONT-PLAN §9.8 option 1) */}
-              {user?.role === 'admin' && (
+              {/* Removal / Moderation Button for Authority and Admin */}
+              {(user?.role === 'admin' || user?.role === 'authority') && (
                 <div className="pt-2 border-t border-line/60">
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setModerateOpen(true)}
+                    onClick={() => setRemoveModalOpen(true)}
                     className="w-full text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 font-semibold"
                   >
-                    Moderate Issue (Hide / Remove)
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Remove Issue with Notes
                   </Button>
                 </div>
               )}
@@ -888,6 +894,22 @@ export default function IssueDetailPage() {
           </Card>
         </div>
       </div>
+      {removeModalOpen && data && (
+        <RemoveWithNotesModal
+          open={removeModalOpen}
+          onClose={() => setRemoveModalOpen(false)}
+          item={{
+            id: data.id,
+            type: 'issue',
+            description: data.description || `Incident #${shortId(data.id)}`,
+            category: categoryLabel(categories, data.primaryCategory),
+          }}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['issues'] })
+            navigate(backLink)
+          }}
+        />
+      )}
     </div>
   )
 }

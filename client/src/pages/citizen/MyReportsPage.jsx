@@ -27,7 +27,7 @@ const STATUS_OPTIONS = [
   { value: 'solved', label: 'Solved / Resolved' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'triaged', label: 'Under Review' },
-  { value: 'processing', label: 'Processing' },
+  { value: 'processing', label: 'In Progress' },
   { value: 'submitted', label: 'Submitted' },
 ]
 

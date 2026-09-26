@@ -19,10 +19,10 @@ const STATUS_TONES = {
 const SEV_LABELS = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }
 const STATUS_LABELS = {
   submitted: 'Submitted',
-  processing: 'Processing',
+  processing: 'In Progress',
   triaged: 'Under Review',
   acknowledged: 'Acknowledged',
-  dispatched: 'Dispatched',
+  dispatched: 'In Progress',
   in_progress: 'In Progress',
   resolved: 'Solved',
   closed: 'Closed',
@@ -63,7 +63,7 @@ export function badgeFor(report) {
     return { tone: 'processing', label: 'In Progress' }
   }
   if (issueStatus === 'acknowledged' || issueStatus === 'dispatched') {
-    return { tone: 'processing', label: 'Dispatched' }
+    return { tone: 'processing', label: 'In Progress' }
   }
 
   // 3. Triaged / Under Review
@@ -71,9 +71,9 @@ export function badgeFor(report) {
     return { tone: 'neutral', label: 'Under Review' }
   }
 
-  // 4. Processing
+  // 4. Processing -> In Progress
   if (status === 'processing') {
-    return { tone: 'processing', label: 'Processing' }
+    return { tone: 'processing', label: 'In Progress' }
   }
 
   // 5. Default

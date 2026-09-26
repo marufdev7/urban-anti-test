@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ExternalLink, FilterX, Image, Search, ShieldCheck } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ExternalLink, FilterX, Image, Search, ShieldCheck, Trash2 } from 'lucide-react'
 import { api, normalizeMediaUrl } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
 import { badgeFor, categoryLabel, useCategories } from '../../hooks/data'
@@ -14,18 +14,21 @@ import PageHeader from '../../components/ui/PageHeader'
 import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 import StatusBadge from '../../components/ui/StatusBadge'
+import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModal'
 
 const STATUSES = [
   { value: '', label: 'All Statuses' },
   { value: 'submitted', label: 'Submitted' },
-  { value: 'processing', label: 'Processing' },
+  { value: 'processing', label: 'In Progress' },
   { value: 'triaged', label: 'Under Review' },
 ]
 
 export default function AuthorityReportsPage() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
   const { data: categories } = useCategories()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [removeTarget, setRemoveTarget] = useState(null)
 
   const q = searchParams.get('q') ?? ''
   const category = searchParams.get('category') ?? ''
@@ -205,14 +208,32 @@ export default function AuthorityReportsPage() {
                   </p>
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-xs text-ink-faint">
                     <span>{formatDateTime(r.createdAt)}</span>
-                    {r.issueId && (
-                      <Link
-                        to={`/authority/queue/${r.issueId}`}
-                        className="flex items-center gap-1 font-semibold text-primary hover:underline"
+                    <div className="flex items-center gap-2">
+                      {r.issueId && (
+                        <Link
+                          to={`/authority/queue/${r.issueId}`}
+                          className="flex items-center gap-1 font-semibold text-primary hover:underline"
+                        >
+                          Issue #{shortId(r.issueId)} <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRemoveTarget({
+                            id: r.id,
+                            type: 'report',
+                            description: r.description,
+                            category: categoryLabel(categories, r.classification?.category),
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+                        title="Remove unwanted report with notes"
                       >
-                        Issue #{shortId(r.issueId)} <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    )}
+                        <Trash2 className="h-3 w-3" />
+                        <span>Remove</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -294,16 +315,32 @@ export default function AuthorityReportsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {r.issueId ? (
-                        <Link
-                          to={`/authority/queue/${r.issueId}`}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                      <div className="flex items-center justify-end gap-2">
+                        {r.issueId && (
+                          <Link
+                            to={`/authority/queue/${r.issueId}`}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                          >
+                            View incident
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRemoveTarget({
+                              id: r.id,
+                              type: 'report',
+                              description: r.description,
+                              category: categoryLabel(categories, r.classification?.category),
+                            })
+                          }
+                          className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50/70 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition cursor-pointer"
+                          title="Remove unwanted report with notes"
                         >
-                          View incident
-                        </Link>
-                      ) : (
-                        <span className="text-xs text-ink-faint">—</span>
-                      )}
+                          <Trash2 className="h-3 w-3" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -322,6 +359,16 @@ export default function AuthorityReportsPage() {
             </div>
           )}
         </Card>
+      )}
+      {removeTarget && (
+        <RemoveWithNotesModal
+          open={Boolean(removeTarget)}
+          onClose={() => setRemoveTarget(null)}
+          item={removeTarget}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['authority-reports'] })
+          }}
+        />
       )}
     </div>
   )
