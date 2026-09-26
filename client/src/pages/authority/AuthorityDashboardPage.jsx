@@ -139,6 +139,8 @@ export default function AuthorityDashboardPage() {
   const criticalCount = severityGroups.find((g) => g.key === 'critical')?.count ?? 0
   const activeCasesCount = metrics?.open ?? (queuedCount + assessingCount + onSiteCount)
   const totalCasesCount = metrics?.total ?? (activeCasesCount + resolvedCount)
+  const hasResolutionTime = metrics?.medianTimeToResolutionSeconds != null
+  const isSlaMet = hasResolutionTime && metrics.medianTimeToResolutionSeconds <= 4 * 3600
 
   const issuesList = queue?.data ?? []
 
@@ -396,16 +398,26 @@ export default function AuthorityDashboardPage() {
               <div className="mt-2">
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-2xl sm:text-3xl font-black text-ink">
-                    {metrics?.medianTimeToResolutionSeconds
+                    {hasResolutionTime
                       ? formatHours(metrics.medianTimeToResolutionSeconds)
-                      : '3.6h'}
+                      : '—'}
                   </span>
                   <span className="text-[11px] font-bold text-teal-700">Target: &lt; 4h</span>
                 </div>
-                <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-700 font-semibold">
-                  <CheckCircle2 className="h-3 w-3" />
-                  <span>Within Municipal SLA</span>
-                </div>
+                {hasResolutionTime ? (
+                  <div
+                    className={`mt-2 flex items-center gap-1 text-[10px] font-semibold ${
+                      isSlaMet ? 'text-emerald-700' : 'text-amber-700'
+                    }`}
+                  >
+                    {isSlaMet ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                    <span>{isSlaMet ? 'Within Municipal SLA' : 'Over SLA Target'}</span>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-[10px] text-ink-muted">
+                    No resolved cases yet
+                  </div>
+                )}
               </div>
             </div>
 
