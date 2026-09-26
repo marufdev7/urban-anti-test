@@ -20,7 +20,6 @@ export const ISSUE_STATUSES = [
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'insufficient_info', label: 'Needs More Info' },
 ]
