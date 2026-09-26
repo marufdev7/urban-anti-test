@@ -7,8 +7,8 @@ export const ALL_ISSUE_STATUSES = [
   { value: 'triaged', label: 'Under Review' },
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'in_progress', label: 'In Progress' },
-  { value: 'resolved', label: 'Resolved' },
-  { value: 'closed', label: 'Closed' },
+  { value: 'resolved', label: 'Solved' },
+  { value: 'closed', label: 'Solved' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'duplicate', label: 'Duplicate' },
   { value: 'insufficient_info', label: 'Needs More Info' },
@@ -65,7 +65,7 @@ export function issueStatusTone(status) {
 /** Build the /issues query string from the URL-synced filter state. */
 export function issuesQueryString(filters) {
   const params = new URLSearchParams()
-  params.set('limit', '20')
+  params.set('limit', '10')
   for (const [key, value] of Object.entries(filters)) {
     if (value) params.set(key, value)
   }

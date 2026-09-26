@@ -152,6 +152,7 @@ export default function QueuePage() {
     sort: searchParams.get('sort') ?? '',
     q: searchParams.get('q') ?? '',
     cursor: searchParams.get('cursor') ?? '',
+    limit: '10',
   }
 
   const setFilter = (key, value) => {
@@ -165,13 +166,14 @@ export default function QueuePage() {
   }
 
   const clearAll = () => setSearchParams({}, { replace: true })
-  const hasFilters = Object.entries(filters).some(([key, v]) => v && key !== 'cursor' && key !== 'assignedTo')
+  const hasFilters = Object.entries(filters).some(([key, v]) => v && key !== 'cursor' && key !== 'assignedTo' && key !== 'limit')
 
   const { data, isLoading, isFetching, isError, error } = useIssues(filters, {
     refetchInterval: 20_000,
   })
   const issues = data?.data ?? []
   const nextCursor = data?.page?.nextCursor
+  const prevCursor = data?.page?.prevCursor
 
   const allSelected = issues.length > 0 && issues.every((iss) => selectedIds.has(iss.id))
   const toggleSelectAll = () => {
@@ -309,7 +311,7 @@ export default function QueuePage() {
       {isLoading ? (
         <>
           <div className="md:hidden">
-            <SkeletonCards count={4} />
+            <SkeletonCards count={10} />
           </div>
           <Card className="hidden overflow-hidden md:block">
             <table className="w-full text-sm">
@@ -324,7 +326,7 @@ export default function QueuePage() {
                   <th className="px-4 py-3 text-right">Time Elapsed</th>
                 </tr>
               </thead>
-              <SkeletonRows cols={7} rows={5} />
+              <SkeletonRows cols={7} rows={10} />
             </table>
           </Card>
         </>
@@ -593,10 +595,11 @@ export default function QueuePage() {
             </table>
           </div>
 
-          {/* Pagination Footer (FRONT-PLAN §1.3 & §10.5 cursor pagination) */}
-          <div className="flex flex-wrap items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted">
+          {/* Pagination Footer (10 items per page with Prev/Next navigation) */}
+          <div className="flex flex-wrap items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted bg-surface-sunken/30">
             <div>
-              Viewing {issues.length} active issues on this page
+              Viewing <strong className="font-semibold text-ink">{issues.length}</strong> active issues on this page
+              {filters.cursor ? ' (Paged view)' : ''}
             </div>
 
             <div className="flex items-center gap-2">
@@ -606,17 +609,32 @@ export default function QueuePage() {
                 disabled={!filters.cursor}
                 onClick={() => setFilter('cursor', '')}
                 className="text-xs"
+                title="Return to the first page"
               >
                 First Page
               </Button>
               <Button
                 variant="secondary"
                 size="sm"
+                disabled={!filters.cursor && !prevCursor}
+                onClick={() => {
+                  if (prevCursor) setFilter('cursor', prevCursor)
+                  else setFilter('cursor', '')
+                }}
+                className="text-xs flex items-center gap-1"
+                title="Go to previous page"
+              >
+                &larr; Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={!nextCursor}
                 onClick={() => nextCursor && setFilter('cursor', nextCursor)}
-                className="text-xs font-semibold text-primary"
+                className="text-xs font-semibold text-primary flex items-center gap-1"
+                title="Go to next page"
               >
-                Next Page &rarr;
+                Next &rarr;
               </Button>
             </div>
           </div>
