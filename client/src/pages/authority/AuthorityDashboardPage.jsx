@@ -89,7 +89,7 @@ export default function AuthorityDashboardPage() {
   const summary = useAnalyticsSummary({ groupBy: 'status' }, { refetchInterval: 10_000 })
   const severitySplit = useAnalyticsSummary({ groupBy: 'severity' }, { refetchInterval: 10_000 })
   const categorySplit = useAnalyticsSummary({ groupBy: 'category' }, { refetchInterval: 10_000 })
-  const { data: queue, isLoading: isQueueLoading, refetch: refetchQueue } = useIssues({}, { refetchInterval: 10_000 })
+  const { data: queue, isLoading: isQueueLoading, refetch: refetchQueue } = useIssues({ limit: '100' }, { refetchInterval: 10_000 })
 
   // UI States
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
