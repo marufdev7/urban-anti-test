@@ -202,12 +202,13 @@ class ReportPatchSerializer(CamelCaseSerializer):
     # The value is a `slug`, resolved against the *active* taxonomy by `_resolve_category()` — the
     # same resolver intake uses, so a retired slug is refused on both paths (C-2, T2.1).
     category = serializers.CharField(required=False, allow_blank=False, allow_null=False)
+    address = serializers.CharField(required=False, allow_blank=True, allow_null=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         reject_unknown_fields(self)
         if not attrs:
             raise serializers.ValidationError(
-                "Send a description or a category to change.", code="REQUIRED"
+                "Send a description, category, or address to change.", code="REQUIRED"
             )
         return attrs
 
@@ -247,6 +248,7 @@ class ReportDetailSerializer(CamelCaseSerializer):
     issue_id = serializers.SerializerMethodField()
     issue_status = serializers.SerializerMethodField()
     status = serializers.CharField(read_only=True)
+    is_editable = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
     def get_location(self, report: Report) -> dict[str, Any]:

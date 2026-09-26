@@ -273,5 +273,6 @@ class ReportDetailView(APIView):
             # perfectly good re-categorization of a photo-less report.
             description=data.get("description"),
             category_slug=data.get("category"),
+            address=data.get("address"),
         )
         return Response(ReportDetailSerializer(updated).data, status=status.HTTP_200_OK)

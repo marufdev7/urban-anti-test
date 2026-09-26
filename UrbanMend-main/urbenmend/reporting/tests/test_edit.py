@@ -141,20 +141,34 @@ def test_the_author_may_still_edit_while_the_report_is_processing() -> None:
     assert response.status_code == 200
 
 
-def test_the_author_may_not_edit_after_triage() -> None:
+def test_the_author_may_not_edit_after_authority_acknowledgement() -> None:
     """⚠️ §6.3's own `NOT_EDITABLE`, not the generic `CONFLICT`.
 
-    A triaged report may already be clustered into an Issue an Authority is working, so rewriting the
-    text underneath them would change what was triaged without re-triaging it. The specific code is
-    what lets a client stop offering the edit affordance; `CONFLICT` is indistinguishable from a
-    duplicate submission.
+    An author may no longer edit after an authority has acknowledged the issue.
     """
-    report = ReportFactory.create(status=ReportStatus.TRIAGED)
+    from urbenmend.issues.models import IssueStatus
+    from urbenmend.issues.tests.factories import IssueFactory
+
+    issue = IssueFactory.create(status=IssueStatus.ACKNOWLEDGED)
+    report = ReportFactory.create(status=ReportStatus.TRIAGED, issue=issue)
 
     response = _patch(_signed_in(report.author), report, description="Too late to change this.")
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "NOT_EDITABLE"
+
+
+def test_the_author_may_still_edit_while_triaged_before_acknowledgement() -> None:
+    """A triaged report whose issue is not yet acknowledged remains editable by author."""
+    from urbenmend.issues.models import IssueStatus
+    from urbenmend.issues.tests.factories import IssueFactory
+
+    issue = IssueFactory.create(status=IssueStatus.TRIAGED)
+    report = ReportFactory.create(status=ReportStatus.TRIAGED, issue=issue)
+
+    response = _patch(_signed_in(report.author), report, description="Updated before authority takes it.")
+
+    assert response.status_code == 200
 
 
 def test_another_citizen_may_not_edit_someone_elses_report() -> None:

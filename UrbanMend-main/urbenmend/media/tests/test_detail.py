@@ -196,7 +196,11 @@ def test_the_author_may_not_remove_once_the_report_is_triaged() -> None:
 
     A photo an Authority has already been dispatched on must not vanish from underneath them.
     """
-    report = ReportFactory.create(status=ReportStatus.TRIAGED)
+    from urbenmend.issues.models import IssueStatus
+    from urbenmend.issues.tests.factories import IssueFactory
+
+    issue = IssueFactory.create(status=IssueStatus.ACKNOWLEDGED)
+    report = ReportFactory.create(status=ReportStatus.TRIAGED, issue=issue)
     media = MediaFactory.create(owner=report.author, report=report)
     client = Client()
     client.force_login(report.author)
@@ -216,7 +220,11 @@ def test_an_admin_moderating_is_not_bound_by_the_edit_lock() -> None:
     author's pre-triage lock could not remove anything that had been triaged — which is precisely
     the content a takedown request is about.
     """
-    report = ReportFactory.create(status=ReportStatus.TRIAGED)
+    from urbenmend.issues.models import IssueStatus
+    from urbenmend.issues.tests.factories import IssueFactory
+
+    issue = IssueFactory.create(status=IssueStatus.ACKNOWLEDGED)
+    report = ReportFactory.create(status=ReportStatus.TRIAGED, issue=issue)
     media = MediaFactory.create(owner=report.author, report=report)
     client, _ = _signed_in(Role.ADMIN)
 

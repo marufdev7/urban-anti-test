@@ -4,21 +4,30 @@ import { X } from 'lucide-react'
 /** Modal dialog with Escape-key close, backdrop click and focus on open. */
 export default function Dialog({ open, onClose, title, children, footer, className = '' }) {
   const panelRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return undefined
     // Remember what was focused before the modal so it can be returned there.
     const previouslyFocused = document.activeElement
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') onClose?.()
+      if (event.key === 'Escape') onCloseRef.current?.()
     }
     document.addEventListener('keydown', onKeyDown)
-    panelRef.current?.focus()
+
+    // Only focus the dialog container if focus is not already inside it
+    if (panelRef.current && !panelRef.current.contains(document.activeElement)) {
+      panelRef.current.focus()
+    }
+
     return () => {
       document.removeEventListener('keydown', onKeyDown)
-      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus()
+      if (previouslyFocused instanceof HTMLElement && typeof previouslyFocused.focus === 'function') {
+        previouslyFocused.focus()
+      }
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

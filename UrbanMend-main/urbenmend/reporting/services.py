@@ -306,15 +306,13 @@ def update_report(
     report: Report,
     description: str | None = None,
     category_slug: str | None = None,
+    address: str | None = None,
 ) -> Report:
-    """`PATCH /reports/{id}` — the pre-triage edit and the human re-categorization (T2.8, FR-11).
+    """`PATCH /reports/{id}` — the author edit and the human re-categorization (T2.8, FR-11).
 
     Two callers with two different rights, and §6.3 grants them separately:
 
-    * **The author**, and *only while pre-triage*, may correct `description` and `category`. Past
-      triage the answer is `409 NOT_EDITABLE`: the report has been classified and may already be
-      clustered into an Issue an Authority is working, so rewriting the text underneath them would
-      change what was triaged without re-triaging it.
+    * **The author**, as long as the report has not been acknowledged by an authority, may correct `description`, `category` and `address`.
     * **An Authority in scope, or an Admin**, may **re-categorize at any time** — that is the whole
       point of FR-11's correction path, which exists precisely because the LLM gets some wrong. They
       may not touch `description`: it is the citizen's own account of what they saw, and an official
@@ -350,7 +348,7 @@ def update_report(
         AuthorizationError: `403 FORBIDDEN` — an Authority outside the report's category scope.
         PermissionDenied: `403 FORBIDDEN` — a citizen who is not the author, or an official trying to
             edit the description.
-        Conflict: `409 NOT_EDITABLE` — the author editing a report past triage, or any caller
+        Conflict: `409 NOT_EDITABLE` — the author editing an acknowledged report, or any caller
             reaching a moderated row.
         ReportValidationError: `400 VALIDATION_FAILED` — an unknown or retired category slug, or an
             edit that would leave the report with neither a photo nor an adequate description (BR-3).
@@ -393,11 +391,11 @@ def update_report(
         # the reason (T1.5: "denial messages name neither role nor resource").
         raise PermissionDenied("You do not have permission to edit this report.")
     elif not report.is_editable:
-        # ⚠️ §6.3's own code, not the generic `CONFLICT`. "Already triaged" is a state a client can
+        # ⚠️ §6.3's own code, not the generic `CONFLICT`. "Already acknowledged" is a state a client can
         # act on — stop offering the edit affordance — while `CONFLICT` is indistinguishable from a
         # duplicate submission.
         raise Conflict(
-            "This report has already been triaged and can no longer be edited.",
+            "This report has already been acknowledged and can no longer be edited.",
             code="NOT_EDITABLE",
         )
 
@@ -410,14 +408,14 @@ def update_report(
     previous_category = report.category
     previous_slug = previous_category.slug if previous_category else None
 
-    if description is None and category_slug is None:
+    if description is None and category_slug is None and address is None:
         # ⚠️ **Checked *after* authorization, not before.** A caller who may not edit this report must
         # not be able to distinguish "your body was empty" from "you may not touch this" — the same
         # observable ordering `submit_report()` records for the idempotency key. `ReportPatchSerializer`
         # refuses an empty body first, so this is the guard for a non-HTTP caller (FR-3): without it
         # the function answers `200` and a bumped `updated_at` to a request that changed nothing.
         raise ReportValidationError(
-            {"description": "Send a description or a category to change."},
+            {"description": "Send a description, category, or address to change."},
             code="REQUIRED",
         )
 
@@ -437,9 +435,21 @@ def update_report(
         # Reuses intake's resolver, so a retired slug is refused here too — the same reasoning:
         # BR-7's coercion to `Other` is for an *LLM* returning something off-taxonomy, and silently
         # filing an official's correction under `Other` loses the decision they just made.
-        report.category = _resolve_category(category_slug)
+        new_category = _resolve_category(category_slug)
+        report.category = new_category
         report.classification_source = _human_classification_source(actor)
         changed.extend(["category", "classification_source"])
+        if report.issue_id:
+            try:
+                if report.issue and report.issue.reports.count() <= 1:
+                    report.issue.primary_category = new_category
+                    report.issue.save(update_fields=["primary_category", "updated_at"])
+            except Exception:
+                pass
+
+    if address is not None:
+        report.address = address.strip()
+        changed.append("address")
 
     # ⚠️ `updated_at` must be listed: it is `auto_now`, and `save(update_fields=...)` writes only the
     # named columns, so omitting it leaves the row reading as never-modified — the same trap

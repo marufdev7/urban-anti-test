@@ -179,6 +179,11 @@ urlpatterns = [
         name="categories-detail",
     ),
     path(
+        "classification/classify",
+        classification_views.ClassifyPreviewView.as_view(),
+        name="classification-classify",
+    ),
+    path(
         "severity-keywords",
         classification_views.SeverityKeywordCollectionView.as_view(),
         name="severity-keywords",

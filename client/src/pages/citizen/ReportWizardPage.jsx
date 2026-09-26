@@ -12,12 +12,18 @@ import {
   MapPin,
   Shield,
   ShieldCheck,
+  Sparkles,
   X,
 } from 'lucide-react'
 import { api, apiUpload, ApiError } from '../../lib/api'
 import { mediaErrorMessage, useCategories, useCityBoundary } from '../../hooks/data'
 import { forwardGeocode, isPointInBoundary, reverseGeocode } from '../../lib/geo'
 import { BANGLADESH_CITIES, isPointInPolygon } from '../../lib/zones'
+import {
+  CATEGORY_GROUP_MAPPING,
+  detectCategoryFromDescription,
+  fetchBackendAIClassification,
+} from '../../lib/classification'
 import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
@@ -120,6 +126,58 @@ export default function ReportWizardPage() {
       return ''
     }
   })
+  const [hasManualOverride, setHasManualOverride] = useState(false)
+  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false)
+  const [serverAiResult, setServerAiResult] = useState(null)
+
+  // Real-time instant semantic inference
+  const detectedCategory = useMemo(() => {
+    return detectCategoryFromDescription(description)
+  }, [description])
+
+  // Automatically select category and group when detected, unless the citizen manually picked one
+  useEffect(() => {
+    if (detectedCategory && !hasManualOverride && !serverAiResult) {
+      setCategory(detectedCategory.category)
+      setCategoryGroup(detectedCategory.group)
+    }
+  }, [detectedCategory, hasManualOverride, serverAiResult])
+
+  // Asynchronous Backend AI Analysis (debounced 600ms)
+  useEffect(() => {
+    if (!description || description.trim().length < 6) {
+      setServerAiResult(null)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setIsAiAnalyzing(true)
+      const aiRes = await fetchBackendAIClassification(description)
+      setIsAiAnalyzing(false)
+      if (aiRes?.category) {
+        setServerAiResult(aiRes)
+        if (!hasManualOverride) {
+          setCategory(aiRes.category)
+          setCategoryGroup(CATEGORY_GROUP_MAPPING[aiRes.category] || 'environmental')
+        }
+      }
+    }, 600)
+
+    return () => clearTimeout(timer)
+  }, [description, hasManualOverride])
+
+  const handleTriggerAiAnalyze = async () => {
+    if (!description || description.trim().length < 4) return
+    setIsAiAnalyzing(true)
+    const aiRes = await fetchBackendAIClassification(description)
+    setIsAiAnalyzing(false)
+    if (aiRes?.category) {
+      setServerAiResult(aiRes)
+      setCategory(aiRes.category)
+      setCategoryGroup(CATEGORY_GROUP_MAPPING[aiRes.category] || 'environmental')
+      setHasManualOverride(false)
+    }
+  }
 
   const [photos, setPhotos] = useState([]) // [{localId, preview, mediaId, state, error}]
   const [submitError, setSubmitError] = useState(null)
@@ -243,6 +301,14 @@ export default function ReportWizardPage() {
   const handleSelectGroup = (group) => {
     setCategoryGroup(group)
     setCategory(CATEGORY_MAP[group] || 'roads')
+    setHasManualOverride(true)
+  }
+
+  const applyDetectedCategory = (detected) => {
+    if (!detected) return
+    setCategory(detected.category)
+    setCategoryGroup(detected.group)
+    setHasManualOverride(false)
   }
 
   // Handle marker change from map click or marker drag: updates coordinates and automatically reverse-geocodes address
@@ -349,7 +415,7 @@ export default function ReportWizardPage() {
           address: address.trim(),
           category,
           mediaIds: photos.filter((p) => p.mediaId).map((p) => p.mediaId),
-          language: 'en',
+          language: /[\u0980-\u09FF]/.test(description) ? 'bn' : 'en',
         },
       }),
     onSuccess: (ack) => {
@@ -471,7 +537,15 @@ export default function ReportWizardPage() {
 
               {/* Issue Category */}
               <div>
-                <label className="mb-2.5 block text-sm font-semibold text-ink">Issue Category</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-ink">Issue Category</label>
+                  {detectedCategory && !hasManualOverride && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-[#005a4c] border border-emerald-200 shadow-2xs">
+                      <Sparkles className="h-3 w-3 text-emerald-600 animate-pulse" />
+                      Auto-detected: {detectedCategory.labelEn}
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-3.5">
                   {/* Infrastructure Hazard Tile */}
                   <button
@@ -509,21 +583,103 @@ export default function ReportWizardPage() {
                     <span className="text-xs font-bold text-ink leading-tight">Environmental</span>
                   </button>
                 </div>
+
+                {/* Active Specific Subcategory Badge */}
+                <div className="mt-2.5 flex items-center justify-between text-xs text-ink-muted bg-slate-50 border border-slate-200/70 rounded-lg px-3 py-1.5">
+                  <span className="text-[11px] font-medium">Selected Category:</span>
+                  <span className="font-semibold text-[#005a4c]">
+                    {categoryMeta?.label?.en || detectedCategory?.labelEn || category}
+                  </span>
+                </div>
               </div>
 
               {/* Description */}
               <div>
-                <label htmlFor="description" className="mb-1.5 block text-sm font-semibold text-ink">
-                  Description
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="description" className="block text-sm font-semibold text-ink">
+                    Description
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleTriggerAiAnalyze}
+                    disabled={isAiAnalyzing || !description.trim()}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#005a4c] hover:text-[#004a3e] bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200/80 px-2.5 py-1 rounded-md transition-colors disabled:opacity-40 cursor-pointer shadow-2xs"
+                  >
+                    {isAiAnalyzing ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
+                    )}
+                    <span>{isAiAnalyzing ? 'Analyzing AI...' : 'AI Analyze'}</span>
+                  </button>
+                </div>
                 <textarea
                   id="description"
                   rows={4}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the issue in detail..."
+                  placeholder="Describe the issue in detail... (e.g. gas pipeline leak, broken road, drain blocked)"
                   className="w-full rounded-xl border border-line bg-white p-3.5 text-sm placeholder:text-ink-faint focus:border-[#005a4c] focus:outline-none focus:ring-1 focus:ring-[#005a4c]"
                 />
+
+                {/* AI Analysis Status / Result */}
+                {(detectedCategory || serverAiResult || isAiAnalyzing) && !hasManualOverride && (
+                  <div className="mt-2 flex items-center justify-between rounded-lg bg-emerald-50/90 border border-emerald-200 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2 text-emerald-900">
+                      {isAiAnalyzing ? (
+                        <Loader2 className="h-4 w-4 text-emerald-600 animate-spin shrink-0" />
+                      ) : (
+                        <Sparkles className="h-4 w-4 text-emerald-600 shrink-0 animate-pulse" />
+                      )}
+                      <span>
+                        AI Analyzed Category:{' '}
+                        <strong>
+                          {categoryMeta?.label?.en ||
+                            detectedCategory?.labelEn ||
+                            serverAiResult?.category ||
+                            category}
+                        </strong>
+                        {detectedCategory?.labelBn ? ` (${detectedCategory.labelBn})` : ''}
+                      </span>
+                    </div>
+                    {isAiAnalyzing ? (
+                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">
+                        Deep analyzing intent...
+                      </span>
+                    ) : serverAiResult?.rationale ? (
+                      <span
+                        className="text-[11px] font-medium text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded max-w-[240px] truncate"
+                        title={serverAiResult.rationale}
+                      >
+                        {serverAiResult.rationale}
+                      </span>
+                    ) : detectedCategory?.matchedTerms?.length > 0 ? (
+                      <span className="text-[11px] font-medium text-emerald-700 bg-emerald-100/80 border border-emerald-200 px-2 py-0.5 rounded">
+                        Analyzed: "{detectedCategory.matchedTerms.slice(0, 2).join(' • ')}"
+                      </span>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* When user manually chose a category, but description points to something else */}
+                {hasManualOverride && detectedCategory && detectedCategory.category !== category && (
+                  <div className="mt-2 flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2 text-amber-900">
+                      <Sparkles className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span>
+                        AI suggests <strong>{detectedCategory.labelEn}</strong> based on description.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applyDetectedCategory(detectedCategory)}
+                      className="font-semibold text-emerald-800 hover:text-emerald-900 bg-white border border-emerald-300 px-2.5 py-1 rounded shadow-2xs hover:bg-emerald-50 transition-colors"
+                    >
+                      Apply AI Category
+                    </button>
+                  </div>
+                )}
+
                 {readyPhotos.length === 0 && description.trim().length > 0 && description.trim().length < MIN_DESCRIPTION && (
                   <p className="mt-1 text-xs text-amber-700 font-medium">
                     Rule BR-3: At least 15 characters required when submitting without photos ({description.trim().length}/{MIN_DESCRIPTION}).
@@ -628,18 +784,29 @@ export default function ReportWizardPage() {
                 <div className="mt-3 grid grid-cols-2 gap-2.5">
                   {(categories ?? []).filter((c) => c.active).map((c) => {
                     const isSelected = category === c.key
+                    const isDetected = detectedCategory?.category === c.key
                     return (
                       <button
                         key={c.key}
                         type="button"
-                        onClick={() => setCategory(c.key)}
-                        className={`flex items-center gap-2 rounded-xl border p-3 text-left text-xs font-semibold transition-all ${
+                        onClick={() => {
+                          setCategory(c.key)
+                          setCategoryGroup(CATEGORY_GROUP_MAPPING[c.key] || 'infrastructure')
+                          setHasManualOverride(true)
+                        }}
+                        className={`flex items-center justify-between rounded-xl border p-3 text-left text-xs font-semibold transition-all ${
                           isSelected
                             ? 'border-2 border-[#005a4c] bg-white ring-1 ring-[#005a4c]/20 text-[#005a4c]'
                             : 'border-line bg-white text-ink hover:border-slate-300'
                         }`}
                       >
                         <span className="truncate">{c.label.en}</span>
+                        {isDetected && (
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            <Sparkles className="h-2.5 w-2.5" />
+                            AI
+                          </span>
+                        )}
                       </button>
                     )
                   })}

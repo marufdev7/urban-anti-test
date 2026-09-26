@@ -6,16 +6,35 @@ import StatusBadge from '../ui/StatusBadge'
 import { badgeFor, categoryLabel, isReportSolved, severityBadgeFor, useCategories } from '../../hooks/data'
 import { shortId, timeAgo, truncate } from '../../lib/format'
 import { normalizeMediaUrl } from '../../lib/api'
+import { useAuth } from '../../auth/AuthContext'
 
 /**
  * One report in the dashboard grid: photo with status & severity badges,
  * title, location, id + age, and clear resolution verification.
  */
 export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
+  const { user } = useAuth()
   const { data: categories } = useCategories()
   const badge = badgeFor(report)
   const sevBadge = severityBadgeFor(report)
   const isSolved = isReportSolved(report)
+
+  const issueStatus = report?.issueStatus || report?.issue?.status
+  const isAcknowledged =
+    issueStatus === 'acknowledged' ||
+    issueStatus === 'in_progress' ||
+    issueStatus === 'resolved' ||
+    issueStatus === 'closed' ||
+    issueStatus === 'rejected' ||
+    report?.status === 'resolved'
+  const isEditable =
+    report?.isEditable !== undefined
+      ? report.isEditable
+      : !isAcknowledged && report?.status !== 'hidden' && report?.status !== 'removed'
+
+  const isAuthor = Boolean(user?.id && report?.authorId && String(user.id) === String(report.authorId))
+  const canEdit = isAuthor && isEditable
+
   const photo = report.media?.find((m) => m.thumbnailUrl || m.url)
   const [imgFailed, setImgFailed] = useState(false)
   const [useOriginal, setUseOriginal] = useState(false)
@@ -90,6 +109,11 @@ export default function ReportCard({ report, linkBase = '/citizen/reports' }) {
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
             <h3 className="truncate text-sm font-semibold text-ink">{title}</h3>
+            {canEdit && (
+              <span className="shrink-0 inline-flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200" title="Editable until authority acknowledges">
+                ✎ Editable
+              </span>
+            )}
           </div>
 
           <p className="mt-1 flex items-center gap-1 truncate text-xs text-ink-muted">

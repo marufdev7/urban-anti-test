@@ -181,7 +181,7 @@ export default function MyReportsPage() {
 
   const pageTitle = isQueueRoute ? 'Processing Queue' : 'My Reports'
   const pageSubtitle = isQueueRoute
-    ? 'Track your active civic incident reports progressing through triage, municipal dispatch, and repair.'
+    ? 'Track your active civic incident reports progressing through review, municipal dispatch, and repair.'
     : 'Comprehensive archive of all your civic incident submissions, status tracking, and verified resolutions.'
 
   return (

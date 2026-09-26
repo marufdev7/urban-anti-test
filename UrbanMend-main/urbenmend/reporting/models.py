@@ -279,7 +279,20 @@ class Report(models.Model):
     def is_editable(self) -> bool:
         """Whether the author may still edit (FR-11, API §6.3 `409 NOT_EDITABLE`).
 
-        Pre-triage only. T2.8 owns the endpoint; the rule lives here because both the service
-        and the serializer need one answer to the question.
+        The author may edit the report as long as it has not been acknowledged by an authority.
         """
-        return self.status in {ReportStatus.SUBMITTED, ReportStatus.PROCESSING}
+        if self.status in {ReportStatus.HIDDEN, ReportStatus.REMOVED}:
+            return False
+
+        if not self.issue_id:
+            return True
+
+        try:
+            if self.issue:
+                # Pre-acknowledgement issue statuses: submitted, triaged.
+                # Once acknowledged, in_progress, resolved, etc., editing is locked.
+                return self.issue.status in {"submitted", "triaged"}
+        except Exception:
+            return False
+
+        return True

@@ -199,18 +199,29 @@ def test_classified_report_carries_its_provenance() -> None:
     [
         (ReportStatus.SUBMITTED, True),
         (ReportStatus.PROCESSING, True),
-        (ReportStatus.TRIAGED, False),
+        (ReportStatus.TRIAGED, True),
         (ReportStatus.HIDDEN, False),
         (ReportStatus.REMOVED, False),
     ],
 )
-def test_is_editable_is_pre_triage_only(status: str, editable: bool) -> None:
-    """FR-11 / API §6.3 `409 NOT_EDITABLE`.
-
-    ⚠️ `HIDDEN`/`REMOVED` are false as well as `TRIAGED`: a moderated report must not become
-    editable by its author, or FR-31 removal is undoable by the person who caused it.
-    """
+def test_is_editable_allows_edit_before_acknowledgement(status: str, editable: bool) -> None:
+    """A report is editable until an authority acknowledges it."""
     assert ReportFactory.build(status=status).is_editable is editable
+
+
+def test_is_editable_false_once_issue_is_acknowledged() -> None:
+    """Once linked to an Issue that an authority has acknowledged, editing is locked."""
+    from urbenmend.issues.models import IssueStatus
+    from urbenmend.issues.tests.factories import IssueFactory
+
+    issue = IssueFactory.create(status=IssueStatus.ACKNOWLEDGED)
+    report = ReportFactory.create(status=ReportStatus.TRIAGED, issue=issue)
+    assert report.is_editable is False
+
+    # But if issue is still in submitted or triaged state, report remains editable
+    triaged_issue = IssueFactory.create(status=IssueStatus.TRIAGED)
+    triaged_report = ReportFactory.create(status=ReportStatus.TRIAGED, issue=triaged_issue)
+    assert triaged_report.is_editable is True
 
 
 # ---------------------------------------------------------------------------------------

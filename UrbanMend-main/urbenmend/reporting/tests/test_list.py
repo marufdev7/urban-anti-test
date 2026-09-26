@@ -39,6 +39,7 @@ from urbenmend.media.models import MediaState
 from urbenmend.media.tests.factories import ReadyMediaFactory
 from urbenmend.reporting import selectors
 from urbenmend.reporting.models import Report, ReportStatus
+from urbenmend.reporting.tests.test_detail import EXPECTED_KEYS
 from urbenmend.reporting.tests.factories import (
     DEFAULT_LOCATION,
     ClassifiedReportFactory,
@@ -278,17 +279,7 @@ def test_a_list_item_carries_the_same_shape_as_the_detail_body() -> None:
 
     item = _signed_in(report.author).get(_url()).json()["data"][0]
 
-    assert set(item) == {
-        "id",
-        "authorId",
-        "description",
-        "location",
-        "media",
-        "classification",
-        "issueId",
-        "status",
-        "createdAt",
-    }
+    assert set(item) == EXPECTED_KEYS
     assert item["media"][0]["id"] == str(media.pk)
 
 

@@ -9,13 +9,14 @@ from rest_framework.views import APIView
 
 from urbenmend.api.pagination import StandardCursorPagination
 from urbenmend.classification.models import Category
+from urbenmend.classification.contracts import ClassificationRequest
 from urbenmend.classification.reference_services import (
     create_category,
     create_severity_keyword,
     update_category,
     update_severity_keyword,
 )
-from urbenmend.classification.selectors import list_severity_keywords
+from urbenmend.classification.selectors import active_category_slugs, list_severity_keywords
 from urbenmend.classification.serializers import (
     CategoryCreateSerializer,
     CategorySerializer,
@@ -23,6 +24,7 @@ from urbenmend.classification.serializers import (
     SeverityKeywordSerializer,
     SeverityKeywordWriteSerializer,
 )
+from urbenmend.classification.services import classify_with_fallback
 from urbenmend.identity.models import User
 
 
@@ -92,3 +94,34 @@ class SeverityKeywordDetailView(APIView):
             actor=cast("User", request.user), keyword_id=keyword_id, active=False
         )
         return Response(SeverityKeywordSerializer(keyword).data)
+
+
+class ClassifyPreviewView(APIView):
+    """Real-time AI/fallback classification preview for report drafting (FR-13a)."""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request: Request) -> Response:
+        text = str(request.data.get("text") or "").strip()
+        if not text:
+            return Response({"error": "text is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        has_bangla = any("\u0980" <= c <= "\u09ff" for c in text)
+        classification_req = ClassificationRequest(
+            text=text,
+            allowed_categories=active_category_slugs(),
+            language="bn" if has_bangla else "en",
+        )
+        user_scope = str(request.user.id) if request.user and request.user.is_authenticated else "anon"
+        result = classify_with_fallback(classification_req, user_scope=user_scope)
+        return Response(
+            {
+                "category": result.category,
+                "severity": result.severity.value,
+                "confidence": result.confidence,
+                "rationale": result.rationale,
+                "source": result.source.value,
+                "model": result.model,
+            }
+        )
+

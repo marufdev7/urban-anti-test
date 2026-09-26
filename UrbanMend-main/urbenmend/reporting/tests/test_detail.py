@@ -46,7 +46,9 @@ EXPECTED_KEYS = {
     "media",
     "classification",
     "issueId",
+    "issueStatus",
     "status",
+    "isEditable",
     "createdAt",
 }
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAuth } from '../../auth/AuthContext'
 import {
   AlertCircle,
   ArrowLeft,
@@ -8,7 +9,9 @@ import {
   Compass,
   ImageOff,
   Info,
+  Lock,
   MapPin,
+  Pencil,
   ShieldCheck,
   Sparkles,
   Wrench,
@@ -17,11 +20,13 @@ import { api, normalizeMediaUrl } from '../../lib/api'
 import { badgeFor, categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
 import { formatDateTime, shortId } from '../../lib/format'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
+import Button from '../../components/ui/Button'
 import MapPanel from '../../components/MapPanel'
 import { SkeletonDetail } from '../../components/ui/Skeleton'
 import StatusBadge from '../../components/ui/StatusBadge'
 import StatusTimeline from '../../components/report/StatusTimeline'
 import ConfirmIssueButton from '../../components/issue/ConfirmIssueButton'
+import EditReportModal from '../../components/report/EditReportModal'
 
 function sevLabel(sev) {
   return { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }[sev] ?? null
@@ -180,8 +185,13 @@ function ReportMediaGallery({ media }) {
  */
 export default function ReportTrackingPage() {
   const { reportId } = useParams()
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
   const { data: categories } = useCategories()
   const { polygons } = useCityBoundary()
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [localReportOverride, setLocalReportOverride] = useState(null)
 
   const fallbackReport = FALLBACK_REPORTS_BY_ID[reportId]
 
@@ -228,7 +238,7 @@ export default function ReportTrackingPage() {
       query.state.data?.classification?.source ? false : 4000,
   })
 
-  const report = remoteReport || fallbackReport
+  const report = localReportOverride || remoteReport || fallbackReport
 
   // Once clustered into an Issue, follow the issue and its status events (FRONT-PLAN §9.3)
   const issueId = report?.issueId
@@ -270,6 +280,26 @@ export default function ReportTrackingPage() {
     : categoryName
   const position = report.location
 
+  const isAcknowledged =
+    issue?.status === 'acknowledged' ||
+    issue?.status === 'in_progress' ||
+    issue?.status === 'resolved' ||
+    issue?.status === 'closed' ||
+    issue?.status === 'rejected' ||
+    report?.issueStatus === 'acknowledged' ||
+    report?.issueStatus === 'in_progress' ||
+    report?.issueStatus === 'resolved' ||
+    report?.issueStatus === 'closed' ||
+    report?.status === 'resolved'
+
+  // Editable until an authority acknowledges it
+  const isEditable =
+    report?.isEditable !== undefined
+      ? report.isEditable
+      : !isAcknowledged && report?.status !== 'hidden' && report?.status !== 'removed'
+
+  const isAuthor = Boolean(user?.id && report?.authorId && String(user.id) === String(report.authorId))
+  const canEdit = isAuthor && isEditable
 
   const isAssigned = !!issueId
   const isResolved =
@@ -363,10 +393,30 @@ export default function ReportTrackingPage() {
         <div className="space-y-5 lg:col-span-2">
           <Card>
             <CardBody className="pt-5">
-              <h2 className="text-2xl font-bold text-ink">{title}</h2>
-              <p className="mt-1 text-xs text-ink-muted">
-                Submitted on {formatDateTime(report.createdAt)}
-              </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-2xl font-bold text-ink">{title}</h2>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Submitted on {formatDateTime(report.createdAt)}
+                  </p>
+                </div>
+                {canEdit ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setIsEditModalOpen(true)}
+                    className="flex shrink-0 items-center gap-1.5 border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 font-semibold shadow-xs"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Report
+                  </Button>
+                ) : isAuthor && isAcknowledged ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-panel border border-line bg-surface-sunken px-2.5 py-1 text-2xs font-medium text-ink-muted">
+                    <Lock className="h-3 w-3" />
+                    Acknowledged (Locked)
+                  </span>
+                ) : null}
+              </div>
 
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-panel border border-line bg-surface-sunken/60 px-4 py-3">
@@ -532,6 +582,19 @@ export default function ReportTrackingPage() {
           </Card>
         </div>
       </div>
+
+      {/* Edit Report Modal */}
+      {canEdit && (
+        <EditReportModal
+          open={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          report={report}
+          onSaved={(updated) => {
+            setLocalReportOverride(updated)
+            queryClient.invalidateQueries({ queryKey: ['reports', reportId] })
+          }}
+        />
+      )}
     </div>
   )
 }
