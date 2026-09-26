@@ -781,7 +781,7 @@ export default function ManualEntryModal({ isOpen, onClose, onSuccess, defaultAr
                 </span>
               </h2>
               <p className="text-xs text-ink-muted">
-                Log reports received via phone hotline, citizen walk-in, or radio dispatch into the triage queue.
+                Log reports received via phone hotline, citizen walk-in, or radio dispatch into the work queue.
               </p>
             </div>
           </div>
@@ -1187,7 +1187,7 @@ export default function ManualEntryModal({ isOpen, onClose, onSuccess, defaultAr
                   {photos.length === 3 && (
                     <div className="flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-[11px] text-emerald-800">
                       <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                      <span>Maximum 3 evidence photos attached. Ready for triage logging.</span>
+                      <span>Maximum 3 evidence photos attached. Ready for logging.</span>
                     </div>
                   )}
                 </div>

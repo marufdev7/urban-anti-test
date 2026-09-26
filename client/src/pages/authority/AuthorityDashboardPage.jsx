@@ -274,7 +274,7 @@ export default function AuthorityDashboardPage() {
             className="inline-flex items-center gap-1.5 rounded-xl bg-[#005a4c] hover:bg-[#00483c] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition active:scale-95 cursor-pointer"
           >
             <Plus className="h-4 w-4" />
-            <span>+ Log Incident</span>
+            <span>Manual Entry</span>
           </button>
         </div>
       </div>
@@ -350,7 +350,7 @@ export default function AuthorityDashboardPage() {
                 </div>
                 <div className="mt-2 flex items-center gap-1 text-[10px] text-orange-800 font-medium">
                   <TrendingUp className="h-3 w-3" />
-                  <span>Prioritize field dispatch</span>
+                  <span>Prioritize response</span>
                 </div>
               </div>
             </Link>
@@ -437,7 +437,7 @@ export default function AuthorityDashboardPage() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-ink">Operational Triage Pipeline</h3>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-ink">Operational Workflow Pipeline</h3>
                       <p className="text-[11px] text-ink-muted mt-0.5">Live distribution of cases across workflow lifecycle</p>
                     </div>
                     <Link
@@ -530,7 +530,7 @@ export default function AuthorityDashboardPage() {
 
                 <div className="mt-4 pt-3 border-t border-line/60 flex items-center justify-between text-xs text-ink-muted">
                   <span>Total cases recorded in timeframe: <strong>{totalCasesCount}</strong></span>
-                  <span className="text-emerald-700 font-semibold">Ready for dispatch</span>
+                  <span className="text-emerald-700 font-semibold">Active workflow</span>
                 </div>
               </div>
             </div>
@@ -604,7 +604,7 @@ export default function AuthorityDashboardPage() {
                   <div>
                     <h2 className="text-sm font-bold text-ink flex items-center gap-2">
                       <Flame className="h-4 w-4 text-orange-600" />
-                      <span>Priority Incident Triage</span>
+                      <span>Priority Incidents</span>
                     </h2>
                     <p className="text-[11px] text-ink-muted">High-priority reports requiring authority action</p>
                   </div>
@@ -723,7 +723,7 @@ export default function AuthorityDashboardPage() {
                             </span>
 
                             <span className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface-panel px-2.5 py-1 text-xs font-semibold text-ink group-hover:border-[#005a4c] group-hover:text-[#005a4c] transition shadow-2xs">
-                              <span>Dispatch</span>
+                              <span>View Details</span>
                               <ChevronRight className="h-3.5 w-3.5" />
                             </span>
                           </div>
