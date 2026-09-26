@@ -11,10 +11,17 @@
    - [2. Citizen Dashboard](#2-citizen-dashboard)
    - [3. Problem Reporting Wizard & AI Triage](#3-problem-reporting-wizard--ai-triage)
    - [4. Real-Time Report Tracking & Details](#4-real-time-report-tracking--details)
-   - [5. Community Processing Queue](#5-community-processing-queue)
+   - [5. Community Issues](#5-community-issues)
    - [6. Citizen Interactive Map](#6-citizen-interactive-map)
    - [7. My Reports Portal](#7-my-reports-portal)
-3. [Authority Portal — Blueprint & Features](#authority-portal--blueprint--features)
+   - [8. Citizen Settings & Profile Management](#8-citizen-settings--profile-management)
+3. [Authority Portal — Features & Workflow](#authority-portal--features--workflow)
+   - [1. Executive Operations Dashboard](#1-executive-operations-dashboard)
+   - [2. Department Work Queue](#2-department-work-queue)
+   - [3. "My Issues" Assigned Task Queue](#3-my-issues-assigned-task-queue)
+   - [4. Comprehensive Issue Detail & Lifecycle Management](#4-comprehensive-issue-detail--lifecycle-management)
+   - [5. Authority Operations Map](#5-authority-operations-map)
+   - [6. Authority Profile & Operations Settings](#6-authority-profile--operations-settings)
 4. [Admin Portal — Blueprint & Features](#admin-portal--blueprint--features)
 5. [Technical Stack & Real-Time Sync Engine](#technical-stack--real-time-sync-engine)
 6. [Future Expansion Roadmap](#future-expansion-roadmap)
@@ -143,25 +150,25 @@ flowchart TD
 
 ---
 
-### 5. Community Processing Queue (`/citizen/processing-queue`)
+### 5. Community Issues (`/citizen/queue`)
 
-* **Comprehensive Civic Incident Feed:**
-  * View all public civic problems reported across the city.
+* **Comprehensive Civic Incident Feed (formerly Processing Queue):**
+  * Live feed of active civic issues and municipal operations currently being resolved across your area.
 * **Live Aggregate Summary Bar:**
   * Shows total active issues and total affected citizens count across the entire sector.
 * **Multi-Dimensional Filters:**
   * **Search:** Free-text keyword search across titles, descriptions, and locations.
   * **Category Filter:** Filter by Roads, Water & Drainage, Waste Management, Streetlights, Parks, etc.
   * **Severity Filter:** Critical, High, Medium, Low.
-  * **Status Filter:** Submitted, Under Review, Dispatched, In Progress.
+  * **Status Filter:** In Progress, Acknowledged, Under Review.
   * **"My Reports Only" Switch:** Quickly isolate your own submitted issues.
-* **Intelligent Sorting Options:**
-  * **Nearest First (GPS):** Sorts by physical proximity to citizen.
-  * **Most Reports / Corroborations:** Highlights hotspots affecting the most people.
-  * **Newest First:** Recent incident stream.
+* **Intelligent Proximity Sorting:**
+  * **Nearest First (GPS):** Sorts by physical proximity using Haversine calculation.
+  * **Most Corroborations:** Highlights hotspots affecting the most community members.
+  * **Newest First:** Real-time stream of recent submissions.
   * **Oldest First:** Identifies aging unaddressed problems.
 * **Direct Actions:**
-  * Corroborate ("Me Too") and Track directly from any queue item.
+  * Instant "Me Too / Confirm" corroboration directly from any issue card.
 
 ---
 
@@ -183,38 +190,115 @@ flowchart TD
 
 ### 7. My Reports Portal (`/citizen/reports`)
 
-* **Citizen's Personal Incident History:**
-  * Central list of all reports submitted by the authenticated citizen.
-* **Status Tabs:**
-  * **All Reports:** Complete chronological archive.
-  * **Processing:** Active reports currently undergoing review or repair.
-  * **Solved:** Past resolved complaints with closure timestamps.
+* **Citizen's Personal Incident Archive (`MyReportsPage.jsx`):**
+  * Central archive of all reports submitted by the authenticated citizen.
+* **Dynamic Status Tabs & Live Counts:**
+  * **All My Reports:** Complete chronological archive with total submission tally.
+  * **Active in Processing:** Complaints currently undergoing investigation, dispatch, or field repair.
+  * **Solved & Verified:** Successfully resolved complaints with official closure timestamps.
+* **Search & Status Filtering:**
+  * Instant search across description, ID, category, or address.
+  * Filter dropdown for In Progress, Under Review, Submitted, and Solved statuses.
 * **Direct Actions:**
-  * Edit pending reports.
-  * Open live tracking screen.
+  * Edit pending reports via polished `EditReportModal` (with clear notice banner and responsive action buttons).
+  * One-click transition to Community Issues feed or live incident tracking.
 
 ---
 
-## 🛠️ Authority Portal — Blueprint & Features
+### 8. Citizen Settings & Profile Management (`/citizen/settings`)
 
-*(Designed for municipal field officers, department dispatchers, and engineers)*
+* **Executive Citizen Workspace:**
+  * Modern, full-width responsive profile management interface.
+* **Custom Profile Photo Upload:**
+  * Circular avatar with camera upload badge.
+  * Client-side canvas compression (max 800x800, JPEG 85%) for fast, lightweight photo saving.
+* **Editable Display Name:**
+  * Edit citizen display name with instant state persistence across the app.
+* **Civic Impact Metrics:**
+  * Dynamically computes total reports submitted and successfully resolved community issues.
+* **Preferences & Security:**
+  * Preferred language toggle (Bangla / English), email notification preferences, and account management.
 
-* **Authority Dashboard (`/authority/dashboard`):**
-  * Department-specific KPIs (e.g., Roads & Highways vs. Water & Sewerage).
-  * SLA aging metrics (Overdue, Critical Unassigned, In-Progress).
-* **Triage & Work Queue (`/authority/queue`):**
-  * Triage incoming citizen complaints.
-  * Sort by severity, age, and corroboration count.
-  * Batch assign to field units.
-* **Issue Detail & Management (`/authority/issues/:issueId`):**
-  * **Status Lifecycle Management:** Move issue through `Acknowledged` ➔ `In Progress` ➔ `Resolved` ➔ `Closed` ➔ `Rejected`.
-  * **Severity Override:** Manually override AI-assigned severity with mandatory reason/rationale.
-  * **Clustering & Merging:** Merge duplicate citizen reports into one primary issue or split misclassified reports.
-  * **Comments & Work Logs:** Add internal staff notes or public updates visible to citizens.
-* **Authority Interactive Map (`/authority/map`):**
-  * Sector-wide incident heatmaps and crew dispatch routing.
-* **Authority Settings (`/authority/settings`):**
-  * Department profile, operational ward assignments, and duty notifications.
+---
+
+## 🛠️ Authority Portal — Features & Workflow
+
+The **Authority Portal** is an enterprise-grade operational command center designed for municipal field engineers, zonal inspectors, and department dispatchers across Dhaka city divisions.
+
+```mermaid
+flowchart LR
+    A["Authority Login"] --> B["Authority Dashboard"]
+    B --> C["Work Queue (/authority/queue)"]
+    B --> D["My Assigned Issues (/authority/my-issues)"]
+    B --> E["Jurisdiction Map (/authority/map)"]
+    B --> F["Executive Settings (/authority/settings)"]
+    
+    C --> G["Assign / Review Issue"]
+    G --> H["Issue Detail & Lifecycle (/authority/issues/:id)"]
+    D --> H
+    H --> I["Update Status (In Progress / Solved)"]
+    H --> J["Override Severity (with Audit Reason)"]
+    H --> K["Print Work Order / PDF Export"]
+    H --> L["Add Internal Notes & Citizen Updates"]
+```
+
+### 1. Executive Operations Dashboard (`/authority/dashboard`)
+* **Department-Scoped Real-time KPIs:**
+  * **Active Work Queue:** Total unresolved cases within the authority's assigned department and jurisdiction.
+  * **High & Critical Alerts:** Urgent public safety hazards requiring immediate response.
+  * **In Progress Work Orders:** Field crews currently deployed on-site.
+  * **Monthly Resolved:** Volume of verified repairs completed in the current billing cycle.
+* **Urgent SLA Attention Feed:**
+  * Prioritized listing of overdue or high-impact incidents with direct "Review & Dispatch" links.
+* **Manual Walk-In Entry Modal (`ManualEntryModal.jsx`):**
+  * Allows operators to log civic complaints received via walk-in counter, telephone hotline, or field inspection.
+
+### 2. Department Work Queue (`/authority/queue`)
+* **Review, Assign & Resolve Workflow:**
+  * Streamlined municipal triage for incoming citizen reports and clustered issues.
+* **Smart Filtering & Faceting:**
+  * Filter by category, severity level, status, and proximity.
+* **Assignment Engine:**
+  * Assign issues to specific field officers, maintenance teams, or assign directly to oneself.
+* **Batch Operations:**
+  * Fast multi-select for bulk status updates and crew dispatches.
+
+### 3. "My Issues" Assigned Task Queue (`/authority/my-issues`)
+* **Dedicated Personal Workspace:**
+  * Filtered view exclusively showing issues assigned to the logged-in authority officer.
+* **Live Sidebar Notification Badge:**
+  * Real-time numeric badge (`badgeKey: 'myIssues'`) notifying the officer of pending assigned workloads.
+
+### 4. Comprehensive Issue Detail & Lifecycle Management (`/authority/issues/:issueId`)
+* **Standard Municipal Lifecycle Transitions:**
+  * Move cases through `Acknowledged` ➔ `In Progress` ➔ `Resolved` ➔ `Closed` ➔ `Rejected`.
+* **Official Severity Override Engine:**
+  * Authoritative override of AI-calculated severity (e.g. escalating Medium to Critical) with mandatory audit reason logging.
+* **Report Clustering & Duplicate Management:**
+  * Inspect all citizen reports merged into the parent issue.
+  * Detach or re-cluster misclassified submissions.
+* **Dual-Channel Incident Communication:**
+  * **Internal Notes:** Confidential communication between municipal staff and field supervisors.
+  * **Public Progress Updates:** Citizen-facing announcements visible on the public tracking timeline.
+* **Official Work Order PDF Generation:**
+  * One-click generation of formatted Municipal Work Order PDFs via `jspdf` and `jspdf-autotable`.
+  * Includes department header, incident coordinates, QR code, assigned crew details, and signature blocks.
+
+### 5. Authority Operations Map (`/authority/map`)
+* **Zonal GIS Command Center:**
+  * High-density incident clustering with severity heatmaps.
+  * Filter by municipal ward boundaries and active crew locations.
+
+### 6. Authority Profile & Operations Settings (`/authority/settings`)
+* **Executive 2-Column Workspace:**
+  * Full-width modern interface with high-contrast layout.
+* **Official Avatar & Department Banner:**
+  * Department identity card with official Municipal Shield badge.
+  * Circular avatar with client-side canvas-compressed photo upload.
+* **Jurisdiction & Contact Details:**
+  * Official municipal ID, assigned department (e.g. Roads & Transport, Water & Drainage), contact email, and operational sector.
+* **Operational Preferences:**
+  * Dispatch notifications, emergency SMS alerts, and automated triage thresholds.
 
 ---
 
@@ -248,6 +332,7 @@ flowchart TD
   * **Optimistic UI Engine:** Mutations (`useConfirmIssue`, `useWithdrawConfirmation`) instantly update query caches for `['issues']`, `['reports']`, and `['map-issues']` before the network request finishes.
   * **Automatic Rollback:** Reverts seamlessly if a network error occurs.
 * **Styling & Icons:** Tailwind CSS with custom theme variables, Lucide React icons.
+* **Document Generation:** `jspdf` & `jspdf-autotable` for client-side printable work order generation.
 * **Maps & Geo:** Leaflet, React-Leaflet, OpenStreetMap, MapLibre.
 * **Auth:** Firebase Authentication SDK (Google Auth & Email) with role-gated routing.
 
