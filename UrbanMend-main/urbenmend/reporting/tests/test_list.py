@@ -640,3 +640,48 @@ def test_role_is_read_from_the_session_not_the_query_string() -> None:
     response = _signed_in(mine.author).get(_url(role=Role.ADMIN))
 
     assert response.status_code == 400
+
+
+def test_admin_can_query_deleted_reports_with_moderation_details() -> None:
+    """Admin can query ?status=deleted to inspect removed reports with audit notes."""
+    from django.contrib.contenttypes.models import ContentType
+    from urbenmend.moderation.models import ModerationAction
+
+    admin = AdminFactory.create()
+    active_report = ReportFactory.create()
+    deleted_report = ReportFactory.create(status=ReportStatus.REMOVED)
+
+    ModerationAction.objects.create(
+        actor=admin,
+        action="remove",
+        reason="Duplicate spam submission from bot",
+        target_content_type=ContentType.objects.get_for_model(deleted_report),
+        target_object_id=str(deleted_report.pk),
+    )
+
+    # Standard query without ?status=deleted excludes the removed report
+    res_normal = _signed_in(admin).get(_url()).json()
+    assert str(deleted_report.pk) not in _ids(res_normal)
+    assert str(active_report.pk) in _ids(res_normal)
+
+    # Querying with ?status=deleted returns only deleted reports
+    res_deleted = _signed_in(admin).get(_url(status="deleted")).json()
+    assert _ids(res_deleted) == [str(deleted_report.pk)]
+
+    item = res_deleted["data"][0]
+    assert item["status"] == "removed"
+    assert "moderation" in item
+    assert item["moderation"]["action"] == "remove"
+    assert item["moderation"]["reason"] == "Duplicate spam submission from bot"
+    assert item["moderation"]["moderator"] == admin.email
+    assert item["moderation"]["moderatorRole"] == Role.ADMIN
+
+
+def test_citizen_cannot_query_deleted_reports() -> None:
+    """Citizens cannot access removed or deleted reports even with ?status=deleted."""
+    citizen = UserFactory.create()
+    ReportFactory.create(author=citizen, status=ReportStatus.REMOVED)
+
+    res = _signed_in(citizen).get(_url(status="deleted")).json()
+    assert res["data"] == []
+

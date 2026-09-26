@@ -8,6 +8,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  Trash2,
   UserCheck,
   Users,
   X,
@@ -34,6 +35,7 @@ const NAV_BY_ROLE = {
     { to: '/admin/dashboard', label: 'Analytics', icon: LayoutDashboard },
     { to: '/admin/queue', label: 'Moderation', icon: Flag },
     { to: '/admin/reports', label: 'Raw Reports', icon: FileText },
+    { to: '/admin/deleted-reports', label: 'Deleted Reports', icon: Trash2 },
     { to: '/admin/map', label: 'Municipal Map', icon: Map },
     { to: '/admin/authorities', label: 'Authorities', icon: Users },
     { to: '/admin/audit-log', label: 'Audit Log', icon: ScrollText },
@@ -75,6 +77,15 @@ export default function Sidebar({ onNavigate }) {
     }
     if (to === '/admin/queue') {
       return location.pathname === '/admin/queue' || location.pathname.startsWith('/admin/queue/')
+    }
+    if (to === '/admin/deleted-reports') {
+      return location.pathname === '/admin/deleted-reports' || location.search.includes('tab=deleted')
+    }
+    if (to === '/admin/reports') {
+      return (
+        (location.pathname === '/admin/reports' || location.pathname.startsWith('/admin/reports/')) &&
+        !location.search.includes('tab=deleted')
+      )
     }
     if (to === '/citizen/queue') {
       return location.pathname === '/citizen/queue'

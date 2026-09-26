@@ -248,6 +248,7 @@ class ReportDetailSerializer(CamelCaseSerializer):
     issue_id = serializers.SerializerMethodField()
     issue_status = serializers.SerializerMethodField()
     status = serializers.CharField(read_only=True)
+    moderation = serializers.SerializerMethodField()
     is_editable = serializers.BooleanField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
@@ -321,6 +322,47 @@ class ReportDetailSerializer(CamelCaseSerializer):
                 return None
         return None
 
+    def get_moderation(self, report: Report) -> dict[str, Any] | None:
+        """Audit moderation details if this report was removed or hidden."""
+        if report.status in ("removed", "hidden"):
+            try:
+                from django.contrib.contenttypes.models import ContentType
+                from urbenmend.moderation.models import ModerationAction
+
+                ct = ContentType.objects.get_for_model(report)
+                action = (
+                    ModerationAction.objects.filter(
+                        target_content_type=ct, target_object_id=str(report.pk)
+                    )
+                    .select_related("actor")
+                    .order_by("-created_at")
+                    .first()
+                )
+                if action:
+                    actor_name = (
+                        getattr(action.actor, "name", "")
+                        or action.actor.email
+                        or getattr(action.actor, "phone", "")
+                        or str(action.actor.pk)
+                    )
+                    return {
+                        "action": action.action,
+                        "reason": action.reason,
+                        "moderatedAt": action.created_at.isoformat(),
+                        "moderator": actor_name,
+                        "moderatorRole": getattr(action.actor, "role", "unknown"),
+                        "moderatorArea": getattr(action.actor, "assigned_area", ""),
+                    }
+            except Exception:
+                return None
+        return None
+
+    def to_representation(self, instance: Report) -> dict[str, Any]:
+        data = super().to_representation(instance)
+        if getattr(instance, "status", None) not in ("removed", "hidden"):
+            data.pop("moderation", None)
+        return data
+
 
 class ReportListQuerySerializer(CamelCaseSerializer):
     """`GET /reports` query parameters (API §6.3, §4.4).
@@ -356,8 +398,8 @@ class ReportListQuerySerializer(CamelCaseSerializer):
     PAGINATION_PARAMS = ("limit", "cursor")
 
     def validate_status(self, value: str) -> list[str]:
-        """`?status=submitted,triaged,solved` → `["submitted", "triaged", "solved"]` (§4.4 comma-separated)."""
-        allowed = set(ReportStatus.values) | {"solved", "resolved", "in_progress"}
+        """`?status=submitted,triaged,solved,deleted` → `["submitted", "triaged", "solved", "deleted"]` (§4.4 comma-separated)."""
+        allowed = set(ReportStatus.values) | {"solved", "resolved", "in_progress", "deleted"}
         return self._allowlisted(value, allowed=allowed, label="status")
 
     def validate_category(self, value: str) -> list[str]:

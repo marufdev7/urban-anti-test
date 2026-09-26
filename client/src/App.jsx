@@ -100,6 +100,7 @@ export default function App() {
                 <Route path="/admin/moderation/:flagId" element={<ModerationQueuePage />} />
                 <Route path="/admin/map" element={<AdminMapPage />} />
                 <Route path="/admin/reports" element={<AdminReportsPage />} />
+                <Route path="/admin/deleted-reports" element={<AdminReportsPage defaultTab="deleted" />} />
                 <Route path="/admin/authorities" element={<AuthoritiesPage />} />
                 <Route path="/admin/authorities/new" element={<ProvisionAuthorityPage />} />
                 <Route path="/admin/authorities/:authorityId" element={<AuthorityDetailPage />} />

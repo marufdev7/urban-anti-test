@@ -145,14 +145,19 @@ def list_reports(
     """
     require_role(actor, Role.CITIZEN, Role.AUTHORITY, Role.ADMIN)
 
-    queryset = (
-        Report.objects.exclude(status__in=MODERATED_STATUSES)
+    is_admin = has_role(actor, Role.ADMIN)
+    wants_deleted = any(s in ("removed", "deleted", "hidden") for s in statuses)
+
+    base_qs = (
+        Report.objects
         .select_related("category", "issue")
-        # ⚠️ **One query for the whole page's `media[]`, not one per row.** §6.3's list items carry
-        # the same `media[]` the detail body does, so without this a 20-item page issues 21 queries
-        # and NFR-2's p95 budget is spent on a loop no reader of the serializer would notice.
         .prefetch_related(visible_media_prefetch())
     )
+
+    if is_admin and wants_deleted:
+        queryset = base_qs.filter(status__in=[ReportStatus.REMOVED, ReportStatus.HIDDEN])
+    else:
+        queryset = base_qs.exclude(status__in=MODERATED_STATUSES)
 
     if has_role(actor, Role.ADMIN):
         pass  # No filter at all — §6.3 "Admin: all".
@@ -168,7 +173,7 @@ def list_reports(
     else:
         queryset = queryset.filter(author=actor)
 
-    if statuses:
+    if statuses and not (is_admin and wants_deleted):
         status_q = Q()
         standard_statuses = [s for s in statuses if s not in ("solved", "resolved", "in_progress")]
         if standard_statuses:
