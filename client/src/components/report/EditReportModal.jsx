@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertCircle, Check, MapPin, Pencil, Sparkles, Tag, Wrench } from 'lucide-react'
+import { AlertCircle, Check, Info, MapPin, Pencil, Sparkles, Tag, Wrench } from 'lucide-react'
 import Dialog from '../ui/Dialog'
 import Button from '../ui/Button'
 import Spinner from '../ui/Spinner'
@@ -77,17 +77,24 @@ export default function EditReportModal({ open, onClose, report, onSaved }) {
   }
 
   const footer = (
-    <div className="flex w-full items-center justify-between">
-      <p className="text-[11px] text-ink-muted">
-        * Editable until municipal authority acknowledges
-      </p>
-      <div className="flex items-center gap-2">
+    <div className="flex w-full flex-col gap-3">
+      {/* Notice text above buttons */}
+      <div className="flex items-center gap-1.5 text-ink-muted">
+        <Info className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+        <p className="text-[11px] text-ink-muted">
+          * Editable until municipal authority acknowledges
+        </p>
+      </div>
+
+      {/* Modal Action Buttons */}
+      <div className="flex items-center justify-end gap-2.5 pt-0.5">
         <Button
           type="button"
           variant="secondary"
           size="sm"
           onClick={onClose}
           disabled={saving}
+          className="min-w-24 text-xs font-semibold cursor-pointer"
         >
           Cancel
         </Button>
@@ -96,19 +103,11 @@ export default function EditReportModal({ open, onClose, report, onSaved }) {
           size="sm"
           onClick={handleSubmit}
           disabled={saving || !hasChanges || !description.trim()}
-          className="bg-primary text-white hover:bg-primary-hover font-semibold"
+          loading={saving}
+          className="min-w-32 whitespace-nowrap text-xs font-semibold shadow-xs cursor-pointer"
         >
-          {saving ? (
-            <span className="flex items-center gap-1.5">
-              <Spinner className="h-3.5 w-3.5" />
-              Saving...
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5" />
-              Save Changes
-            </span>
-          )}
+          {!saving && <Check className="h-4 w-4" />}
+          <span>{saving ? 'Saving...' : 'Save Changes'}</span>
         </Button>
       </div>
     </div>
