@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 
-// Issue workflow statuses (backend IssueStatus enum, moderation-only pair
-// excluded — they are not filterable, per IssueStatusQuerySerializer).
-export const ISSUE_STATUSES = [
+// All known backend Issue statuses for label lookup
+export const ALL_ISSUE_STATUSES = [
   { value: 'submitted', label: 'Submitted' },
   { value: 'triaged', label: 'Under Review' },
   { value: 'acknowledged', label: 'Acknowledged' },
@@ -12,6 +11,17 @@ export const ISSUE_STATUSES = [
   { value: 'closed', label: 'Closed' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'duplicate', label: 'Duplicate' },
+  { value: 'insufficient_info', label: 'Needs More Info' },
+]
+
+// Active workflow statuses displayed in Work Queue filters and standard issue management
+export const ISSUE_STATUSES = [
+  { value: 'triaged', label: 'Under Review' },
+  { value: 'acknowledged', label: 'Acknowledged' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'closed', label: 'Closed' },
+  { value: 'rejected', label: 'Rejected' },
   { value: 'insufficient_info', label: 'Needs More Info' },
 ]
 
@@ -30,7 +40,7 @@ export const ISSUE_SORTS = [
 ]
 
 export function issueStatusLabel(status) {
-  return ISSUE_STATUSES.find((s) => s.value === status)?.label ?? status
+  return ALL_ISSUE_STATUSES.find((s) => s.value === status)?.label ?? status
 }
 
 export function issueStatusTone(status) {
