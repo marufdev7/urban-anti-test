@@ -339,44 +339,46 @@ export default function AuthoritySettingsPage() {
             {/* Avatar & Personnel Identifiers */}
             <div className="flex flex-col md:flex-row items-center md:items-start gap-5 text-center md:text-left">
               {/* Profile Avatar with Photo Edit Trigger */}
-              <div className="-mt-14 sm:-mt-18 relative group shrink-0 flex flex-col items-center self-center md:self-start">
-                <div className="h-28 w-28 sm:h-32 sm:w-32 rounded-full border-4 border-surface-panel bg-surface-sunken shadow-xl overflow-hidden flex items-center justify-center ring-2 ring-black/5">
-                  {userPhoto ? (
-                    <img
-                      src={userPhoto}
-                      alt={user?.fullName || 'Authority Official'}
-                      className="h-full w-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-[#005a4c] text-white font-black text-4xl">
-                      {(user?.fullName || 'A').charAt(0).toUpperCase()}
+              <div className="-mt-14 sm:-mt-18 relative shrink-0 flex flex-col items-center self-center md:self-start">
+                {/* The Circular Avatar Container (strictly 1:1 circular ratio with overflow-hidden) */}
+                <div className="relative h-28 w-28 sm:h-32 sm:w-32 rounded-full border-4 border-surface-panel bg-surface-sunken shadow-xl ring-2 ring-black/5">
+                  <div
+                    onClick={() => setAvatarModalOpen(true)}
+                    className="group relative h-full w-full rounded-full overflow-hidden flex items-center justify-center cursor-pointer"
+                    title="Click to update profile photo"
+                  >
+                    {userPhoto ? (
+                      <img
+                        src={userPhoto}
+                        alt={user?.fullName || 'Authority Official'}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-[#005a4c] text-white font-black text-4xl">
+                        {(user?.fullName || 'A').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+
+                    {/* Hover overlay: strictly inside the circular overflow-hidden box, guaranteeing a perfect circle */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 backdrop-blur-2xs">
+                      <Camera className="h-6 w-6" />
+                      <span className="text-[10px] font-bold mt-1 tracking-wide">Change</span>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Badge button at bottom-right of avatar */}
+                  <button
+                    type="button"
+                    onClick={() => setAvatarModalOpen(true)}
+                    className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full bg-[#005a4c] text-white shadow-md border-2 border-surface-panel hover:bg-[#00483c] hover:scale-105 transition active:scale-95 cursor-pointer z-10"
+                    title="Change photo"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </button>
                 </div>
-
-                {/* Hover overlay button to change picture */}
-                <button
-                  type="button"
-                  onClick={() => setAvatarModalOpen(true)}
-                  className="absolute inset-0 flex flex-col items-center justify-center rounded-full bg-black/55 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer backdrop-blur-2xs"
-                  title="Update profile photo"
-                >
-                  <Camera className="h-6 w-6" />
-                  <span className="text-[10px] font-bold mt-1">Change</span>
-                </button>
-
-                {/* Badge button at bottom-right of avatar */}
-                <button
-                  type="button"
-                  onClick={() => setAvatarModalOpen(true)}
-                  className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full bg-[#005a4c] text-white shadow-md border-2 border-surface-panel hover:bg-[#00483c] hover:scale-105 transition active:scale-95 cursor-pointer"
-                  title="Change photo"
-                >
-                  <Camera className="h-4 w-4" />
-                </button>
 
                 {/* Clear label placed under profile picture */}
                 <span className="mt-2 hidden sm:inline-block text-[10px] font-bold tracking-wider uppercase text-ink-faint">
@@ -422,19 +424,6 @@ export default function AuthoritySettingsPage() {
                   UrbanMend Municipal Resilience Authority
                 </p>
               </div>
-            </div>
-
-            {/* Quick Actions on the Right */}
-            <div className="flex items-center justify-center md:justify-end gap-2.5 pt-2 md:pt-4 shrink-0">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setAvatarModalOpen(true)}
-                className="gap-2 shadow-xs"
-              >
-                <Camera className="h-4 w-4 text-[#005a4c]" />
-                <span>Update Photo</span>
-              </Button>
             </div>
           </div>
 
