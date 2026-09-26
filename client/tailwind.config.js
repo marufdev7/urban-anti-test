@@ -65,7 +65,7 @@ export default {
         },
       },
       animation: {
-        dropdown: 'dropdown 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        dropdown: 'dropdown 1s cubic-bezier(0.22, 1, 0.36, 1) 0.5s both',
       },
     },
   },
