@@ -169,30 +169,10 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">
-            {user?.fullName ? `Welcome back, ${user.fullName}!` : 'Overview'}
-          </h1>
-          <p className="mt-1 text-sm text-ink-muted">
-            Monitor public safety reports and track community resilience efforts.
-          </p>
-        </div>
-        {user?.photoUrl && (
-          <div className="hidden sm:flex items-center gap-2.5 rounded-full border border-line bg-surface-panel p-1.5 pr-3.5 shadow-xs">
-            <img
-              src={user.photoUrl}
-              alt={user.fullName || 'User'}
-              referrerPolicy="no-referrer"
-              className="h-8 w-8 rounded-full object-cover border border-line"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-            />
-            <span className="text-xs font-semibold text-ink">{user.fullName}</span>
-          </div>
-        )}
-      </div>
+      <PageHeader
+        title={user?.fullName ? `Welcome back, ${user.fullName}!` : 'Overview'}
+        subtitle="Monitor public safety reports and track community resilience efforts."
+      />
 
       {isError && (
         <div className="mb-4 rounded-panel border border-status-critical/30 bg-status-critical-soft p-3 text-xs text-status-critical">

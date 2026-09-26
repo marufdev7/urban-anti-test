@@ -36,7 +36,9 @@ export default function UserMenu() {
         onClick={() => setOpen((value) => !value)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex items-center gap-2.5 rounded-panel border border-line bg-surface-panel px-3 py-1.5 hover:bg-surface-sunken transition-colors"
+        className={`flex items-center gap-2.5 rounded-panel border border-line bg-surface-panel px-3 py-1.5 hover:bg-surface-sunken transition-all duration-150 active:scale-95 ${
+          open ? 'ring-2 ring-primary/25 bg-surface-sunken border-primary/40' : ''
+        }`}
       >
         <span className="text-xs font-semibold text-ink">
           {displayName}
@@ -61,7 +63,7 @@ export default function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-64 rounded-panel border border-line bg-surface-panel shadow-menu overflow-hidden"
+          className="absolute right-0 z-40 mt-2 w-64 origin-top-right rounded-panel border border-line bg-surface-panel shadow-menu overflow-hidden animate-dropdown"
         >
           <div className="flex items-center gap-3 border-b border-line px-4 py-3 bg-surface-panel">
             {photo ? (
