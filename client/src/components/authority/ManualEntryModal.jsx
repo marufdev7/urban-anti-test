@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -165,7 +166,7 @@ function CameraCaptureModal({ isOpen, onClose, onCapture }) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[110] flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-fade-in">
       <div className="relative w-full max-w-lg rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-4 py-3 bg-surface-sunken">
@@ -257,7 +258,7 @@ function PhotoLightboxModal({ photo, onClose, onRemove }) {
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-3 sm:p-6 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[110] flex items-center justify-center bg-black/85 p-3 sm:p-6 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
@@ -409,6 +410,33 @@ export default function ManualEntryModal({ isOpen, onClose, onSuccess, defaultAr
         .finally(() => setIsGeocoding(false))
     }
   }, [isOpen, defaultArea])
+
+  // Prevent background scroll and support Escape key close when modal is open
+  useEffect(() => {
+    if (!isOpen) return undefined
+
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (isCameraOpen) {
+          setIsCameraOpen(false)
+        } else if (activeLightboxPhoto) {
+          setActiveLightboxPhoto(null)
+        } else {
+          onClose()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = originalOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [isOpen, isCameraOpen, activeLightboxPhoto, onClose])
 
   // Real-time automatic AI classification on description changes
   useEffect(() => {
@@ -759,8 +787,11 @@ export default function ManualEntryModal({ isOpen, onClose, onSuccess, defaultAr
 
   if (!isOpen) return null
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-4 backdrop-blur-xs overflow-y-auto animate-fade-in">
+  const modalContent = (
+    <div
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 z-[100] flex items-center justify-center bg-black/60 p-2 sm:p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
+      style={{ margin: 0 }}
+    >
       <div
         className="relative my-auto flex max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden"
         role="dialog"
@@ -1321,4 +1352,6 @@ export default function ManualEntryModal({ isOpen, onClose, onSuccess, defaultAr
       />
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent
 }
