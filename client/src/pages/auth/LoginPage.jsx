@@ -60,13 +60,18 @@ export default function LoginPage() {
     setError(null)
     setIsGoogleLoading(true)
     try {
-      const { idToken } = await signInWithGoogle()
+      const { user: googleUser, idToken } = await signInWithGoogle()
+      const profile = {
+        fullName: googleUser?.displayName || '',
+        photoUrl: googleUser?.photoURL || '',
+        email: googleUser?.email || '',
+      }
       const result = await firebaseLogin.mutateAsync({ idToken })
       if (result?.requires2fa) {
         setNeedsTwoFactor(true)
         return
       }
-      await completeLogin(result.user)
+      await completeLogin(result.user, profile)
       navigate(targetFor(result.user), { replace: true })
     } catch (err) {
       if (

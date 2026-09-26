@@ -16,6 +16,7 @@ import EmptyState from '../../components/ui/EmptyState'
 import PageHeader from '../../components/ui/PageHeader'
 import ReportCard from '../../components/report/ReportCard'
 import CommunityIssueCard from '../../components/issue/CommunityIssueCard'
+import { useAuth } from '../../auth/AuthContext'
 
 /** Haversine distance in km between two {lat, lng} points. */
 function haversineKm(a, b) {
@@ -31,6 +32,7 @@ function haversineKm(a, b) {
 
 /** Citizen dashboard with real live database data. */
 export default function DashboardPage() {
+  const { user } = useAuth()
   const { data: reportsData, isLoading, isError, error } = useQuery({
     queryKey: ['reports', 'mine', 'dashboard'],
     queryFn: () => api('/reports?limit=100'),
@@ -167,10 +169,30 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Overview"
-        subtitle="Monitor public safety reports and track community resilience efforts."
-      />
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">
+            {user?.fullName ? `Welcome back, ${user.fullName}!` : 'Overview'}
+          </h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            Monitor public safety reports and track community resilience efforts.
+          </p>
+        </div>
+        {user?.photoUrl && (
+          <div className="hidden sm:flex items-center gap-2.5 rounded-full border border-line bg-surface-panel p-1.5 pr-3.5 shadow-xs">
+            <img
+              src={user.photoUrl}
+              alt={user.fullName || 'User'}
+              referrerPolicy="no-referrer"
+              className="h-8 w-8 rounded-full object-cover border border-line"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+            <span className="text-xs font-semibold text-ink">{user.fullName}</span>
+          </div>
+        )}
+      </div>
 
       {isError && (
         <div className="mb-4 rounded-panel border border-status-critical/30 bg-status-critical-soft p-3 text-xs text-status-critical">

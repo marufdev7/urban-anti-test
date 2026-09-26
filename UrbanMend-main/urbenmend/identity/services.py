@@ -1121,13 +1121,17 @@ def provision_authority(
     if categories:
         authority.category_scope.set(categories)
 
+    audit_data = {
+        "category_scope": sorted(category.slug for category in categories),
+        "require_two_factor": require_two_factor,
+    }
+    if authority.assigned_area:
+        audit_data["assigned_area"] = authority.assigned_area
     _audit_privileged_action(
         actor=actor,
         action="authority.provisioned",
         target=authority,
-        category_scope=sorted(category.slug for category in categories),
-        assigned_area=authority.assigned_area,
-        require_two_factor=require_two_factor,
+        **audit_data,
     )
     if not password:
         send_verification_code(user=authority, channel=Channel.EMAIL)

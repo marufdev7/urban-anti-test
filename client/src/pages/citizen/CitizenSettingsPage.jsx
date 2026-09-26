@@ -125,6 +125,36 @@ export default function CitizenSettingsPage() {
           }
         />
         <CardBody className="space-y-4">
+          {/* User Photo & Name Display */}
+          <div className="flex items-center gap-4 rounded-panel border border-line bg-surface p-4">
+            {user?.photoUrl || user?.avatarUrl ? (
+              <img
+                src={user.photoUrl || user.avatarUrl}
+                alt={user?.fullName || 'Profile'}
+                referrerPolicy="no-referrer"
+                className="h-16 w-16 rounded-full object-cover border-2 border-primary shadow-sm"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary-soft text-xl font-bold text-primary border border-primary/20">
+                {(user?.fullName || 'C').charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h3 className="text-base font-bold text-ink">
+                {user?.fullName || 'Citizen User'}
+              </h3>
+              <p className="text-xs text-ink-muted">{user?.email || 'No email provided'}</p>
+              {user?.fullName && (
+                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-status-resolved-soft px-2 py-0.5 text-[11px] font-medium text-status-resolved">
+                  <Check className="h-3 w-3" /> Signed in via Google
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-ink-faint">
@@ -138,7 +168,7 @@ export default function CitizenSettingsPage() {
               </p>
               <div className="mt-1 flex items-center gap-2">
                 <span className="text-sm font-medium text-ink">{user?.email ?? '—'}</span>
-                {user?.verified?.email && (
+                {(user?.verified?.email || user?.fullName) && (
                   <span className="rounded bg-status-resolved-soft px-1.5 py-0.5 text-[11px] font-semibold text-status-resolved">
                     Verified
                   </span>

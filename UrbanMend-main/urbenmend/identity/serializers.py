@@ -144,12 +144,14 @@ class LoginResponseSerializer(CamelCaseSerializer):
     def get_user(self, obj: User) -> dict[str, str] | None:
         if self.get_requires2fa(obj):
             return None
-        return {
+        data = {
             "id": str(obj.id),
             "role": obj.role,
             "preferredLanguage": obj.preferred_language,
-            "assignedArea": getattr(obj, "assigned_area", "") or "",
         }
+        if getattr(obj, "assigned_area", ""):
+            data["assignedArea"] = obj.assigned_area
+        return data
 
     def get_requires2fa(self, obj: User) -> bool:
         """Whether a second factor is outstanding for this account (FR-4, T1.7).
@@ -239,6 +241,12 @@ class UserSerializer(CamelCaseModelSerializer):
         from urbenmend.identity.selectors import category_scope_for
 
         return [category.slug for category in category_scope_for(obj)]
+
+    def to_representation(self, instance: User) -> dict[str, Any]:
+        data = super().to_representation(instance)
+        if not getattr(instance, "assigned_area", ""):
+            data.pop("assignedArea", None)
+        return data
 
 
 class AdminUserListQuerySerializer(CamelCaseSerializer):
