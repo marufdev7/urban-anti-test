@@ -30,20 +30,26 @@
   text-decoration: none !important;
 }
 
-/* Profile Dropdown smooth animation (0.5s delay, 1s duration) */
-@keyframes profileDropdownFade {
-  0% {
-    opacity: 0;
-    transform: scale(0.95) translateY(-8px);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+/* Profile Dropdown smooth open/close (0.3s delay, 0.75s duration) */
+.profile-dropdown-panel {
+  transform-origin: top right;
+  transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.3s,
+              transform 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.3s,
+              visibility 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.3s;
 }
 
-.animate-profile-dropdown {
-  animation: profileDropdownFade 1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both !important;
-  transform-origin: top right !important;
+.profile-dropdown-panel.open {
+  opacity: 1 !important;
+  transform: scale(1) translateY(0) !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
+
+.profile-dropdown-panel.closed {
+  opacity: 0 !important;
+  transform: scale(0.95) translateY(-8px) !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 

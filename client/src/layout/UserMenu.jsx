@@ -60,60 +60,59 @@ export default function UserMenu() {
         )}
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          style={{
-            animation: 'profileDropdownFade 1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both',
-            transformOrigin: 'top right',
-          }}
-          className="absolute right-0 z-40 mt-2 w-64 origin-top-right rounded-panel border border-line bg-surface-panel shadow-menu overflow-hidden animate-profile-dropdown"
-        >
-          <div className="flex items-center gap-3 border-b border-line px-4 py-3 bg-surface-panel">
-            {photo ? (
-              <img
-                src={photo}
-                alt={displayName}
-                referrerPolicy="no-referrer"
-                className="h-10 w-10 shrink-0 rounded-full object-cover border border-line shadow-xs"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none'
-                }}
-              />
-            ) : (
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary font-bold text-sm">
-                {displayName.charAt(0).toUpperCase()}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-ink leading-tight">{displayName}</p>
-              <p className="truncate text-xs text-ink-muted leading-tight mt-0.5">{user?.email || '—'}</p>
-              <span className="mt-1 inline-block rounded-full bg-surface-sunken px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-faint">
-                {ROLE_LABELS[user?.role] ?? user?.role}
-              </span>
+      <div
+        role="menu"
+        aria-hidden={!open}
+        className={`absolute right-0 z-40 mt-2 w-64 origin-top-right rounded-panel border border-line bg-surface-panel shadow-menu overflow-hidden profile-dropdown-panel ${
+          open ? 'open' : 'closed'
+        }`}
+      >
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3 bg-surface-panel">
+          {photo ? (
+            <img
+              src={photo}
+              alt={displayName}
+              referrerPolicy="no-referrer"
+              className="h-10 w-10 shrink-0 rounded-full object-cover border border-line shadow-xs"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
+          ) : (
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary font-bold text-sm">
+              {displayName.charAt(0).toUpperCase()}
             </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold text-ink leading-tight">{displayName}</p>
+            <p className="truncate text-xs text-ink-muted leading-tight mt-0.5">{user?.email || '—'}</p>
+            <span className="mt-1 inline-block rounded-full bg-surface-sunken px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-faint">
+              {ROLE_LABELS[user?.role] ?? user?.role}
+            </span>
           </div>
-          <Link
-            to={`/${user?.role}/settings`}
-            role="menuitem"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors"
-          >
-            <Settings className="h-4 w-4 text-ink-muted" aria-hidden="true" />
-            Settings
-          </Link>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={logout.isPending}
-            onClick={() => logout.mutate()}
-            className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-status-critical hover:bg-status-critical-soft transition-colors disabled:opacity-50"
-          >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            {logout.isPending ? 'Signing out…' : 'Sign out'}
-          </button>
         </div>
-      )}
+        <Link
+          to={`/${user?.role}/settings`}
+          role="menuitem"
+          tabIndex={open ? 0 : -1}
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors"
+        >
+          <Settings className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+          Settings
+        </Link>
+        <button
+          type="button"
+          role="menuitem"
+          tabIndex={open ? 0 : -1}
+          disabled={logout.isPending || !open}
+          onClick={() => logout.mutate()}
+          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-status-critical hover:bg-status-critical-soft transition-colors disabled:opacity-50"
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          {logout.isPending ? 'Signing out…' : 'Sign out'}
+        </button>
+      </div>
     </div>
   )
 }
