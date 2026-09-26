@@ -63,7 +63,11 @@ export default function UserMenu() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-64 origin-top-right rounded-panel border border-line bg-surface-panel shadow-menu overflow-hidden animate-dropdown"
+          style={{
+            animation: 'profileDropdownFade 1s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both',
+            transformOrigin: 'top right',
+          }}
+          className="absolute right-0 z-40 mt-2 w-64 origin-top-right rounded-panel border border-line bg-surface-panel shadow-menu overflow-hidden animate-profile-dropdown"
         >
           <div className="flex items-center gap-3 border-b border-line px-4 py-3 bg-surface-panel">
             {photo ? (
