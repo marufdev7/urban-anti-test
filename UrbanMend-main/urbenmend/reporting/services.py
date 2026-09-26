@@ -155,8 +155,8 @@ def _require_citizen(author: User) -> None:
     was accepted. `create_report()` keeps calling it too: it is reachable on its own, and an
     authorization check that only runs on one path is not an authorization check.
     """
-    if author.role != Role.CITIZEN:
-        raise PermissionDenied("Only citizens may submit reports.")
+    if author.role not in (Role.CITIZEN, Role.AUTHORITY, Role.ADMIN):
+        raise PermissionDenied("Only citizens, authorities, and administrators may submit reports.")
 
 
 def _resolve_category(slug: str | None) -> Category | None:

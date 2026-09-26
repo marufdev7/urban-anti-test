@@ -72,8 +72,8 @@ def _require_citizen(actor: User) -> None:
     Django's `PermissionDenied` → the generic `403 FORBIDDEN`. §6.4 names no endpoint-specific code,
     and inventing one would put a contract decision in a service (the T1.9/T2.1 reasoning).
     """
-    if actor.role != Role.CITIZEN:
-        raise PermissionDenied("Only citizens may upload photos.")
+    if actor.role not in (Role.CITIZEN, Role.AUTHORITY, Role.ADMIN):
+        raise PermissionDenied("Only citizens, authorities, and administrators may upload photos.")
 
 
 def _reject_undecodable(

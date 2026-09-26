@@ -296,7 +296,7 @@ class GoogleAIStudioLLMProvider(LLMProvider):
         # "system" role; folding the band definitions in as another user turn makes them advisory
         # text the model may weigh against the report itself.
         request = urllib.request.Request(  # noqa: S310 -- constructor validates HTTPS above
-            f"{self.endpoint}/models/{urllib.parse.quote(self.model)}:generateContent",
+            f"{self.endpoint}/models/{urllib.parse.quote(self.model)}:generateContent?key={urllib.parse.quote(self.api_key)}",
             data=json.dumps(
                 {
                     "systemInstruction": {"parts": [{"text": prompt.system}]},
@@ -304,7 +304,7 @@ class GoogleAIStudioLLMProvider(LLMProvider):
                     "generationConfig": generation_config,
                 }
             ).encode(),
-            headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+            headers={"Content-Type": "application/json"},
             method="POST",
         )
         try:

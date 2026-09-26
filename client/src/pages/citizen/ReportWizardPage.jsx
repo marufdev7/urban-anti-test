@@ -21,8 +21,8 @@ import { forwardGeocode, isPointInBoundary, reverseGeocode } from '../../lib/geo
 import { BANGLADESH_CITIES, isPointInPolygon } from '../../lib/zones'
 import {
   CATEGORY_GROUP_MAPPING,
+  classifyTextWithAI,
   detectCategoryFromDescription,
-  fetchBackendAIClassification,
 } from '../../lib/classification'
 import { shortId } from '../../lib/format'
 import Button from '../../components/ui/Button'
@@ -152,13 +152,13 @@ export default function ReportWizardPage() {
 
     const timer = setTimeout(async () => {
       setIsAiAnalyzing(true)
-      const aiRes = await fetchBackendAIClassification(description)
+      const aiRes = await classifyTextWithAI(description)
       setIsAiAnalyzing(false)
       if (aiRes?.category) {
         setServerAiResult(aiRes)
         if (!hasManualOverride) {
           setCategory(aiRes.category)
-          setCategoryGroup(CATEGORY_GROUP_MAPPING[aiRes.category] || 'environmental')
+          setCategoryGroup(CATEGORY_GROUP_MAPPING[aiRes.category] || 'infrastructure')
         }
       }
     }, 600)
@@ -169,12 +169,12 @@ export default function ReportWizardPage() {
   const handleTriggerAiAnalyze = async () => {
     if (!description || description.trim().length < 4) return
     setIsAiAnalyzing(true)
-    const aiRes = await fetchBackendAIClassification(description)
+    const aiRes = await classifyTextWithAI(description)
     setIsAiAnalyzing(false)
     if (aiRes?.category) {
       setServerAiResult(aiRes)
       setCategory(aiRes.category)
-      setCategoryGroup(CATEGORY_GROUP_MAPPING[aiRes.category] || 'environmental')
+      setCategoryGroup(CATEGORY_GROUP_MAPPING[aiRes.category] || 'infrastructure')
       setHasManualOverride(false)
     }
   }

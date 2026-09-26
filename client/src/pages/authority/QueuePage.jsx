@@ -30,6 +30,7 @@ import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
 import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
+import ManualEntryModal from '../../components/authority/ManualEntryModal'
 
 const SEV_STYLES = {
   critical: 'border-rose-400 text-black font-semibold bg-rose-100/70',
@@ -84,12 +85,6 @@ export default function QueuePage() {
   const [manualEntryOpen, setManualEntryOpen] = useState(false)
   const [assigningId, setAssigningId] = useState(null)
 
-  // Manual entry modal state (POST /reports)
-  const [manualCategory, setManualCategory] = useState('')
-  const [manualDescription, setManualDescription] = useState('')
-  const [manualSubmitting, setManualSubmitting] = useState(false)
-  const [manualError, setManualError] = useState(null)
-
   const isMyIssuesRoute = location.pathname.startsWith('/authority/my-issues')
   const assignedToParam = searchParams.get('assignedTo')
   const isMyIssues = isMyIssuesRoute || assignedToParam === 'me'
@@ -124,33 +119,6 @@ export default function QueuePage() {
     }
   }
 
-  const handleManualSubmit = async (e) => {
-    e.preventDefault()
-    if (!manualDescription.trim()) return
-    setManualSubmitting(true)
-    setManualError(null)
-    try {
-      await api('/reports', {
-        method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: {
-          description: manualDescription.trim(),
-          category: manualCategory || undefined,
-          location: { lng: 90.41, lat: 23.78 }, // Default to municipal center
-          language: 'en',
-        },
-      })
-      setManualEntryOpen(false)
-      setManualDescription('')
-      setManualCategory('')
-      queryClient.invalidateQueries({ queryKey: ['issues'] })
-    } catch (err) {
-      setManualError(err.message)
-    } finally {
-      setManualSubmitting(false)
-    }
-  }
-
   const filters = {
     category: searchParams.get('category') ?? '',
     severity: searchParams.get('severity') ?? '',
@@ -169,14 +137,6 @@ export default function QueuePage() {
       if (key !== 'cursor') next.delete('cursor')
       return next
     }, { replace: true })
-  }
-
-  const handleTabSwitch = (target) => {
-    if (target === 'all') {
-      navigate('/authority/queue')
-    } else {
-      navigate('/authority/my-issues')
-    }
   }
 
   const clearAll = () => setSearchParams({}, { replace: true })
@@ -207,125 +167,49 @@ export default function QueuePage() {
 
   return (
     <div>
-      {/* View Switcher Tabs: Work Queue vs My Issues */}
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
-        <div className="flex items-center gap-1.5 rounded-panel bg-surface-sunken p-1 border border-line">
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('all')}
-            className={`flex items-center gap-2 rounded-panel px-3.5 py-1.5 text-xs font-semibold transition ${
-              !isMyIssues
-                ? 'bg-surface-panel text-ink shadow-xs border border-line/60'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            <ClipboardList className="h-3.5 w-3.5" />
-            <span>All Issues (Work Queue)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('my')}
-            className={`flex items-center gap-2 rounded-panel px-3.5 py-1.5 text-xs font-semibold transition ${
-              isMyIssues
-                ? 'bg-primary text-white shadow-xs'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            <UserCheck className="h-3.5 w-3.5" />
-            <span>Assigned to Me</span>
-          </button>
+      {/* Page Header with Title, Jurisdiction Badge & Manual Entry Action */}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-2xl font-bold tracking-tight text-ink">
+              {isMyIssues ? 'My Assigned Issues' : 'Work Queue'}
+            </h1>
+            {user?.assignedArea && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                <MapPin className="h-3.5 w-3.5 text-emerald-600" />
+                <span>{getJurisdictionLabel(user.assignedArea)}</span>
+              </span>
+            )}
+            {isMyIssues && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+                <UserCheck className="h-3.5 w-3.5" />
+                Direct Assignments
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-ink-muted">
+            {isMyIssues
+              ? `Municipal incidents assigned directly to you${user?.assignedArea ? ` in ${getJurisdictionLabel(user.assignedArea)}` : ''} for municipal response, dispatch, and resolution.`
+              : `Manage and review active municipal reports across ${getJurisdictionLabel(user?.assignedArea)}.`}
+          </p>
         </div>
 
         <Button
           onClick={() => setManualEntryOpen(true)}
-          className="bg-[#0e7490] hover:bg-[#085f76] text-white font-semibold px-4 py-2 flex items-center gap-2"
+          className="bg-[#005a4c] hover:bg-[#00483c] text-white font-semibold px-4 py-2 flex items-center gap-2 shadow-xs shrink-0 self-start sm:self-auto"
         >
           <Plus className="h-4 w-4 stroke-[2.5]" aria-hidden="true" />
           <span>Manual Entry</span>
         </Button>
       </div>
 
-      {/* Header with Dynamic Title & Description */}
-      <div className="mb-6">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-bold tracking-tight text-ink">
-            {isMyIssues ? 'My Assigned Issues' : 'Work Queue'}
-          </h1>
-          {user?.assignedArea && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-              <MapPin className="h-3.5 w-3.5 text-emerald-600" />
-              <span>{getJurisdictionLabel(user.assignedArea)}</span>
-            </span>
-          )}
-          {isMyIssues && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
-              <UserCheck className="h-3.5 w-3.5" />
-              Direct Assignments
-            </span>
-          )}
-        </div>
-        <p className="mt-1 text-sm text-ink-muted">
-          {isMyIssues
-            ? `Municipal incidents assigned directly to you${user?.assignedArea ? ` in ${getJurisdictionLabel(user.assignedArea)}` : ''} for municipal response, dispatch, and resolution.`
-            : `Manage and review active municipal reports across ${getJurisdictionLabel(user?.assignedArea)}.`}
-        </p>
-      </div>
-
-      {/* Manual Entry quick modal (Filing report via POST /reports per FRONT-PLAN §9.5) */}
+      {/* Comprehensive Modern Manual Entry Modal */}
       {manualEntryOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-panel border border-line bg-surface-panel p-6 shadow-menu">
-            <h3 className="text-lg font-bold text-ink">Log Manual Municipal Report</h3>
-            <p className="mt-1 text-xs text-ink-muted">
-              File an incident received via hotline or radio dispatch to initiate automated review.
-            </p>
-            {manualError && (
-              <p className="mt-3 rounded border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
-                {manualError}
-              </p>
-            )}
-            <form onSubmit={handleManualSubmit} className="mt-4 space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-ink">Category (Optional)</label>
-                <select
-                  value={manualCategory}
-                  onChange={(e) => setManualCategory(e.target.value)}
-                  className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                >
-                  <option value="">Select Category…</option>
-                  {(categories ?? []).filter((c) => c.active).map((c) => (
-                    <option key={c.key} value={c.key}>{c.label.en}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-ink">Incident Description (Required, min 15 chars)</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={manualDescription}
-                  onChange={(e) => setManualDescription(e.target.value)}
-                  placeholder="e.g. Fallen electrical transmission cable sparking near intersection..."
-                  className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="ghost" size="sm" onClick={() => setManualEntryOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  size="sm"
-                  loading={manualSubmitting}
-                  disabled={manualDescription.trim().length < 15}
-                  className="bg-[#0e7490] text-white font-semibold"
-                >
-                  Submit Report
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <ManualEntryModal
+          isOpen={manualEntryOpen}
+          onClose={() => setManualEntryOpen(false)}
+          defaultArea={user?.assignedArea}
+        />
       )}
 
       {/* Filters Bar matching authority-queue.png */}
