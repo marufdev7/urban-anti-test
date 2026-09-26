@@ -20,7 +20,7 @@ import { useIssues } from '../hooks/issues'
 const NAV_BY_ROLE = {
   citizen: [
     { to: '/citizen/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/citizen/queue', label: 'Processing Queue', icon: ClipboardList },
+    { to: '/citizen/queue', label: 'Community Issues', icon: Users },
     { to: '/citizen/reports', label: 'My Reports', icon: FileText },
     { to: '/citizen/map', label: 'Map', icon: Map },
   ],

@@ -297,7 +297,7 @@ export default function Topbar({ onMenuClick }) {
                     onClick={() => handlePerformSearch()}
                     className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover hover:underline cursor-pointer"
                   >
-                    <span>View all results in Processing Queue</span>
+                    <span>View all results in Community Issues</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </button>
 
@@ -320,7 +320,7 @@ export default function Topbar({ onMenuClick }) {
                   onClick={() => handlePerformSearch()}
                   className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/5 border border-primary/20 px-3 py-1.5 rounded-panel cursor-pointer"
                 >
-                  <span>Search entire Processing Queue</span>
+                  <span>Search all Community Issues</span>
                   <ArrowRight className="h-3 w-3" />
                 </button>
               </div>

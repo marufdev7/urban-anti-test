@@ -137,8 +137,8 @@ export default function MyReportsPage() {
           <div className="flex items-center gap-2">
             <Link to="/citizen/queue">
               <Button variant="secondary" size="sm" className="flex items-center gap-1.5 text-xs font-semibold">
-                <ClipboardList className="h-4 w-4 text-primary" />
-                View Area Processing Queue
+                <Users className="h-4 w-4 text-primary" />
+                View Community Issues
               </Button>
             </Link>
             <Link to="/citizen/reports/new">
@@ -173,7 +173,7 @@ export default function MyReportsPage() {
         <div className="flex items-center gap-2">
           <Link to="/citizen/queue">
             <Button variant="secondary" size="sm" className="flex items-center gap-1.5 text-xs font-semibold border-primary/40 text-primary hover:bg-primary-soft">
-              <span>View Area Processing Queue</span>
+              <span>View Community Issues</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </Link>

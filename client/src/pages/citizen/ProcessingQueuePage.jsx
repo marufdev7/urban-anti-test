@@ -51,10 +51,9 @@ const DISTANCE_OPTIONS = [
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Processing States' },
-  { value: 'in_progress', label: 'Work in Progress' },
+  { value: 'in_progress', label: 'In Progress' },
   { value: 'acknowledged', label: 'Acknowledged' },
   { value: 'triaged', label: 'Under Review' },
-  { value: 'submitted', label: 'Submitted / Intake' },
 ]
 
 const SORT_OPTIONS = [
@@ -274,8 +273,8 @@ export default function ProcessingQueuePage() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Processing Queue"
-        subtitle="Live queue of active civic issues and municipal operations currently being processed across your area."
+        title="Community Issues"
+        subtitle="Live feed of active civic issues and municipal operations currently being resolved across your area."
         actions={
           <div className="flex items-center gap-2">
             <Link to="/citizen/map">
@@ -299,19 +298,19 @@ export default function ProcessingQueuePage() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#005a4c] text-white shadow-xs">
-              <ClipboardList className="h-6 w-6" />
+              <Users className="h-6 w-6" />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-bold text-ink">
-                  Municipal Processing Operations
+                  Active Community Issues
                 </h2>
                 <span className="rounded-full bg-[#005a4c] px-2.5 py-0.5 text-[11px] font-bold text-white uppercase tracking-wider">
                   {totalProcessingCount} Active in District
                 </span>
               </div>
               <p className="mt-1 text-ink-muted text-xs leading-relaxed max-w-2xl">
-                Active municipal works and community issues currently undergoing review, dispatch, or field repair by city departments. You can corroborate issues to help accelerate municipal resolution.
+                Active municipal works and community issues currently undergoing review, investigation, or field repair by city departments. You can corroborate issues to help accelerate municipal resolution.
               </p>
             </div>
           </div>
@@ -333,13 +332,13 @@ export default function ProcessingQueuePage() {
         {/* METRICS ROW */}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-line/60 pt-3">
           <div className="rounded-panel bg-surface-panel/80 p-2.5 border border-line/50">
-            <p className="text-[11px] font-medium text-ink-muted">Total Active Processing</p>
+            <p className="text-[11px] font-medium text-ink-muted">Total Active Issues</p>
             <p className="mt-0.5 text-lg font-bold text-ink">{totalProcessingCount}</p>
           </div>
           <div className="rounded-panel bg-amber-50/70 p-2.5 border border-amber-200">
             <p className="text-[11px] font-semibold text-amber-800 flex items-center gap-1">
               <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-ping" />
-              Repair in Progress
+              In Progress
             </p>
             <p className="mt-0.5 text-lg font-bold text-amber-950">{inProgressCount}</p>
           </div>
@@ -489,7 +488,7 @@ export default function ProcessingQueuePage() {
       {isIssuesError && (
         <Card className="p-6">
           <p className="text-sm text-status-critical" role="alert">
-            Could not load processing queue: {issuesError?.message}
+            Could not load community issues: {issuesError?.message}
           </p>
         </Card>
       )}
@@ -497,11 +496,11 @@ export default function ProcessingQueuePage() {
       {!isIssuesLoading && !isIssuesError && filteredAndSortedIssues.length === 0 && (
         <Card>
           <EmptyState
-            title="No processing works found in this view"
+            title="No community issues found in this view"
             message={
               hasActiveFilters
-                ? 'No active processing works match your selected distance or filter criteria. Try expanding distance or clearing filters.'
-                : 'There are currently no active municipal issues in processing in your immediate vicinity.'
+                ? 'No active community issues match your selected distance or filter criteria. Try expanding distance or clearing filters.'
+                : 'There are currently no active community issues in your immediate vicinity.'
             }
             action={
               <div className="flex items-center gap-2">
@@ -523,7 +522,7 @@ export default function ProcessingQueuePage() {
         <>
           <div className="flex items-center justify-between text-xs text-ink-muted px-1">
             <span>
-              Showing <strong>{filteredAndSortedIssues.length}</strong> active processing work{filteredAndSortedIssues.length === 1 ? '' : 's'}
+              Showing <strong>{filteredAndSortedIssues.length}</strong> active community issue{filteredAndSortedIssues.length === 1 ? '' : 's'}
               {userLocation ? ' sorted by proximity' : ''}
             </span>
             <span className="text-[11px]">
