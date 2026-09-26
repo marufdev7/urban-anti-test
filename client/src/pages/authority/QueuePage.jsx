@@ -35,7 +35,7 @@ import ManualEntryModal from '../../components/authority/ManualEntryModal'
 const SEV_STYLES = {
   critical: 'border-rose-400 text-black font-semibold bg-rose-100/70',
   high: 'border-amber-400 text-black font-semibold bg-amber-100/70',
-  medium: 'border-sky-400 text-black font-semibold bg-sky-100/70',
+  medium: 'border-yellow-400 text-black font-semibold bg-yellow-100/70',
   low: 'border-emerald-400 text-black font-semibold bg-emerald-100/70',
 }
 
@@ -407,7 +407,8 @@ export default function QueuePage() {
                       ) : null}
                     </div>
                     <span className={`font-semibold ${sev === 'critical' ? 'text-rose-600' : 'text-ink'}`}>
-                      {formatAge(issue.ageSeconds)}
+                      {new Date(issue.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      <span className="text-ink-muted font-normal ml-1">• {formatAge(issue.ageSeconds)}</span>
                     </span>
                   </div>
                 </Link>
@@ -435,7 +436,7 @@ export default function QueuePage() {
                   <th scope="col" className="px-4 py-3.5">Assigned To</th>
                   <th scope="col" className="px-4 py-3.5 text-right">
                     <span className="inline-flex items-center gap-1">
-                      Time Elapsed <ChevronDown className="h-3.5 w-3.5" />
+                      Reported <ChevronDown className="h-3.5 w-3.5" />
                     </span>
                   </th>
                 </tr>
@@ -489,10 +490,17 @@ export default function QueuePage() {
                       </td>
 
                       {/* Location */}
-                      <td className="px-4 py-3.5 text-ink-muted">
-                        {issue.representativeLocation
-                          ? `Grid Sector 4, ${issue.representativeLocation.lat.toFixed(3)}, ${issue.representativeLocation.lng.toFixed(3)}`
-                          : 'Dhaka Sector 7G'}
+                      <td className="px-4 py-3.5 max-w-[200px]">
+                        <div className="flex items-start gap-1.5">
+                          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-muted" />
+                          <span className="text-ink-muted truncate" title={issue.address || ''}>
+                            {issue.address
+                              ? issue.address
+                              : issue.representativeLocation
+                                ? `${issue.representativeLocation.lat.toFixed(4)}, ${issue.representativeLocation.lng.toFixed(4)}`
+                                : 'Location unavailable'}
+                          </span>
+                        </div>
                       </td>
 
                       {/* Status with dot */}
@@ -544,13 +552,16 @@ export default function QueuePage() {
                         )}
                       </td>
 
-                      {/* Time elapsed */}
+                      {/* Reported date + age */}
                       <td
-                        className={`px-4 py-3.5 text-right text-xs font-semibold ${
+                        className={`px-4 py-3.5 text-right text-xs ${
                           isCritical ? 'text-rose-600' : 'text-ink'
                         }`}
                       >
-                        {formatAge(issue.ageSeconds)}
+                        <span className="font-semibold">
+                          {new Date(issue.openedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                        <span className="text-ink-muted ml-1">• {formatAge(issue.ageSeconds)} ago</span>
                       </td>
                     </tr>
                   )

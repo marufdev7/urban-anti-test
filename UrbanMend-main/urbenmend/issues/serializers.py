@@ -307,6 +307,7 @@ class IssueQueueItemSerializer(CamelCaseSerializer):
     description = serializers.SerializerMethodField()
     media = serializers.SerializerMethodField()
     has_confirmed = serializers.SerializerMethodField()
+    address = serializers.SerializerMethodField()
 
     def get_severity(self, issue: Issue) -> dict[str, Any]:
         """§6.5's four keys — `{current, computed, overridden, rationale}` and nothing else.
@@ -403,6 +404,12 @@ class IssueQueueItemSerializer(CamelCaseSerializer):
         if user and getattr(user, "is_authenticated", False):
             return issue.confirmations.filter(citizen=user).exists()
         return False
+
+    def get_address(self, issue: Issue) -> str:
+        reports = list(issue.reports.all())
+        if reports and reports[0].address:
+            return reports[0].address
+        return ""
 
 
 

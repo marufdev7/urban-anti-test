@@ -47,7 +47,7 @@ SORT_CHOICES = (SORT_SEVERITY, SORT_AGE, SORT_NEWEST, SORT_CORROBORATION)
 # orders by `opened_at` descending (API §6.5, amended 2026-08-18). Renaming the param to match the
 # column would break the documented contract to fix a naming mismatch a client cannot observe.
 SORT_KEYS: dict[str, tuple[tuple[str, bool], ...]] = {
-    SORT_SEVERITY: (("severity_rank", True), ("opened_at", False), ("pk", False)),
+    SORT_SEVERITY: (("severity_rank", True), ("corroboration_total", True), ("opened_at", False), ("pk", False)),
     SORT_AGE: (("opened_at", False), ("pk", False)),
     SORT_NEWEST: (("opened_at", True), ("pk", True)),
     SORT_CORROBORATION: (("corroboration_total", True), ("opened_at", False), ("pk", False)),
