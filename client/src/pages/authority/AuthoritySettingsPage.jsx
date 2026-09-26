@@ -281,24 +281,13 @@ export default function AuthoritySettingsPage() {
         title="Authority Profile & Operations Hub"
         subtitle="Manage personnel credentials, authority profile picture, jurisdictional command scope, and security standards."
         action={
-          <div className="flex items-center gap-2">
-            <Link
-              to="/authority/map"
-              className="inline-flex items-center gap-1.5 rounded-panel border border-line bg-surface-panel px-3 py-1.5 text-xs font-semibold text-ink shadow-xs hover:bg-surface-sunken transition"
-            >
-              <MapPin className="h-3.5 w-3.5 text-[#005a4c]" />
-              <span>Jurisdiction Map</span>
-            </Link>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setAvatarModalOpen(true)}
-              className="gap-1.5"
-            >
-              <Camera className="h-3.5 w-3.5 text-[#005a4c]" />
-              <span>Update Photo</span>
-            </Button>
-          </div>
+          <Link
+            to="/authority/map"
+            className="inline-flex items-center gap-1.5 rounded-panel border border-line bg-surface-panel px-3 py-1.5 text-xs font-semibold text-ink shadow-xs hover:bg-surface-sunken transition"
+          >
+            <MapPin className="h-3.5 w-3.5 text-[#005a4c]" />
+            <span>Jurisdiction Map</span>
+          </Link>
         }
       />
 
@@ -467,13 +456,13 @@ export default function AuthoritySettingsPage() {
                 {user?.categoryScope?.length ? `${user.categoryScope.length} Active Categories` : '7 Municipal Sectors'}
               </p>
             </div>
-            {/* Blue mark revised: Changed from "Triage, Dispatch & Resolve" to "Triage, Assign & Resolve" */}
+            {/* Incident Lifecycle card */}
             <div className="rounded-xl border border-line bg-surface-sunken/70 p-3 hover:bg-surface-sunken transition">
               <div className="flex items-center gap-2 text-ink-faint">
                 <Layers className="h-3.5 w-3.5 text-[#005a4c]" />
                 <span className="text-[10px] font-bold uppercase tracking-wider">Incident Lifecycle</span>
               </div>
-              <p className="mt-1 font-bold text-sm text-ink truncate">Triage, Assign &amp; Resolve</p>
+              <p className="mt-1 font-bold text-sm text-ink truncate">Review, Assign &amp; Resolve</p>
             </div>
             <div className="rounded-xl border border-line bg-surface-sunken/70 p-3 hover:bg-surface-sunken transition">
               <div className="flex items-center gap-2 text-ink-faint">
@@ -843,7 +832,7 @@ export default function AuthoritySettingsPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                       <div className="flex items-center gap-2 rounded-lg bg-surface-panel border border-line p-2.5">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                        <span><strong>Incident Triage:</strong> Review and verify raw citizen reports</span>
+                        <span><strong>Incident Review:</strong> Verify and acknowledge citizen reports</span>
                       </div>
                       <div className="flex items-center gap-2 rounded-lg bg-surface-panel border border-line p-2.5">
                         <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
