@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ArrowRight,
@@ -37,13 +37,24 @@ const STATUS_OPTIONS = [
  * Distinct from the community-wide Processing Queue (/citizen/queue).
  */
 export default function MyReportsPage() {
-  const [q, setQ] = useState('')
-  const [search, setSearch] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlQuery = searchParams.get('q') || searchParams.get('search') || ''
+
+  const [q, setQ] = useState(urlQuery)
+  const [search, setSearch] = useState(urlQuery)
   const [status, setStatus] = useState('')
   // active tab: 'all' | 'active' | 'solved'
   const [activeTab, setActiveTab] = useState('all')
   const [cursor, setCursor] = useState(null)
   const [stale, setStale] = useState([]) // accumulated earlier pages
+
+  // Sync state if URL search query changes
+  useEffect(() => {
+    setQ(urlQuery)
+    setSearch(urlQuery)
+    setStale([])
+    setCursor(null)
+  }, [urlQuery])
 
   const params = new URLSearchParams({ limit: '50' })
   if (search) params.set('q', search)
@@ -90,7 +101,18 @@ export default function MyReportsPage() {
   const applyFilters = (next = {}) => {
     setStale([])
     setCursor(null)
-    if ('search' in next) setSearch(next.search)
+    if ('search' in next) {
+      const cleanSearch = next.search !== undefined ? next.search.trim() : ''
+      setSearch(cleanSearch)
+      const newParams = new URLSearchParams(searchParams)
+      if (cleanSearch) {
+        newParams.set('q', cleanSearch)
+      } else {
+        newParams.delete('q')
+        newParams.delete('search')
+      }
+      setSearchParams(newParams, { replace: true })
+    }
     if ('status' in next) setStatus(next.status)
   }
 
@@ -199,7 +221,7 @@ export default function MyReportsPage() {
               Solved &amp; Verified ({solvedCount})
             </button>
 
-            {(search || status) && (
+            {(search || status || q) && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -208,6 +230,10 @@ export default function MyReportsPage() {
                   setSearch('')
                   setStatus('')
                   setActiveTab('all')
+                  const newParams = new URLSearchParams(searchParams)
+                  newParams.delete('q')
+                  newParams.delete('search')
+                  setSearchParams(newParams, { replace: true })
                 }}
                 className="ml-auto text-xs text-ink-muted hover:text-ink flex items-center gap-1"
               >
@@ -231,7 +257,13 @@ export default function MyReportsPage() {
                 id="report-search"
                 type="search"
                 value={q}
-                onChange={(e) => setQ(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setQ(val)
+                  if (!val.trim() && search) {
+                    applyFilters({ search: '' })
+                  }
+                }}
                 placeholder="Search description, ID, category or address location…"
                 className="w-full rounded-panel border border-line bg-surface-panel py-2 pl-9 pr-4 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />

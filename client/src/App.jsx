@@ -62,6 +62,7 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route path="/citizen/dashboard" element={<CitizenDashboardPage />} />
                 <Route path="/citizen/queue" element={<ProcessingQueuePage />} />
+                <Route path="/citizen/processing-queue" element={<Navigate to="/citizen/queue" replace />} />
                 <Route path="/citizen/reports" element={<MyReportsPage />} />
                 <Route path="/citizen/reports/new" element={<ReportWizardPage />} />
                 <Route path="/citizen/reports/new/details" element={<ReportWizardPage />} />

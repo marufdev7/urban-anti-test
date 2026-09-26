@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -77,12 +77,20 @@ export default function ProcessingQueuePage() {
   const [userLocation, setUserLocation] = useState(null)
   const [geoError, setGeoError] = useState(false)
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlQuery = searchParams.get('q') || searchParams.get('search') || ''
+
   // Filters state
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(urlQuery)
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedStatus, setSelectedStatus] = useState('')
   const [maxDistanceKm, setMaxDistanceKm] = useState('all')
   const [sortBy, setSortBy] = useState('distance')
+
+  // Keep search state synchronized if URL search parameter changes
+  useEffect(() => {
+    setSearch(urlQuery)
+  }, [urlQuery])
 
   // Request browser geolocation for proximity calculation
   useEffect(() => {
@@ -191,16 +199,19 @@ export default function ProcessingQueuePage() {
 
       // 4. Search query
       if (search.trim()) {
-        const term = search.toLowerCase()
+        const term = search.toLowerCase().trim()
+        const cleanTerm = term.replace(/^#/, '')
         const desc = (issue.description || '').toLowerCase()
         const cat = (issue.primaryCategory || '').toLowerCase()
+        const catLabel = (categoryLabel(issue.primaryCategory) || '').toLowerCase()
         const addr = (issue.representativeLocation?.address || '').toLowerCase()
         const id = (issue.id || '').toLowerCase()
         if (
           !desc.includes(term) &&
           !cat.includes(term) &&
+          !catLabel.includes(term) &&
           !addr.includes(term) &&
-          !id.includes(term)
+          !id.includes(cleanTerm)
         ) {
           return false
         }
@@ -233,12 +244,28 @@ export default function ProcessingQueuePage() {
     return result
   }, [processingIssues, maxDistanceKm, selectedStatus, selectedCategory, search, sortBy])
 
+  const handleSearchChange = (val) => {
+    setSearch(val)
+    const newParams = new URLSearchParams(searchParams)
+    if (val.trim()) {
+      newParams.set('q', val.trim())
+    } else {
+      newParams.delete('q')
+      newParams.delete('search')
+    }
+    setSearchParams(newParams, { replace: true })
+  }
+
   const clearAllFilters = () => {
     setSearch('')
     setSelectedCategory('')
     setSelectedStatus('')
     setMaxDistanceKm('all')
     setSortBy('distance')
+    const newParams = new URLSearchParams(searchParams)
+    newParams.delete('q')
+    newParams.delete('search')
+    setSearchParams(newParams, { replace: true })
   }
 
   const hasActiveFilters =
@@ -399,7 +426,7 @@ export default function ProcessingQueuePage() {
               <input
                 type="search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 placeholder="Search active issues by description, category, or area address..."
                 className="w-full rounded-panel border border-line bg-surface-panel py-2 pl-9 pr-4 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
               />

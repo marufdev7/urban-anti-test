@@ -23,10 +23,11 @@ from django.db.models import (
     OuterRef,
     Q,
     Subquery,
+    TextField,
     Value,
     When,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Cast, Coalesce
 
 from urbenmend.geo.selectors import nearby_pois
 from urbenmend.identity.models import Role, User
@@ -426,13 +427,21 @@ def list_issues(
         # `icontains` is the honest limit `list_reports()` documents: PostgreSQL ships no Bangla
         # text-search configuration, so a `SearchVector` would stem English and do nothing for Bangla
         # while looking like full-text search.
-        queryset = queryset.filter(
-            Exists(
-                Report.objects.filter(
-                    Q(description__icontains=query) | Q(address__icontains=query),
-                    issue=OuterRef("pk"),
-                ).exclude(status__in=MODERATED_REPORT_STATUSES)
+        clean_q = query.lstrip("#").strip()
+        queryset = queryset.annotate(id_str=Cast("id", TextField())).filter(
+            Q(
+                Exists(
+                    Report.objects.annotate(rep_id_str=Cast("id", TextField()))
+                    .filter(
+                        Q(description__icontains=query)
+                        | Q(address__icontains=query)
+                        | Q(rep_id_str__icontains=clean_q),
+                        issue=OuterRef("pk"),
+                    )
+                    .exclude(status__in=MODERATED_REPORT_STATUSES)
+                )
             )
+            | Q(id_str__icontains=clean_q)
         )
 
     return queryset

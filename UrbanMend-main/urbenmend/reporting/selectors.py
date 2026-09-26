@@ -19,7 +19,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.contrib.gis.measure import Distance
-from django.db.models import Q
+from django.db.models import Q, TextField
+from django.db.models.functions import Cast
 from django.http import Http404
 
 from urbenmend.api.exceptions import Gone
@@ -177,13 +178,12 @@ def list_reports(
         queryset = queryset.filter(category__slug__in=category_slugs)
 
     if query:
-        # ⚠️ **`icontains`, and this is the honest limit of `?q=` today.** §1.4 wants bilingual
-        # free-text search; PostgreSQL ships no Bangla text-search configuration, so a
-        # `SearchVector` over `'simple'` would stem English and do nothing at all for Bangla while
-        # *looking* like full-text search. A substring match is worse at English and identical for
-        # Bangla, and it does not pretend otherwise. `address` is included because "Mirpur Road" is
-        # a search a citizen will type and it is not in the description.
-        queryset = queryset.filter(Q(description__icontains=query) | Q(address__icontains=query))
+        clean_q = query.lstrip("#").strip()
+        queryset = queryset.annotate(id_str=Cast("id", TextField())).filter(
+            Q(description__icontains=query)
+            | Q(address__icontains=query)
+            | Q(id_str__icontains=clean_q)
+        )
 
     if near is not None and radius_m is not None:
         # ⚠️ `__dwithin` on the `geography` column takes **metres**, which is the whole reason
