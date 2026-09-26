@@ -51,8 +51,8 @@ export default function AuthorityReportsPage() {
   const clearAll = () => setSearchParams({}, { replace: true })
   const hasFilters = Boolean(q || category || status)
 
-  // Query parameters for GET /reports
-  const params = new URLSearchParams({ limit: '20' })
+  // Query parameters for GET /reports (10 reports per page)
+  const params = new URLSearchParams({ limit: '10' })
   if (q) params.set('q', q)
   if (category) params.set('category', category)
   if (status) params.set('status', status)
@@ -155,7 +155,7 @@ export default function AuthorityReportsPage() {
                   <th scope="col" className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <SkeletonRows cols={6} rows={5} />
+              <SkeletonRows cols={6} rows={10} />
             </table>
           </Card>
         </>
