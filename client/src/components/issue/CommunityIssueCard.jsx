@@ -34,7 +34,7 @@ const STATUS_LABELS = {
   closed: 'Closed',
 }
 
-export default function CommunityIssueCard({ issue, distanceKm = null }) {
+export default function CommunityIssueCard({ issue, distanceKm = null, isMyReport = false }) {
   const { data: categories } = useCategories()
   const [imgFailed, setImgFailed] = useState(false)
   const [useOriginal, setUseOriginal] = useState(false)
@@ -68,7 +68,9 @@ export default function CommunityIssueCard({ issue, distanceKm = null }) {
       className={`group flex flex-col justify-between overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
         isSolved
           ? 'border-status-resolved/50 ring-1 ring-status-resolved/30 bg-status-resolved/[0.02]'
-          : 'border-line'
+          : isMyReport
+            ? 'border-primary/50 ring-2 ring-primary/20 bg-primary/[0.01]'
+            : 'border-line'
       }`}
     >
       <div>
@@ -141,11 +143,16 @@ export default function CommunityIssueCard({ issue, distanceKm = null }) {
         {/* Card Body */}
         <div className="p-4">
           <div className="flex items-start justify-between gap-2">
-            <Link to={`/citizen/reports/${issue.id}`} className="hover:text-primary transition-colors">
+            <Link to={`/citizen/reports/${issue.id}`} className="hover:text-primary transition-colors flex-1 min-w-0">
               <h3 className="text-sm font-bold text-ink leading-snug">
                 {title}
               </h3>
             </Link>
+            {isMyReport && (
+              <span className="shrink-0 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary border border-primary/20">
+                Your Report
+              </span>
+            )}
           </div>
 
           <div className="mt-1.5 flex items-center gap-1.5 text-xs text-ink-muted">

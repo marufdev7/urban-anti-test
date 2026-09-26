@@ -9,6 +9,7 @@ import ForbiddenPage from './pages/ForbiddenPage'
 import NotFoundPage from './pages/NotFoundPage'
 import CitizenDashboardPage from './pages/citizen/DashboardPage'
 import MyReportsPage from './pages/citizen/MyReportsPage'
+import ProcessingQueuePage from './pages/citizen/ProcessingQueuePage'
 import ReportWizardPage from './pages/citizen/ReportWizardPage'
 import ReportTrackingPage from './pages/citizen/ReportTrackingPage'
 import CitizenMapPage from './pages/citizen/CitizenMapPage'
@@ -60,7 +61,7 @@ export default function App() {
             <Route element={<RequireRole role="citizen" />}>
               <Route element={<AppShell />}>
                 <Route path="/citizen/dashboard" element={<CitizenDashboardPage />} />
-                <Route path="/citizen/queue" element={<MyReportsPage />} />
+                <Route path="/citizen/queue" element={<ProcessingQueuePage />} />
                 <Route path="/citizen/reports" element={<MyReportsPage />} />
                 <Route path="/citizen/reports/new" element={<ReportWizardPage />} />
                 <Route path="/citizen/reports/new/details" element={<ReportWizardPage />} />
