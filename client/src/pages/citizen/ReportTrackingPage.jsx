@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../auth/AuthContext'
@@ -195,17 +195,50 @@ export default function ReportTrackingPage() {
 
   const fallbackReport = FALLBACK_REPORTS_BY_ID[reportId]
 
+  // Look for issue in React Query cache to enable instant display (0ms latency)
+  const cachedIssue = useMemo(() => {
+    if (!reportId) return null
+    const queries = queryClient.getQueriesData({ queryKey: ['issues'] })
+    for (const [key, val] of queries) {
+      if (key[0] === 'issues' && key[1] === reportId && val?.id) return val
+      if (Array.isArray(val?.data)) {
+        const match = val.data.find((i) => i.id === reportId)
+        if (match) return match
+      }
+      if (Array.isArray(val)) {
+        const match = val.find((i) => i.id === reportId)
+        if (match) return match
+      }
+    }
+    return null
+  }, [queryClient, reportId])
+
+  const cachedReport = useMemo(() => {
+    if (!reportId) return null
+    const queries = queryClient.getQueriesData({ queryKey: ['reports'] })
+    for (const [key, val] of queries) {
+      if (key[0] === 'reports' && key[1] === reportId && val?.id) return val
+      if (Array.isArray(val?.data)) {
+        const match = val.data.find((r) => r.id === reportId)
+        if (match) return match
+      }
+      if (Array.isArray(val)) {
+        const match = val.find((r) => r.id === reportId)
+        if (match) return match
+      }
+    }
+    return null
+  }, [queryClient, reportId])
+
   const { data: remoteReport, isLoading, isError, error } = useQuery({
     queryKey: ['reports', reportId],
     queryFn: async () => {
-      try {
-        return await api(`/reports/${reportId}`)
-      } catch (err) {
-        // If report not found, check if an Issue ID was provided from the map
+      // If we already know this is an Issue ID from cache, fetch issue reports directly
+      if (cachedIssue) {
         try {
           const reportsRes = await api(`/issues/${reportId}/reports`)
           const first = reportsRes?.data?.[0] || reportsRes?.results?.[0]
-          if (first) return first
+          if (first) return { ...first, issueId: reportId }
         } catch {}
 
         try {
@@ -224,7 +257,43 @@ export default function ReportTrackingPage() {
                 severitySignal: issueRes.severity?.current || 'medium',
                 source: 'gemini',
               },
-              media: [],
+              media: issueRes.media || [],
+              corroborationCount: issueRes.corroborationCount,
+              hasConfirmed: issueRes.hasConfirmed,
+            }
+          }
+        } catch {}
+      }
+
+      try {
+        return await api(`/reports/${reportId}`)
+      } catch (err) {
+        // If report not found, check if an Issue ID was provided from the map/dashboard
+        try {
+          const reportsRes = await api(`/issues/${reportId}/reports`)
+          const first = reportsRes?.data?.[0] || reportsRes?.results?.[0]
+          if (first) return { ...first, issueId: reportId }
+        } catch {}
+
+        try {
+          const issueRes = await api(`/issues/${reportId}`)
+          if (issueRes) {
+            return {
+              id: issueRes.id,
+              issueId: issueRes.id,
+              description: issueRes.description || 'Public municipal safety issue',
+              location: issueRes.representativeLocation || { address: 'Dhaka Metropolitan Area' },
+              status: issueRes.status,
+              issueStatus: issueRes.status,
+              createdAt: issueRes.openedAt || new Date().toISOString(),
+              classification: {
+                category: issueRes.primaryCategory,
+                severitySignal: issueRes.severity?.current || 'medium',
+                source: 'gemini',
+              },
+              media: issueRes.media || [],
+              corroborationCount: issueRes.corroborationCount,
+              hasConfirmed: issueRes.hasConfirmed,
             }
           }
         } catch {}
@@ -232,33 +301,108 @@ export default function ReportTrackingPage() {
         throw err
       }
     },
+    placeholderData: () => {
+      if (cachedReport) return cachedReport
+      if (cachedIssue) {
+        return {
+          id: cachedIssue.id,
+          issueId: cachedIssue.id,
+          description: cachedIssue.description || 'Public municipal safety issue',
+          location: cachedIssue.representativeLocation || { address: 'Dhaka Metropolitan Area' },
+          status: cachedIssue.status,
+          issueStatus: cachedIssue.status,
+          createdAt: cachedIssue.openedAt || new Date().toISOString(),
+          classification: {
+            category: cachedIssue.primaryCategory,
+            severitySignal: cachedIssue.severity?.current || cachedIssue.computedSeverity || 'medium',
+            source: 'gemini',
+          },
+          media: cachedIssue.media || [],
+          corroborationCount: cachedIssue.corroborationCount || 1,
+          hasConfirmed: cachedIssue.hasConfirmed || false,
+        }
+      }
+      return undefined
+    },
     enabled: !fallbackReport,
     retry: 1,
     refetchInterval: (query) =>
       query.state.data?.classification?.source ? false : 4000,
   })
 
-  const report = localReportOverride || remoteReport || fallbackReport
+  const report = localReportOverride || remoteReport || fallbackReport || (cachedIssue ? {
+    id: cachedIssue.id,
+    issueId: cachedIssue.id,
+    description: cachedIssue.description || 'Public municipal safety issue',
+    location: cachedIssue.representativeLocation || { address: 'Dhaka Metropolitan Area' },
+    status: cachedIssue.status,
+    issueStatus: cachedIssue.status,
+    createdAt: cachedIssue.openedAt || new Date().toISOString(),
+    classification: {
+      category: cachedIssue.primaryCategory,
+      severitySignal: cachedIssue.severity?.current || cachedIssue.computedSeverity || 'medium',
+      source: 'gemini',
+    },
+    media: cachedIssue.media || [],
+    corroborationCount: cachedIssue.corroborationCount || 1,
+    hasConfirmed: cachedIssue.hasConfirmed || false,
+  } : null)
 
   // Once clustered into an Issue, follow the issue and its status events (FRONT-PLAN §9.3)
-  const issueId = report?.issueId
+  const targetIssueId =
+    report?.issueId ||
+    cachedReport?.issueId ||
+    cachedIssue?.id ||
+    remoteReport?.issueId ||
+    reportId
+
+  const issueId = targetIssueId
+
   const { data: issue } = useQuery({
-    queryKey: ['issues', issueId],
-    queryFn: () => api(`/issues/${issueId}`),
-    enabled: !!issueId,
+    queryKey: ['issues', targetIssueId],
+    queryFn: () => api(`/issues/${targetIssueId}`),
+    enabled: !!targetIssueId,
+    initialData: () => {
+      if (cachedIssue && cachedIssue.id === targetIssueId) return cachedIssue
+      const queries = queryClient.getQueriesData({ queryKey: ['issues'] })
+      for (const [key, val] of queries) {
+        if (key[0] === 'issues' && key[1] === targetIssueId && val?.id) return val
+        if (Array.isArray(val?.data)) {
+          const match = val.data.find((i) => i.id === targetIssueId)
+          if (match) return match
+        }
+        if (Array.isArray(val)) {
+          const match = val.find((i) => i.id === targetIssueId)
+          if (match) return match
+        }
+      }
+      return undefined
+    },
     refetchInterval: 10_000,
   })
 
   const { data: statusEvents } = useQuery({
-    queryKey: ['issues', issueId, 'status-events'],
-    queryFn: () => api(`/issues/${issueId}/status-events`),
-    enabled: !!issueId,
+    queryKey: ['issues', targetIssueId, 'status-events'],
+    queryFn: () => api(`/issues/${targetIssueId}/status-events`),
+    enabled: !!targetIssueId,
   })
 
-  if (!fallbackReport && isLoading) {
+  const activeCorroborationCount =
+    issue?.corroborationCount ??
+    cachedIssue?.corroborationCount ??
+    report?.corroborationCount ??
+    1
+
+  const activeHasConfirmed =
+    issue?.hasConfirmed ??
+    cachedIssue?.hasConfirmed ??
+    report?.hasConfirmed ??
+    false
+
+  if (!fallbackReport && !report && isLoading) {
     return <SkeletonDetail className="mx-auto max-w-5xl" />
   }
-  if (!fallbackReport && isError) {
+  if (!fallbackReport && !report && isError) {
     return (
       <Card className="p-6">
         <p className="text-sm text-status-critical" role="alert">
@@ -363,11 +507,11 @@ export default function ReportTrackingPage() {
             label={badge.label}
             className={`font-bold text-black ${isResolved ? 'bg-emerald-100 text-black border-emerald-400' : 'text-black'}`}
           />
-          {!isResolved && (issueId || report.issueId || report.id) && (
+          {!isResolved && targetIssueId && (
             <ConfirmIssueButton
-              issueId={issueId || report.issueId || report.id}
-              initialCount={issue?.corroborationCount || 1}
-              initialConfirmed={issue?.hasConfirmed || false}
+              issueId={targetIssueId}
+              initialCount={activeCorroborationCount}
+              initialConfirmed={activeHasConfirmed}
               size="sm"
             />
           )}
@@ -442,7 +586,7 @@ export default function ReportTrackingPage() {
 
               <ReportMediaGallery media={report.media} />
 
-              {!isResolved && (issueId || report.issueId || report.id) && (
+              {!isResolved && targetIssueId && (
                 <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-panel border border-[#005a4c]/30 bg-[#005a4c]/5 p-3.5 text-xs shadow-xs">
                   <div className="flex items-center gap-2.5">
                     <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#005a4c]/15 text-[#005a4c] font-bold text-base">
@@ -451,14 +595,16 @@ export default function ReportTrackingPage() {
                     <div>
                       <p className="font-bold text-ink">Does this problem affect your area too?</p>
                       <p className="text-ink-muted text-[11px]">
-                        Click &quot;Me Too / Confirm&quot; to corroborate this civic report and alert municipal responders.
+                        {activeCorroborationCount > 1
+                          ? `${activeCorroborationCount} citizens have corroborated this issue. Click "Me Too" if it affects your area too.`
+                          : 'Click "Me Too / Confirm" to corroborate this civic report and alert municipal responders.'}
                       </p>
                     </div>
                   </div>
                   <ConfirmIssueButton
-                    issueId={issueId || report.issueId || report.id}
-                    initialCount={issue?.corroborationCount || 1}
-                    initialConfirmed={issue?.hasConfirmed || false}
+                    issueId={targetIssueId}
+                    initialCount={activeCorroborationCount}
+                    initialConfirmed={activeHasConfirmed}
                     size="sm"
                   />
                 </div>

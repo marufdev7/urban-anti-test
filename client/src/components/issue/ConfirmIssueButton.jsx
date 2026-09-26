@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Check, CheckCircle2, Loader2, ThumbsUp } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle2, Loader2, ThumbsUp } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { useConfirmIssue, useWithdrawConfirmation } from '../../hooks/issues'
 
@@ -18,23 +18,26 @@ export default function ConfirmIssueButton({
   const { user } = useAuth()
   const isCitizen = user?.role === 'citizen'
 
-  const [hasConfirmed, setHasConfirmed] = useState(initialConfirmed)
-  const [count, setCount] = useState(initialCount)
+  const [hasConfirmed, setHasConfirmed] = useState(Boolean(initialConfirmed))
+  const [count, setCount] = useState(Number(initialCount) || 1)
   const [loading, setLoading] = useState(false)
 
   const confirmMutation = useConfirmIssue(issueId)
   const withdrawMutation = useWithdrawConfirmation(issueId)
 
-  // Keep state synced if props change
-  if (initialConfirmed !== undefined && initialConfirmed !== hasConfirmed && !loading) {
-    // sync only if not actively toggling
-  }
+  // Keep state synced if props change (e.g. from React Query cache or parent updates)
+  useEffect(() => {
+    if (!loading) {
+      setHasConfirmed(Boolean(initialConfirmed))
+      setCount(Number(initialCount) || 1)
+    }
+  }, [initialConfirmed, initialCount, loading])
 
   const handleToggle = async (e) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!isCitizen || loading) return
+    if (!issueId || !isCitizen || loading) return
 
     setLoading(true)
     if (!hasConfirmed) {

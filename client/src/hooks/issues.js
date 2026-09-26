@@ -162,14 +162,222 @@ export function useAnalyticsSummary(params, queryOptions = {}) {
   })
 }
 
+/** Helper to optimistically update issue confirmation state in all React Query caches */
+function applyIssueConfirmation(queryClient, issueId, confirmed) {
+  if (!issueId) return
+
+  const updateItem = (item) => {
+    if (!item) return item
+    const currentCount = Number(item.corroborationCount) || 1
+    const newCount = confirmed ? currentCount + 1 : Math.max(1, currentCount - 1)
+    return {
+      ...item,
+      corroborationCount: newCount,
+      hasConfirmed: confirmed,
+    }
+  }
+
+  // 1. Exact issue query: ['issues', issueId]
+  queryClient.setQueryData(['issues', issueId], (old) => {
+    if (!old) return old
+    return updateItem(old)
+  })
+
+  // 2. All issues collection queries (e.g. ['issues', qs], ['issues', 'public', 'dashboard'], ['issues', 'processing-queue'])
+  queryClient.setQueriesData({ queryKey: ['issues'] }, (old) => {
+    if (!old) return old
+    if (Array.isArray(old.data)) {
+      return {
+        ...old,
+        data: old.data.map((item) => (item.id === issueId ? updateItem(item) : item)),
+      }
+    }
+    if (Array.isArray(old)) {
+      return old.map((item) => (item.id === issueId ? updateItem(item) : item))
+    }
+    if (old.id === issueId) {
+      return updateItem(old)
+    }
+    return old
+  })
+
+  // 3. Reports queries
+  queryClient.setQueriesData({ queryKey: ['reports'] }, (old) => {
+    if (!old) return old
+    if (Array.isArray(old.data)) {
+      return {
+        ...old,
+        data: old.data.map((item) => {
+          if (item.id === issueId || item.issueId === issueId) {
+            return updateItem(item)
+          }
+          return item
+        }),
+      }
+    }
+    if (Array.isArray(old)) {
+      return old.map((item) => {
+        if (item.id === issueId || item.issueId === issueId) {
+          return updateItem(item)
+        }
+        return item
+      })
+    }
+    if (old.id === issueId || old.issueId === issueId) {
+      return updateItem(old)
+    }
+    return old
+  })
+
+  // 4. Map issues queries
+  queryClient.setQueriesData({ queryKey: ['map-issues'] }, (old) => {
+    if (!old || !Array.isArray(old.features)) return old
+    return {
+      ...old,
+      features: old.features.map((f) => {
+        const fId = f.id || f.properties?.id
+        if (fId === issueId) {
+          const currentCount = Number(f.properties?.corroborationCount) || 1
+          const newCount = confirmed ? currentCount + 1 : Math.max(1, currentCount - 1)
+          return {
+            ...f,
+            properties: {
+              ...f.properties,
+              corroborationCount: newCount,
+            },
+          }
+        }
+        return f
+      }),
+    }
+  })
+}
+
+function applyIssueConfirmationCount(queryClient, issueId, exactCount, confirmed) {
+  if (!issueId) return
+
+  const updateItem = (item) => {
+    if (!item) return item
+    return {
+      ...item,
+      corroborationCount: exactCount,
+      hasConfirmed: confirmed,
+    }
+  }
+
+  queryClient.setQueryData(['issues', issueId], (old) => {
+    if (!old) return old
+    return updateItem(old)
+  })
+
+  queryClient.setQueriesData({ queryKey: ['issues'] }, (old) => {
+    if (!old) return old
+    if (Array.isArray(old.data)) {
+      return {
+        ...old,
+        data: old.data.map((item) => (item.id === issueId ? updateItem(item) : item)),
+      }
+    }
+    if (Array.isArray(old)) {
+      return old.map((item) => (item.id === issueId ? updateItem(item) : item))
+    }
+    if (old.id === issueId) {
+      return updateItem(old)
+    }
+    return old
+  })
+
+  queryClient.setQueriesData({ queryKey: ['reports'] }, (old) => {
+    if (!old) return old
+    if (Array.isArray(old.data)) {
+      return {
+        ...old,
+        data: old.data.map((item) => {
+          if (item.id === issueId || item.issueId === issueId) {
+            return updateItem(item)
+          }
+          return item
+        }),
+      }
+    }
+    if (Array.isArray(old)) {
+      return old.map((item) => {
+        if (item.id === issueId || item.issueId === issueId) {
+          return updateItem(item)
+        }
+        return item
+      })
+    }
+    if (old.id === issueId || old.issueId === issueId) {
+      return updateItem(old)
+    }
+    return old
+  })
+
+  queryClient.setQueriesData({ queryKey: ['map-issues'] }, (old) => {
+    if (!old || !Array.isArray(old.features)) return old
+    return {
+      ...old,
+      features: old.features.map((f) => {
+        const fId = f.id || f.properties?.id
+        if (fId === issueId) {
+          return {
+            ...f,
+            properties: {
+              ...f.properties,
+              corroborationCount: exactCount,
+            },
+          }
+        }
+        return f
+      }),
+    }
+  })
+}
+
 /** POST /issues/{issueId}/confirmations — citizen "Me Too / Confirm" (API §6.6, FR-16). */
 export function useConfirmIssue(issueId) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => api(`/issues/${issueId}/confirmations`, { method: 'POST', body: {} }),
-    onSuccess: () => {
+    onMutate: async () => {
+      if (!issueId) return {}
+      await queryClient.cancelQueries({ queryKey: ['issues'] })
+      await queryClient.cancelQueries({ queryKey: ['reports'] })
+      await queryClient.cancelQueries({ queryKey: ['map-issues'] })
+
+      const prevIssues = queryClient.getQueriesData({ queryKey: ['issues'] })
+      const prevReports = queryClient.getQueriesData({ queryKey: ['reports'] })
+      const prevMap = queryClient.getQueriesData({ queryKey: ['map-issues'] })
+
+      applyIssueConfirmation(queryClient, issueId, true)
+
+      return { prevIssues, prevReports, prevMap }
+    },
+    onError: (err, variables, context) => {
+      if (err?.code === 'ALREADY_CONFIRMED') {
+        applyIssueConfirmation(queryClient, issueId, true)
+        return
+      }
+      if (context?.prevIssues) {
+        context.prevIssues.forEach(([key, val]) => queryClient.setQueryData(key, val))
+      }
+      if (context?.prevReports) {
+        context.prevReports.forEach(([key, val]) => queryClient.setQueryData(key, val))
+      }
+      if (context?.prevMap) {
+        context.prevMap.forEach(([key, val]) => queryClient.setQueryData(key, val))
+      }
+    },
+    onSuccess: (data) => {
+      if (data?.corroborationCount !== undefined) {
+        applyIssueConfirmationCount(queryClient, issueId, data.corroborationCount, true)
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['issues'] })
       queryClient.invalidateQueries({ queryKey: ['reports'] })
+      queryClient.invalidateQueries({ queryKey: ['map-issues'] })
     },
   })
 }
@@ -179,9 +387,35 @@ export function useWithdrawConfirmation(issueId) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => api(`/issues/${issueId}/confirmations/me`, { method: 'DELETE' }),
-    onSuccess: () => {
+    onMutate: async () => {
+      if (!issueId) return {}
+      await queryClient.cancelQueries({ queryKey: ['issues'] })
+      await queryClient.cancelQueries({ queryKey: ['reports'] })
+      await queryClient.cancelQueries({ queryKey: ['map-issues'] })
+
+      const prevIssues = queryClient.getQueriesData({ queryKey: ['issues'] })
+      const prevReports = queryClient.getQueriesData({ queryKey: ['reports'] })
+      const prevMap = queryClient.getQueriesData({ queryKey: ['map-issues'] })
+
+      applyIssueConfirmation(queryClient, issueId, false)
+
+      return { prevIssues, prevReports, prevMap }
+    },
+    onError: (err, variables, context) => {
+      if (context?.prevIssues) {
+        context.prevIssues.forEach(([key, val]) => queryClient.setQueryData(key, val))
+      }
+      if (context?.prevReports) {
+        context.prevReports.forEach(([key, val]) => queryClient.setQueryData(key, val))
+      }
+      if (context?.prevMap) {
+        context.prevMap.forEach(([key, val]) => queryClient.setQueryData(key, val))
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['issues'] })
       queryClient.invalidateQueries({ queryKey: ['reports'] })
+      queryClient.invalidateQueries({ queryKey: ['map-issues'] })
     },
   })
 }
