@@ -45,10 +45,10 @@ import ManualEntryModal from '../../components/authority/ManualEntryModal'
 const SEV_TONES = { critical: 'critical', high: 'high', medium: 'medium', low: 'low' }
 
 const SEV_BADGE_STYLES = {
-  critical: 'border-rose-300 bg-rose-50 text-rose-700',
-  high: 'border-orange-300 bg-orange-50 text-orange-700',
-  medium: 'border-amber-300 bg-amber-50 text-amber-700',
-  low: 'border-emerald-300 bg-emerald-50 text-emerald-700',
+  critical: 'border-rose-400 bg-rose-100 text-rose-800',
+  high: 'border-orange-400 bg-orange-100 text-orange-800',
+  medium: 'border-yellow-400 bg-yellow-100 text-yellow-800',
+  low: 'border-emerald-400 bg-emerald-100 text-emerald-800',
 }
 
 const STATUS_DOTS = {

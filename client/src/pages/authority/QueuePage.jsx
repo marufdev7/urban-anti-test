@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
+  AlertTriangle,
+  CheckCircle2,
   ChevronDown,
   ClipboardList,
   Filter,
@@ -32,11 +34,34 @@ import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 import ManualEntryModal from '../../components/authority/ManualEntryModal'
 
+const SEV_CONFIG = {
+  critical: {
+    className: 'border-rose-400 bg-rose-100 text-rose-800 font-bold',
+    iconColor: 'text-rose-600',
+    Icon: AlertCircle,
+  },
+  high: {
+    className: 'border-orange-500 bg-orange-100 text-orange-950 font-bold',
+    iconColor: 'text-orange-600',
+    Icon: AlertTriangle,
+  },
+  medium: {
+    className: 'border-yellow-400 bg-yellow-100 text-yellow-950 font-bold',
+    iconColor: 'text-yellow-600',
+    Icon: Info,
+  },
+  low: {
+    className: 'border-emerald-400 bg-emerald-100 text-emerald-800 font-bold',
+    iconColor: 'text-emerald-600',
+    Icon: CheckCircle2,
+  },
+}
+
 const SEV_STYLES = {
-  critical: 'border-rose-400 text-black font-semibold bg-rose-100/70',
-  high: 'border-amber-400 text-black font-semibold bg-amber-100/70',
-  medium: 'border-yellow-400 text-black font-semibold bg-yellow-100/70',
-  low: 'border-emerald-400 text-black font-semibold bg-emerald-100/70',
+  critical: SEV_CONFIG.critical.className,
+  high: SEV_CONFIG.high.className,
+  medium: SEV_CONFIG.medium.className,
+  low: SEV_CONFIG.low.className,
 }
 
 const STATUS_DOTS = {
@@ -345,6 +370,8 @@ export default function QueuePage() {
           <div className="space-y-3 p-4 md:hidden">
             {issues.map((issue) => {
               const sev = issue.severity?.current || 'medium'
+              const sevCfg = SEV_CONFIG[sev] || SEV_CONFIG.medium
+              const SevIcon = sevCfg.Icon
               return (
                 <Link
                   key={issue.id}
@@ -353,11 +380,11 @@ export default function QueuePage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-bold capitalize ${
-                        SEV_STYLES[sev] ?? 'border-slate-300 text-slate-700 bg-slate-50'
+                      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs capitalize ${
+                        sevCfg.className
                       }`}
                     >
-                      {sev === 'critical' ? <AlertCircle className="h-3 w-3" /> : <Info className="h-3 w-3" />}
+                      <SevIcon className={`h-3 w-3 shrink-0 ${sevCfg.iconColor}`} aria-hidden="true" />
                       {sev}
                     </span>
                     <span className="flex items-center gap-1.5 text-xs font-medium text-ink-muted">
@@ -449,6 +476,8 @@ export default function QueuePage() {
                   const assigneeName = issue.assignedTo
                     ? (issue.assignedTo === user?.id ? 'Me' : 'Team Alpha')
                     : null
+                  const sevCfg = SEV_CONFIG[sev] || SEV_CONFIG.medium
+                  const SevIcon = sevCfg.Icon
 
                   return (
                     <tr
@@ -468,15 +497,9 @@ export default function QueuePage() {
                       {/* Severity pill badge with icon */}
                       <td className="px-4 py-3.5">
                         <span
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-bold capitalize ${
-                            SEV_STYLES[sev] ?? 'border-slate-300 text-slate-700 bg-slate-50'
-                          }`}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs capitalize ${sevCfg.className}`}
                         >
-                          {isCritical ? (
-                            <AlertCircle className="h-3 w-3 text-rose-600" aria-hidden="true" />
-                          ) : (
-                            <Info className="h-3 w-3 text-ink-muted" aria-hidden="true" />
-                          )}
+                          <SevIcon className={`h-3 w-3 shrink-0 ${sevCfg.iconColor}`} aria-hidden="true" />
                           {sev}
                         </span>
                       </td>
