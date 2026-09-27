@@ -400,7 +400,7 @@ export default function ReportTrackingPage() {
     false
 
   if (!fallbackReport && !report && isLoading) {
-    return <SkeletonDetail className="mx-auto max-w-5xl" />
+    return <SkeletonDetail className="w-full" />
   }
   if (!fallbackReport && !report && isError) {
     return (
@@ -479,12 +479,12 @@ export default function ReportTrackingPage() {
   ]
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+    <div className="w-full space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
             to="/citizen/dashboard"
-            className="flex shrink-0 items-center gap-1 text-sm font-medium text-ink-muted hover:text-ink"
+            className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             Back to Dashboard
@@ -519,7 +519,7 @@ export default function ReportTrackingPage() {
       </div>
 
       {isResolved && (
-        <div className="mb-5 flex items-center gap-3 rounded-panel border border-status-resolved/40 bg-status-resolved/10 p-4 text-xs shadow-xs">
+        <div className="flex items-center gap-3 rounded-panel border border-status-resolved/40 bg-status-resolved/10 p-4 text-xs shadow-xs">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-status-resolved text-white font-bold text-base">
             ✓
           </div>
