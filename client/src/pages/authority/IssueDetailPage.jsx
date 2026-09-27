@@ -7,10 +7,12 @@ import {
   ArrowLeft,
   Check,
   Clock,
+  Lock,
   MapPin,
   MessageSquare,
   RotateCw,
   Send,
+  ShieldCheck,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -423,58 +425,9 @@ export default function IssueDetailPage() {
                     )
                   })
                 ) : (
-                  <>
-                    {/* Fallback mock cards matching screenshot */}
-                    <div className="flex flex-col justify-between rounded-panel border border-line bg-surface-panel p-3.5 shadow-xs">
-                      <div>
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <span className="font-medium text-ink-muted">Today, 08:14 AM</span>
-                          <span className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-600">
-                            Critical
-                          </span>
-                        </div>
-                        <p className="mt-2 text-xs italic leading-relaxed text-ink/90">
-                          &ldquo;Sparks coming from the main line near the intersection. Large portion of the street is dark.&rdquo;
-                        </p>
-                        <div className="mt-3">
-                          <div className="flex h-32 w-full items-center justify-center rounded border border-line bg-slate-100 text-xs text-ink-muted">
-                            <span className="text-ink-faint">Photo attached (street view)</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2 border-t border-line/60 pt-2.5 text-xs text-ink-muted">
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 text-[10px] font-bold text-teal-800">
-                          A
-                        </div>
-                        <span>Anonymous Citizen</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col justify-between rounded-panel border border-line bg-surface-panel p-3.5 shadow-xs">
-                      <div>
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <span className="font-medium text-ink-muted">Today, 08:22 AM</span>
-                          <span className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-600">
-                            Critical
-                          </span>
-                        </div>
-                        <p className="mt-2 text-xs italic leading-relaxed text-ink/90">
-                          &ldquo;Smell of ozone and loud buzzing noise. The traffic lights are completely dead here.&rdquo;
-                        </p>
-                        <div className="mt-3">
-                          <div className="flex h-32 w-full items-center justify-center rounded border border-dashed border-sky-200 bg-sky-50/50 text-xs font-semibold text-sky-700">
-                            No Media Attached
-                          </div>
-                        </div>
-                      </div>
-                      <div className="mt-3 flex items-center gap-2 border-t border-line/60 pt-2.5 text-xs text-ink-muted">
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-800">
-                          C
-                        </div>
-                        <span>Citizen ID: 8829</span>
-                      </div>
-                    </div>
-                  </>
+                  <div className="col-span-full rounded-panel border border-dashed border-line bg-surface-muted/30 p-6 text-center text-xs text-ink-muted">
+                    No individual citizen reports linked to this incident cluster yet.
+                  </div>
                 )}
               </div>
             </CardBody>
@@ -484,45 +437,121 @@ export default function IssueDetailPage() {
           <Card>
             <CardHeader
               title={
-                <span className="flex items-center gap-2 font-bold text-ink">
-                  <MessageSquare className="h-4 w-4 text-primary" aria-hidden="true" />
-                  Authority Internal Notes
-                </span>
+                <div className="flex items-center justify-between w-full">
+                  <span className="flex items-center gap-2 font-bold text-ink">
+                    <MessageSquare className="h-4 w-4 text-primary" aria-hidden="true" />
+                    Authority Internal Notes
+                    {internalNotes.length > 0 && (
+                      <span className="ml-1.5 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-800 border border-sky-200">
+                        {internalNotes.length}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[11px] font-medium text-ink-muted flex items-center gap-1">
+                    <Lock className="h-3 w-3 text-slate-500" />
+                    Authority & Admin Only
+                  </span>
+                </div>
               }
             />
             <CardBody>
               <div className="space-y-3">
                 {internalNotes.length > 0 ? (
-                  internalNotes.map((comment) => (
-                    <div key={comment.id} className="flex items-start gap-2.5">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-200 text-[11px] font-bold text-slate-700">
-                        {comment.authorId === user.id ? 'ME' : 'DP'}
-                      </div>
-                      <div className="flex-1 rounded-panel border border-sky-100 bg-sky-50/60 p-3">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-ink">
-                            {comment.authorId === user.id ? 'You' : 'Dispatcher Pierson'}
-                          </span>
-                          <span className="text-ink-muted">{formatDateTime(comment.createdAt)}</span>
+                  internalNotes.map((comment) => {
+                    const isMe = comment.authorId === user?.id
+                    const role = (isMe ? user?.role : comment.authorRole) || 'authority'
+                    const isAdmin = role === 'admin'
+
+                    const displayName = isMe
+                      ? (user?.fullName ? `You (${user.fullName})` : 'You')
+                      : (comment.authorName || (isAdmin ? 'Municipal Administrator' : 'Operations Officer'))
+
+                    let initials = 'OP'
+                    if (isMe) {
+                      initials = user?.fullName
+                        ? user.fullName
+                            .split(' ')
+                            .filter(Boolean)
+                            .map((w) => w[0])
+                            .join('')
+                            .slice(0, 2)
+                            .toUpperCase()
+                        : (isAdmin ? 'AD' : 'YOU')
+                    } else if (comment.authorName) {
+                      initials = comment.authorName
+                        .split(' ')
+                        .filter(Boolean)
+                        .map((w) => w[0])
+                        .join('')
+                        .slice(0, 2)
+                        .toUpperCase()
+                    } else if (isAdmin) {
+                      initials = 'AD'
+                    }
+
+                    return (
+                      <div key={comment.id} className="flex items-start gap-2.5">
+                        {isMe && user?.avatarUrl ? (
+                          <img
+                            src={user.avatarUrl}
+                            alt=""
+                            className="h-7 w-7 rounded-full object-cover border border-line shrink-0"
+                          />
+                        ) : (
+                          <div
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold shadow-xs ${
+                              isAdmin
+                                ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                                : isMe
+                                  ? 'bg-primary/10 text-primary border border-primary/20'
+                                  : 'bg-teal-100 text-teal-800 border border-teal-200'
+                            }`}
+                          >
+                            {initials}
+                          </div>
+                        )}
+                        <div
+                          className={`flex-1 rounded-panel border p-3 ${
+                            isAdmin
+                              ? 'border-purple-100 bg-purple-50/50'
+                              : isMe
+                                ? 'border-primary/20 bg-primary/5'
+                                : 'border-sky-100 bg-sky-50/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-ink">{displayName}</span>
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                  isAdmin
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-teal-100 text-teal-800 border border-teal-200'
+                                }`}
+                              >
+                                {isAdmin ? 'Admin' : 'Authority'}
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-ink-muted">
+                              {formatDateTime(comment.createdAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1.5 text-xs leading-relaxed text-ink whitespace-pre-wrap">
+                            {comment.body}
+                          </p>
                         </div>
-                        <p className="mt-1 text-xs leading-relaxed text-ink">{comment.body}</p>
                       </div>
-                    </div>
-                  ))
+                    )
+                  })
                 ) : (
-                  <div className="flex items-start gap-2.5">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded bg-slate-200 text-[11px] font-bold text-slate-700">
-                      DP
+                  <div className="rounded-panel border border-dashed border-line bg-surface-muted/30 p-5 text-center">
+                    <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <ShieldCheck className="h-4 w-4" />
                     </div>
-                    <div className="flex-1 rounded-panel border border-sky-100 bg-sky-50/60 p-3">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-ink">Dispatcher Pierson</span>
-                        <span className="text-ink-muted">08:30 AM</span>
-                      </div>
-                      <p className="mt-1 text-xs leading-relaxed text-ink">
-                        Unit 4 dispatched. ETA 15 minutes. Traffic control requested at 4th and Main.
-                      </p>
-                    </div>
+                    <p className="mt-2 text-xs font-semibold text-ink">No Internal Notes Recorded</p>
+                    <p className="mt-1 text-[11px] text-ink-muted max-w-md mx-auto">
+                      Internal notes are private to Municipal Authority personnel and System Administrators. Add secure operational updates, crew dispatch status, or triage observations below.
+                    </p>
                   </div>
                 )}
               </div>
@@ -532,17 +561,17 @@ export default function IssueDetailPage() {
                   type="text"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Add secure note…"
-                  className="flex-1 rounded-panel border border-line bg-surface-panel px-3 py-2 text-xs focus:border-primary"
+                  placeholder="Add internal note (visible to Authority and Admin)..."
+                  className="flex-1 rounded-panel border border-line bg-surface-panel px-3 py-2 text-xs focus:border-primary focus:outline-hidden"
                 />
                 <Button
                   type="submit"
                   loading={addComment.isPending}
                   disabled={!note.trim()}
-                  className="bg-[#0e7490] hover:bg-[#085f76] text-white px-5 text-xs font-semibold"
+                  className="bg-[#0e7490] hover:bg-[#085f76] text-white px-4 text-xs font-semibold shrink-0"
                 >
-                  <Send className="mr-1 h-3.5 w-3.5" />
-                  Post
+                  <Send className="mr-1.5 h-3.5 w-3.5" />
+                  Post Note
                 </Button>
               </form>
             </CardBody>
@@ -871,23 +900,13 @@ export default function IssueDetailPage() {
                     </li>
                   ))
                 ) : (
-                  <>
-                    <li className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-slate-400" />
-                      <p className="font-bold text-ink">Unit 4 in Transit</p>
-                      <p className="text-ink-muted">08:35 AM · Dispatcher Pierson</p>
-                    </li>
-                    <li className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-                      <p className="font-bold text-ink">Severity Escalated to Critical</p>
-                      <p className="text-ink-muted">08:30 AM · Automated System (Multi-Report)</p>
-                    </li>
-                    <li className="relative">
-                      <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-slate-300" />
-                      <p className="font-bold text-ink">Initial Report Logged</p>
-                      <p className="text-ink-muted">08:14 AM · Citizen Submissions</p>
-                    </li>
-                  </>
+                  <li className="relative">
+                    <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
+                    <p className="font-bold text-ink">Incident Registered</p>
+                    <p className="text-ink-muted">
+                      {formatDateTime(data.openedAt)} · Initial Intake & System Registration
+                    </p>
+                  </li>
                 )}
               </ol>
             </CardBody>

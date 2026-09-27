@@ -226,7 +226,7 @@ class IssueCommentsView(APIView):
             and not has_category_scope(request.user, issue.primary_category)
         ):
             raise AuthorizationError("You do not have permission to view this issue.")
-        queryset = issue.comments.filter(removed_at__isnull=True)
+        queryset = issue.comments.select_related("author").filter(removed_at__isnull=True)
         if not isinstance(request.user, User) or request.user.role not in {
             Role.AUTHORITY,
             Role.ADMIN,
@@ -281,9 +281,9 @@ class IssueDetailView(APIView):
             raise Http404("Issue not found.")
         selectors.attach_proximity([issue])
         payload = IssueQueueItemSerializer(issue, context={"now": timezone.now(), "request": request}).data
-        comments = issue.comments.filter(removed_at__isnull=True, visibility="public")
+        comments = issue.comments.select_related("author").filter(removed_at__isnull=True, visibility="public")
         if isinstance(request.user, User) and request.user.role in {Role.AUTHORITY, Role.ADMIN}:
-            comments = issue.comments.filter(removed_at__isnull=True)
+            comments = issue.comments.select_related("author").filter(removed_at__isnull=True)
         payload["comments"] = CommentSerializer(comments, many=True).data
         payload["memberReports"] = request.build_absolute_uri(f"/api/v1/issues/{issue.pk}/reports")
         return Response(payload)
@@ -340,7 +340,7 @@ class IssueMapView(APIView):
                 "properties": {
                     "severity": issue.current_severity,
                     "status": issue.status,
-                    "assignedTo": str(issue.assignee_id) if issue.assignee_id else None,
+                    **({"assignedTo": str(issue.assignee_id)} if issue.assignee_id else {}),
                     "corroborationCount": _corroboration_total(issue),
                     "count": 1,
                 },

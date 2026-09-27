@@ -16,6 +16,7 @@ from urbenmend.api.serializers import (
 from urbenmend.classification.models import Category
 from urbenmend.geo.models import POI
 from urbenmend.geo.selectors import nearby_pois
+from urbenmend.identity.models import Role
 from urbenmend.issues.models import (
     ClusteringRule,
     ClusteringRuleStatus,
@@ -217,6 +218,9 @@ class ConfirmationResponseSerializer(CamelCaseSerializer):
 class CommentSerializer(CamelCaseSerializer):
     id = serializers.UUIDField(read_only=True)
     author_id = serializers.UUIDField(read_only=True)
+    author_role = serializers.CharField(source="author.role", read_only=True)
+    author_email = serializers.CharField(source="author.email", read_only=True)
+    author_name = serializers.SerializerMethodField()
     visibility = serializers.ChoiceField(choices=CommentVisibility.choices)
     body = serializers.CharField()
     created_at = serializers.DateTimeField(read_only=True)
@@ -224,7 +228,32 @@ class CommentSerializer(CamelCaseSerializer):
 
     class Meta:
         model = Comment
-        fields = ["id", "author_id", "body", "visibility", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "author_id",
+            "author_role",
+            "author_email",
+            "author_name",
+            "body",
+            "visibility",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_author_name(self, obj: Comment) -> str:
+        author = getattr(obj, "author", None)
+        if not author:
+            return "Municipal Officer"
+        if getattr(author, "role", "") == Role.ADMIN:
+            return "System Administrator"
+        if getattr(author, "role", "") == Role.AUTHORITY:
+            assigned = getattr(author, "assigned_area", "")
+            if assigned:
+                return f"Operations Officer ({assigned.title()})"
+            return "Municipal Operations Officer"
+        if getattr(author, "email", None):
+            return author.email.split("@")[0].replace(".", " ").title()
+        return "Citizen"
 
 
 class CommentCreateSerializer(CamelCaseSerializer):
