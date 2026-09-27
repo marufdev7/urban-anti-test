@@ -39,6 +39,18 @@ function AuthorityQueueDetailRoute() {
   return <IssueDetailPage />
 }
 
+function CitizenReportDetailRoute() {
+  const { user } = useAuth()
+  const { reportId } = useParams()
+  if (user?.role === 'admin') {
+    return <Navigate to={`/admin/queue/${reportId}`} replace />
+  }
+  if (user?.role === 'authority') {
+    return <Navigate to={`/authority/queue/${reportId}`} replace />
+  }
+  return <ReportTrackingPage />
+}
+
 /**
  * Route map = FRONTEND_PLAN.md §2, one-to-one.
  * All routes wired with real, role-protected screens.
@@ -67,15 +79,15 @@ export default function App() {
                 <Route path="/citizen/reports/new" element={<ReportWizardPage />} />
                 <Route path="/citizen/reports/new/details" element={<ReportWizardPage />} />
                 <Route path="/citizen/reports/new/review" element={<ReportWizardPage />} />
-                <Route path="/citizen/reports/:reportId" element={<ReportTrackingPage />} />
                 <Route path="/citizen/map" element={<CitizenMapPage />} />
                 <Route path="/citizen/settings" element={<CitizenSettingsPage />} />
               </Route>
             </Route>
 
-            {/* Authority workspace */}
-            <Route element={<RequireRole role={['authority', 'admin']} />}>
+            {/* Shared Report / Issue Detail Route for all authenticated roles */}
+            <Route element={<RequireRole role={['citizen', 'authority', 'admin']} />}>
               <Route element={<AppShell />}>
+                <Route path="/citizen/reports/:reportId" element={<CitizenReportDetailRoute />} />
                 <Route path="/authority/queue/:reportId" element={<AuthorityQueueDetailRoute />} />
               </Route>
             </Route>

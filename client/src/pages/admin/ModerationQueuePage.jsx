@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useState, useMemo, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  X,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useModerate } from '../../hooks/admin'
@@ -27,7 +28,7 @@ import { SkeletonList } from '../../components/ui/Skeleton'
 function useAllReports() {
   return useQuery({
     queryKey: ['reports', 'admin', 'all'],
-    queryFn: () => api('/reports?limit=50'),
+    queryFn: () => api('/reports?limit=100'),
   })
 }
 
@@ -37,13 +38,21 @@ function useAllReports() {
  * Tabs: All Flags / All Issues, New, In Process, Resolved.
  */
 export default function ModerationQueuePage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const urlQuery = searchParams.get('q') || ''
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'new' | 'in_process' | 'resolved'
   const [severityFilter, setSeverityFilter] = useState('all') // 'all' | 'critical' | 'high' | 'medium' | 'low'
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(urlQuery)
   const [localStatusMap, setLocalStatusMap] = useState({}) // { [issueId]: { status, action } }
 
+  useEffect(() => {
+    if (urlQuery !== undefined && urlQuery !== search) {
+      setSearch(urlQuery)
+    }
+  }, [urlQuery])
+
   const { data: categories } = useCategories()
-  const issuesQuery = useIssues({}, { refetchInterval: 15_000 })
+  const issuesQuery = useIssues({ limit: '100' }, { refetchInterval: 15_000 })
   const reportsQuery = useAllReports()
   const moderate = useModerate('issue')
 
@@ -180,16 +189,44 @@ export default function ModerationQueuePage() {
       if (statusFilter !== 'all' && item.workflowStatus !== statusFilter) return false
       if (severityFilter !== 'all' && item.severity !== severityFilter) return false
       if (search.trim()) {
-        const query = search.toLowerCase()
+        const query = search.trim().toLowerCase()
+        const cleanQuery = query.replace(/^#?um-?/i, '')
+        const short = shortId(item.id).toLowerCase()
+        const fullId = (item.id || '').toLowerCase()
+        const idMatch =
+          fullId.includes(query) ||
+          fullId.includes(cleanQuery) ||
+          short.includes(query) ||
+          short.includes(cleanQuery)
+
         const descMatch = (item.snippet || '').toLowerCase().includes(query)
-        const idMatch = (item.id || '').toLowerCase().includes(query)
         const submitterMatch = (item.submitter || '').toLowerCase().includes(query)
-        const catMatch = (item.primaryCategory || '').toLowerCase().includes(query)
-        if (!descMatch && !idMatch && !submitterMatch && !catMatch) return false
+        const catSlug = (item.primaryCategory || '').toLowerCase()
+        const catName = categoryLabel(categories, item.primaryCategory).toLowerCase()
+        const catMatch = catSlug.includes(query) || catName.includes(query)
+        const sevMatch =
+          (item.flagSeverity || '').toLowerCase().includes(query) ||
+          (item.severity || '').toLowerCase().includes(query)
+        const statusMatch =
+          (item.status || '').toLowerCase().includes(query) ||
+          (item.workflowStatus || '').toLowerCase().includes(query)
+        const reviewMatch = (item.reviewResult || '').toLowerCase().includes(query)
+
+        if (
+          !descMatch &&
+          !idMatch &&
+          !submitterMatch &&
+          !catMatch &&
+          !sevMatch &&
+          !statusMatch &&
+          !reviewMatch
+        ) {
+          return false
+        }
       }
       return true
     })
-  }, [queueItems, statusFilter, severityFilter, search])
+  }, [queueItems, statusFilter, severityFilter, search, categories])
 
   return (
     <div>
@@ -297,17 +334,38 @@ export default function ModerationQueuePage() {
             >
               Medium
             </button>
+            <button
+              type="button"
+              onClick={() => setSeverityFilter('low')}
+              className={`rounded-full px-3 py-1 font-semibold transition ${
+                severityFilter === 'low'
+                  ? 'bg-surface-panel text-emerald-700 shadow-xs'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              Low
+            </button>
           </div>
 
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
             <input
               type="text"
-              placeholder="Search issues..."
+              placeholder="Search issues, IDs, categories..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-44 rounded-full border border-line bg-surface-panel pl-8 pr-3 text-xs text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none"
+              className="h-8 w-48 sm:w-60 rounded-full border border-line bg-surface-panel pl-8 pr-7 text-xs text-ink placeholder:text-ink-muted focus:border-primary focus:outline-none"
             />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink cursor-pointer"
+                title="Clear search"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -319,13 +377,29 @@ export default function ModerationQueuePage() {
           <p className="text-sm text-status-critical" role="alert">{issuesQuery.error.message}</p>
         </Card>
       ) : filteredItems.length === 0 ? (
-        <Card>
+        <Card className="p-8 text-center">
           <EmptyState
-            title="No issues match this filter"
-            message={`No database issues found under ${
-              statusFilter === 'all' ? 'the selected criteria' : `"${statusFilter.replace('_', ' ')}"`
-            }.`}
+            title={search ? 'No search results found' : 'No issues match this filter'}
+            message={
+              search
+                ? `No database issues match "${search}". Try searching by incident ID, category, or keyword.`
+                : `No database issues found under ${
+                    statusFilter === 'all' ? 'the selected criteria' : `"${statusFilter.replace('_', ' ')}"`
+                  }.`
+            }
           />
+          {search && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSearch('')}
+                className="rounded-full text-xs font-semibold"
+              >
+                Clear Search Query
+              </Button>
+            </div>
+          )}
         </Card>
       ) : (
         <div className="space-y-4">
@@ -333,11 +407,15 @@ export default function ModerationQueuePage() {
             const isResolved = item.workflowStatus === 'resolved'
             const isCritical = item.severity === 'critical'
             const isHigh = item.severity === 'high'
+            const isMedium = item.severity === 'medium'
+            const isLow = item.severity === 'low'
             const borderColor = isCritical
               ? 'border-l-rose-500'
               : isHigh
               ? 'border-l-amber-500'
-              : 'border-l-sky-500'
+              : isMedium
+              ? 'border-l-sky-500'
+              : 'border-l-emerald-500'
 
             return (
               <div
@@ -353,13 +431,19 @@ export default function ModerationQueuePage() {
                           ? 'border-rose-300 bg-rose-50'
                           : isHigh
                           ? 'border-amber-300 bg-amber-50'
-                          : 'border-sky-300 bg-sky-50'
+                          : isMedium
+                          ? 'border-sky-300 bg-sky-50'
+                          : 'border-emerald-300 bg-emerald-50'
                       }`}
                     >
                       {isCritical ? (
                         <AlertCircle className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" />
-                      ) : (
+                      ) : isHigh ? (
                         <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+                      ) : isMedium ? (
+                        <AlertTriangle className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
                       )}
                       <span className="text-black">{item.flagSeverity}</span>
                     </span>

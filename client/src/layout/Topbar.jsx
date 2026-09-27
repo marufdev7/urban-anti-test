@@ -145,7 +145,9 @@ export default function Topbar({ onMenuClick }) {
 
   const handleSelectResult = (item) => {
     setDropdownOpen(false)
-    if (user?.role === 'authority') {
+    if (user?.role === 'admin') {
+      navigate(`/admin/queue/${item.id}`)
+    } else if (user?.role === 'authority') {
       navigate(`/authority/queue/${item.id}`)
     } else {
       navigate(`/citizen/reports/${item.id}`)
@@ -297,7 +299,13 @@ export default function Topbar({ onMenuClick }) {
                     onClick={() => handlePerformSearch()}
                     className="flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover hover:underline cursor-pointer"
                   >
-                    <span>View all results in Community Issues</span>
+                    <span>
+                      {user?.role === 'admin'
+                        ? 'View all results in Moderation Queue'
+                        : user?.role === 'authority'
+                        ? 'View all results in Work Queue'
+                        : 'View all results in Community Issues'}
+                    </span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </button>
 
