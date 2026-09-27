@@ -23,6 +23,16 @@ export function AuthProvider({ children }) {
     }
   })
 
+  // Purge legacy global avatar/name keys on startup so they don't bleed across users
+  useEffect(() => {
+    try {
+      localStorage.removeItem('urbanmend_custom_avatar')
+      localStorage.removeItem('urbanmend_custom_name')
+    } catch {
+      // ignore
+    }
+  }, [])
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       if (fbUser) {
@@ -34,6 +44,13 @@ export function AuthProvider({ children }) {
         setGoogleProfile(profile)
         try {
           localStorage.setItem('urbanmend_google_profile', JSON.stringify(profile))
+        } catch {
+          // ignore
+        }
+      } else {
+        setGoogleProfile(null)
+        try {
+          localStorage.removeItem('urbanmend_google_profile')
         } catch {
           // ignore
         }
@@ -86,6 +103,20 @@ export function AuthProvider({ children }) {
       } catch {
         // ignore
       }
+    } else {
+      // If logging in via password/credentials and NOT Google, clear any mismatched googleProfile
+      if (
+        user?.email &&
+        googleProfile?.email &&
+        user.email.toLowerCase() !== googleProfile.email.toLowerCase()
+      ) {
+        setGoogleProfile(null)
+        try {
+          localStorage.removeItem('urbanmend_google_profile')
+        } catch {
+          // ignore
+        }
+      }
     }
     queryClient.setQueryData(['session'], user)
     await queryClient.invalidateQueries()
@@ -102,8 +133,6 @@ export function AuthProvider({ children }) {
       await firebaseSignOut()
       return await api('/auth/logout', { method: 'POST' })
     },
-    // Even a failed logout call (expired session, network drop) must leave the
-    // UI logged out; the cookie can be cleaned up later.
     onSettled: () => {
       try {
         localStorage.removeItem('urbanmend_google_profile')
@@ -116,97 +145,139 @@ export function AuthProvider({ children }) {
     },
   })
 
-  const [customAvatar, setCustomAvatar] = useState(() => {
-    try {
-      return localStorage.getItem('urbanmend_custom_avatar') || ''
-    } catch {
-      return ''
-    }
-  })
+  // State tick to immediately re-render components when avatar or display name changes
+  const [profileTick, setProfileTick] = useState(0)
 
-  const [customName, setCustomName] = useState(() => {
-    try {
-      return localStorage.getItem('urbanmend_custom_name') || ''
-    } catch {
-      return ''
-    }
-  })
+  const rawUser = session.data ?? null
 
   const updateAvatar = (newAvatarUrl) => {
+    if (!rawUser) return
+    const idKey = rawUser.id ? String(rawUser.id) : ''
+    const emailKey = rawUser.email ? rawUser.email.toLowerCase() : ''
     try {
-      if (rawUser?.id) {
-        if (newAvatarUrl) {
-          localStorage.setItem(`urbanmend_custom_avatar_${rawUser.id}`, newAvatarUrl)
-        } else {
-          localStorage.removeItem(`urbanmend_custom_avatar_${rawUser.id}`)
+      if (newAvatarUrl) {
+        if (idKey) localStorage.setItem(`urbanmend_avatar_${idKey}`, newAvatarUrl)
+        if (emailKey) localStorage.setItem(`urbanmend_avatar_${emailKey}`, newAvatarUrl)
+      } else {
+        if (idKey) {
+          localStorage.removeItem(`urbanmend_avatar_${idKey}`)
+          localStorage.removeItem(`urbanmend_custom_avatar_${idKey}`)
+        }
+        if (emailKey) {
+          localStorage.removeItem(`urbanmend_avatar_${emailKey}`)
         }
       }
-      if (newAvatarUrl) {
-        localStorage.setItem('urbanmend_custom_avatar', newAvatarUrl)
-      } else {
-        localStorage.removeItem('urbanmend_custom_avatar')
-      }
+      // Purge any legacy global avatar
+      localStorage.removeItem('urbanmend_custom_avatar')
     } catch {
       // ignore
     }
-    setCustomAvatar(newAvatarUrl || '')
+    setProfileTick((t) => t + 1)
   }
 
   const updateDisplayName = (newName) => {
+    if (!rawUser) return
+    const idKey = rawUser.id ? String(rawUser.id) : ''
+    const emailKey = rawUser.email ? rawUser.email.toLowerCase() : ''
     try {
-      if (rawUser?.id) {
-        if (newName) {
-          localStorage.setItem(`urbanmend_custom_name_${rawUser.id}`, newName)
-        } else {
-          localStorage.removeItem(`urbanmend_custom_name_${rawUser.id}`)
+      if (newName) {
+        if (idKey) localStorage.setItem(`urbanmend_name_${idKey}`, newName)
+        if (emailKey) localStorage.setItem(`urbanmend_name_${emailKey}`, newName)
+      } else {
+        if (idKey) {
+          localStorage.removeItem(`urbanmend_name_${idKey}`)
+          localStorage.removeItem(`urbanmend_custom_name_${idKey}`)
+        }
+        if (emailKey) {
+          localStorage.removeItem(`urbanmend_name_${emailKey}`)
         }
       }
-      if (newName) {
-        localStorage.setItem('urbanmend_custom_name', newName)
-      } else {
-        localStorage.removeItem('urbanmend_custom_name')
-      }
+      // Purge any legacy global name
+      localStorage.removeItem('urbanmend_custom_name')
     } catch {
       // ignore
     }
-    setCustomName(newName || '')
+    setProfileTick((t) => t + 1)
   }
 
-  const rawUser = session.data ?? null
   const user = useMemo(() => {
     if (!rawUser) return null
+
+    const idKey = rawUser.id ? String(rawUser.id) : ''
+    const emailKey = rawUser.email ? rawUser.email.toLowerCase() : ''
+
+    // 1. User-specific custom avatar and name (STRICTLY scoped to this user)
     let userSpecificAvatar = ''
     let userSpecificName = ''
     try {
-      if (rawUser.id) {
-        userSpecificAvatar = localStorage.getItem(`urbanmend_custom_avatar_${rawUser.id}`) || ''
-        userSpecificName = localStorage.getItem(`urbanmend_custom_name_${rawUser.id}`) || ''
+      if (idKey) {
+        userSpecificAvatar =
+          localStorage.getItem(`urbanmend_avatar_${idKey}`) ||
+          localStorage.getItem(`urbanmend_custom_avatar_${idKey}`) ||
+          ''
+        userSpecificName =
+          localStorage.getItem(`urbanmend_name_${idKey}`) ||
+          localStorage.getItem(`urbanmend_custom_name_${idKey}`) ||
+          ''
+      }
+      if (!userSpecificAvatar && emailKey) {
+        userSpecificAvatar =
+          localStorage.getItem(`urbanmend_avatar_${emailKey}`) || ''
+      }
+      if (!userSpecificName && emailKey) {
+        userSpecificName =
+          localStorage.getItem(`urbanmend_name_${emailKey}`) || ''
       }
     } catch {
       // ignore
     }
+
+    // 2. Check if this active session matches Google Auth
+    const isGoogleAuthUser = Boolean(
+      emailKey &&
+      googleProfile?.email &&
+      emailKey === googleProfile.email.toLowerCase()
+    )
+
+    // 3. Effective Avatar resolution:
+    // - User-specific custom avatar takes priority
+    // - If it's a verified Google login, use authentic Google profile photo
+    // - Backend avatar / photo url if present
+    // - None (empty, defaults to role initials or icon)
     const effectiveAvatar =
       userSpecificAvatar ||
-      customAvatar ||
+      (isGoogleAuthUser ? googleProfile?.photoUrl : '') ||
       rawUser.avatarUrl ||
       rawUser.photoUrl ||
-      googleProfile?.photoUrl ||
       ''
+
+    // 4. Effective Display Name resolution:
+    // - User-specific custom display name takes priority
+    // - If it's a verified Google login, use authentic Google displayName
+    // - Backend fullName
+    // - Sensible role-tailored default
+    const defaultRoleName =
+      rawUser.role === 'admin'
+        ? 'System Administrator'
+        : rawUser.role === 'authority'
+          ? (rawUser.assignedArea ? `Authority (${rawUser.assignedArea})` : 'Municipal Officer')
+          : (emailKey ? emailKey.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Citizen User')
+
     const effectiveName =
       userSpecificName ||
-      customName ||
+      (isGoogleAuthUser ? googleProfile?.fullName : '') ||
       rawUser.fullName ||
-      googleProfile?.fullName ||
-      ''
+      defaultRoleName
 
     return {
       ...rawUser,
       fullName: effectiveName,
       avatarUrl: effectiveAvatar,
       photoUrl: effectiveAvatar,
-      email: rawUser.email || googleProfile?.email || '',
+      email: rawUser.email || (isGoogleAuthUser ? googleProfile?.email : '') || '',
+      isGoogleAuth: isGoogleAuthUser,
     }
-  }, [rawUser, googleProfile, customAvatar, customName])
+  }, [rawUser, googleProfile, profileTick])
 
   const value = {
     user,
