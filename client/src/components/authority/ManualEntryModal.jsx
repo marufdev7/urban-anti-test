@@ -53,8 +53,8 @@ const INTAKE_CHANNELS = [
 
 const URGENCY_LEVELS = [
   { id: 'low', label: 'Low', tone: 'bg-emerald-50 text-emerald-800 border-emerald-300' },
-  { id: 'medium', label: 'Medium', tone: 'bg-sky-50 text-sky-800 border-sky-300' },
-  { id: 'high', label: 'High', tone: 'bg-amber-50 text-amber-800 border-amber-300' },
+  { id: 'medium', label: 'Medium', tone: 'bg-amber-50 text-amber-800 border-amber-300' },
+  { id: 'high', label: 'High', tone: 'bg-orange-50 text-orange-900 border-orange-400' },
   { id: 'critical', label: 'Critical', tone: 'bg-rose-50 text-rose-800 border-rose-300' },
 ]
 

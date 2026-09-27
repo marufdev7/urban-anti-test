@@ -33,9 +33,9 @@ function sevTone(sev) {
     case 'critical':
       return 'border-rose-300 bg-rose-50 text-rose-700'
     case 'high':
-      return 'border-amber-300 bg-amber-50 text-amber-700'
+      return 'border-orange-300 bg-orange-50 text-orange-800'
     case 'medium':
-      return 'border-sky-300 bg-sky-50 text-sky-700'
+      return 'border-amber-300 bg-amber-50 text-amber-800'
     case 'low':
       return 'border-emerald-300 bg-emerald-50 text-emerald-700'
     default:
