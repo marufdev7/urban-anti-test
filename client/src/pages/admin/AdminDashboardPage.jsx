@@ -18,6 +18,7 @@ import {
   Eye,
   FileText,
   Filter,
+  Flag,
   Flame,
   Globe,
   HelpCircle,
@@ -379,7 +380,7 @@ export default function AdminDashboardPage() {
       clearanceStatus = {
         label: 'Steady Velocity',
         tone: 'border-teal-300 bg-teal-50 text-teal-700',
-        desc: 'Steady remediation and triage pace',
+        desc: 'Steady remediation and review pace',
       }
     } else {
       clearanceStatus = {
@@ -540,12 +541,11 @@ export default function AdminDashboardPage() {
     }
   })
 
-  // Lifecycle Flow Percentages
+  // Lifecycle Flow Percentages (4 active municipal workflow phases)
   const lifecycleTotal = Math.max(
     1,
-    submittedCount + triagedCount + acknowledgedCount + inProgressCount + resolvedCount
+    triagedCount + acknowledgedCount + inProgressCount + resolvedCount
   )
-  const submittedPct = Math.round((submittedCount / lifecycleTotal) * 100)
   const triagedPct = Math.round((triagedCount / lifecycleTotal) * 100)
   const acknowledgedPct = Math.round((acknowledgedCount / lifecycleTotal) * 100)
   const inProgressPct = Math.round((inProgressCount / lifecycleTotal) * 100)
@@ -737,10 +737,10 @@ export default function AdminDashboardPage() {
 
           <Link
             to="/admin/queue"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-panel px-3 py-2 text-xs font-bold text-ink shadow-2xs hover:border-primary hover:text-primary transition"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-line bg-surface-panel px-3 py-2 text-xs font-bold text-ink shadow-2xs hover:border-[#0e7490] hover:text-[#0e7490] transition"
           >
-            <Layers className="h-3.5 w-3.5 text-primary" />
-            <span>Triage Queue</span>
+            <Flag className="h-3.5 w-3.5 text-[#0e7490]" />
+            <span>Moderation Queue</span>
           </Link>
 
           {/* Time Window Selector */}
@@ -927,7 +927,7 @@ export default function AdminDashboardPage() {
                   <span>Operational Incident Lifecycle Pipeline</span>
                 </h3>
                 <p className="text-xs text-ink-muted mt-0.5">
-                  Real-time phase tracking from initial citizen submission to verified on-ground resolution.
+                  Real-time phase tracking from initial review to verified on-ground resolution.
                 </p>
               </div>
               <div className="text-xs text-ink-muted font-medium">
@@ -935,36 +935,9 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Step Pipeline Visualization */}
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {/* Step 1: Intake */}
-              <button
-                type="button"
-                onClick={() => setSelectedLifecycleStage(selectedLifecycleStage === 'submitted' ? 'all' : 'submitted')}
-                className={`flex flex-col justify-between p-3.5 rounded-xl border text-left transition cursor-pointer ${
-                  selectedLifecycleStage === 'submitted'
-                    ? 'border-slate-500 bg-slate-50 ring-2 ring-slate-400'
-                    : 'border-line bg-surface-panel hover:bg-surface-sunken'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                    1. Intake
-                  </span>
-                  <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-800">
-                    {submittedPct}%
-                  </span>
-                </div>
-                <div className="mt-2">
-                  <span className="text-xl font-black text-ink">{submittedCount}</span>
-                  <p className="text-[11px] text-ink-muted">Awaiting Triage</p>
-                </div>
-                <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
-                  <div className="h-full bg-slate-500 rounded-full" style={{ width: `${submittedPct}%` }} />
-                </div>
-              </button>
-
-              {/* Step 2: Under Review */}
+            {/* 4-Step Pipeline Visualization */}
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Step 1: Under Review */}
               <button
                 type="button"
                 onClick={() => setSelectedLifecycleStage(selectedLifecycleStage === 'triaged' ? 'all' : 'triaged')}
@@ -976,7 +949,7 @@ export default function AdminDashboardPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-sky-700">
-                    2. Under Review
+                    1. Under Review
                   </span>
                   <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">
                     {triagedPct}%
@@ -984,14 +957,14 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="mt-2">
                   <span className="text-xl font-black text-ink">{triagedCount}</span>
-                  <p className="text-[11px] text-ink-muted">Triaged & Validated</p>
+                  <p className="text-[11px] text-ink-muted">Reviewed & Validated</p>
                 </div>
                 <div className="mt-2 h-1.5 w-full rounded-full bg-slate-200 overflow-hidden">
                   <div className="h-full bg-sky-500 rounded-full" style={{ width: `${triagedPct}%` }} />
                 </div>
               </button>
 
-              {/* Step 3: Field Inspection */}
+              {/* Step 2: Field Inspection */}
               <button
                 type="button"
                 onClick={() => setSelectedLifecycleStage(selectedLifecycleStage === 'acknowledged' ? 'all' : 'acknowledged')}
@@ -1003,7 +976,7 @@ export default function AdminDashboardPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
-                    3. Inspection
+                    2. Inspection
                   </span>
                   <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
                     {acknowledgedPct}%
@@ -1018,19 +991,19 @@ export default function AdminDashboardPage() {
                 </div>
               </button>
 
-              {/* Step 4: Active Crews */}
+              {/* Step 3: Active Crews */}
               <button
                 type="button"
                 onClick={() => setSelectedLifecycleStage(selectedLifecycleStage === 'in_progress' ? 'all' : 'in_progress')}
                 className={`flex flex-col justify-between p-3.5 rounded-xl border text-left transition cursor-pointer ${
                   selectedLifecycleStage === 'in_progress'
-                    ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                    ? 'border-[#0e7490] bg-[#0e7490]/5 ring-2 ring-[#0e7490]'
                     : 'border-line bg-surface-panel hover:bg-surface-sunken'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-[#0e7490]">
-                    4. In Progress
+                    3. In Progress
                   </span>
                   <span className="rounded-full bg-[#0e7490]/15 px-1.5 py-0.5 text-[10px] font-bold text-[#0e7490]">
                     {inProgressPct}%
@@ -1045,7 +1018,7 @@ export default function AdminDashboardPage() {
                 </div>
               </button>
 
-              {/* Step 5: Solved & Closed */}
+              {/* Step 4: Solved & Closed */}
               <button
                 type="button"
                 onClick={() => setSelectedLifecycleStage(selectedLifecycleStage === 'resolved' ? 'all' : 'resolved')}
@@ -1057,7 +1030,7 @@ export default function AdminDashboardPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
-                    5. Solved & Closed
+                    4. Solved & Closed
                   </span>
                   <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">
                     {resolvedPct}%
@@ -1327,7 +1300,7 @@ export default function AdminDashboardPage() {
                   <span>Recent Municipal Incidents & Dispatch Feed</span>
                 </h3>
                 <p className="text-xs text-ink-muted mt-0.5">
-                  Live operational incident log with direct triage access and citizen corroboration counts.
+                  Live operational incident log with direct moderation access and citizen corroboration counts.
                 </p>
               </div>
 
