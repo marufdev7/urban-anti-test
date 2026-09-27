@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Clock3,
   Compass,
+  ExternalLink,
   ImageOff,
   Info,
   Lock,
@@ -478,21 +479,42 @@ export default function ReportTrackingPage() {
     },
   ]
 
+  const backLink =
+    user?.role === 'admin'
+      ? '/admin/reports'
+      : user?.role === 'authority'
+        ? '/authority/reports'
+        : '/citizen/dashboard'
+
+  const backLabel =
+    user?.role === 'admin' || user?.role === 'authority'
+      ? 'Back to Reports'
+      : 'Back to Dashboard'
+
   return (
     <div className="w-full space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <Link
-            to="/citizen/dashboard"
+            to={backLink}
             className="flex shrink-0 items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink transition-colors"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Back to Dashboard
+            {backLabel}
           </Link>
           <span className="text-line" aria-hidden="true">|</span>
           <h1 className="truncate text-lg font-bold text-ink">Report #{shortId(report.id)}</h1>
         </div>
         <div className="flex items-center gap-2">
+          {(user?.role === 'authority' || user?.role === 'admin') && report?.issueId && (
+            <Link
+              to={user?.role === 'admin' ? `/admin/queue/${report.issueId}` : `/authority/queue/${report.issueId}`}
+              className="inline-flex items-center gap-1 rounded-full border border-primary bg-primary px-3 py-1 text-xs font-semibold text-white hover:bg-primary-hover shadow-xs transition"
+            >
+              <span>Open Clustered Incident</span>
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          )}
           {cls.severitySignal && (
             <StatusBadge
               pill
@@ -507,7 +529,7 @@ export default function ReportTrackingPage() {
             label={badge.label}
             className={`font-bold text-black ${isResolved ? 'bg-emerald-100 text-black border-emerald-400' : 'text-black'}`}
           />
-          {!isResolved && targetIssueId && (
+          {!isResolved && targetIssueId && (!user?.role || user?.role === 'citizen') && (
             <ConfirmIssueButton
               issueId={targetIssueId}
               initialCount={activeCorroborationCount}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, FileText, FilterX, Image, Search, ShieldCheck, Trash2 } from 'lucide-react'
+import { ExternalLink, Eye, FileText, FilterX, Image, Search, ShieldCheck, Trash2 } from 'lucide-react'
 import { api, normalizeMediaUrl } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
 import { badgeFor, categoryLabel, useCategories } from '../../hooks/data'
@@ -15,6 +15,7 @@ import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 import StatusBadge from '../../components/ui/StatusBadge'
 import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModal'
+import ReportDetailModal from '../../components/report/ReportDetailModal'
 
 const STATUSES = [
   { value: '', label: 'All Statuses' },
@@ -29,6 +30,7 @@ export default function AuthorityReportsPage() {
   const { data: categories } = useCategories()
   const [searchParams, setSearchParams] = useSearchParams()
   const [removeTarget, setRemoveTarget] = useState(null)
+  const [selectedReport, setSelectedReport] = useState(null)
 
   const q = searchParams.get('q') ?? ''
   const category = searchParams.get('category') ?? ''
@@ -219,6 +221,15 @@ export default function AuthorityReportsPage() {
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-xs text-ink-faint">
                     <span>{formatDateTime(r.createdAt)}</span>
                     <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReport(r)}
+                        className="inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/20 transition cursor-pointer"
+                        title="View report details"
+                      >
+                        <Eye className="h-3 w-3" />
+                        <span>Details</span>
+                      </button>
                       {r.issueId && (
                         <Link
                           to={`/authority/queue/${r.issueId}`}
@@ -269,12 +280,16 @@ export default function AuthorityReportsPage() {
                 return (
                   <tr key={r.id} className="hover:bg-surface-sunken/60">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
+                      <div
+                        className="flex items-center gap-2.5 cursor-pointer group"
+                        onClick={() => setSelectedReport(r)}
+                        title="Click to view report details"
+                      >
                         {photo ? (
                           <img
                             src={normalizeMediaUrl(photo.thumbnailUrl || photo.url)}
                             alt=""
-                            className="h-9 w-9 rounded object-cover border border-line"
+                            className="h-9 w-9 rounded object-cover border border-line group-hover:border-primary transition"
                             onError={(e) => {
                               if (photo.url && e.currentTarget.src !== normalizeMediaUrl(photo.url)) {
                                 e.currentTarget.src = normalizeMediaUrl(photo.url)
@@ -288,13 +303,13 @@ export default function AuthorityReportsPage() {
                           />
                         ) : null}
                         <div
-                          className="flex h-9 w-9 items-center justify-center rounded border border-line bg-surface-sunken text-ink-faint"
+                          className="flex h-9 w-9 items-center justify-center rounded border border-line bg-surface-sunken text-ink-faint group-hover:border-primary transition"
                           style={{ display: photo ? 'none' : 'flex' }}
                         >
                           <Image className="h-4 w-4" />
                         </div>
                         <div className="min-w-0">
-                          <span className="font-mono text-xs font-bold text-ink">
+                          <span className="font-mono text-xs font-bold text-ink group-hover:text-primary transition">
                             #{shortId(r.id)}
                           </span>
                           <p className="max-w-xs truncate text-xs text-ink-muted">
@@ -326,12 +341,22 @@ export default function AuthorityReportsPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReport(r)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 hover:border-primary transition cursor-pointer"
+                          title="View complete report details"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>View Details</span>
+                        </button>
                         {r.issueId && (
                           <Link
                             to={`/authority/queue/${r.issueId}`}
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-ink-muted hover:text-primary hover:underline"
+                            title="Open clustered incident"
                           >
-                            View incident
+                            Incident <ExternalLink className="h-3 w-3" />
                           </Link>
                         )}
                         <button
@@ -416,6 +441,21 @@ export default function AuthorityReportsPage() {
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['authority-reports'] })
           }}
+        />
+      )}
+      {selectedReport && (
+        <ReportDetailModal
+          open={Boolean(selectedReport)}
+          onClose={() => setSelectedReport(null)}
+          report={selectedReport}
+          onRemove={(rep) =>
+            setRemoveTarget({
+              id: rep.id,
+              type: 'report',
+              description: rep.description,
+              category: categoryLabel(categories, rep.classification?.category),
+            })
+          }
         />
       )}
     </div>

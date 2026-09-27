@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Eye,
   FileText,
   FilterX,
   Image,
@@ -22,6 +23,7 @@ import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 import StatusBadge from '../../components/ui/StatusBadge'
 import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModal'
+import ReportDetailModal from '../../components/report/ReportDetailModal'
 
 const ACTIVE_STATUSES = [
   { value: '', label: 'All Statuses' },
@@ -35,6 +37,7 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
   const { data: categories } = useCategories()
   const [searchParams, setSearchParams] = useSearchParams()
   const [removeTarget, setRemoveTarget] = useState(null)
+  const [selectedReport, setSelectedReport] = useState(null)
 
   const currentTab = searchParams.get('tab') || defaultTab
   const isDeletedTab = currentTab === 'deleted'
@@ -368,17 +371,19 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
+                          onClick={() => setSelectedReport(r)}
+                          className="inline-flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/20 transition cursor-pointer"
+                          title="View full report details"
+                        >
+                          <Eye className="h-3 w-3" /> Details
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setRemoveTarget(r)}
                           className="flex items-center gap-1 font-semibold text-status-critical hover:underline"
                         >
                           <Trash2 className="h-3 w-3" /> Remove
                         </button>
-                        <Link
-                          to="/admin/queue"
-                          className="flex items-center gap-1 font-semibold text-primary hover:underline"
-                        >
-                          <ShieldAlert className="h-3 w-3" /> Moderate
-                        </Link>
                       </div>
                     )}
                   </div>
@@ -424,12 +429,16 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                   >
                     {/* Report & Photo */}
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2.5">
+                      <div
+                        className="flex items-center gap-2.5 cursor-pointer group"
+                        onClick={() => setSelectedReport(r)}
+                        title="Click to view report details"
+                      >
                         {photo ? (
                           <img
                             src={normalizeMediaUrl(photo.thumbnailUrl || photo.url)}
                             alt=""
-                            className="h-9 w-9 rounded object-cover border border-line"
+                            className="h-9 w-9 rounded object-cover border border-line group-hover:border-primary transition"
                             onError={(e) => {
                               if (photo.url && e.currentTarget.src !== normalizeMediaUrl(photo.url)) {
                                 e.currentTarget.src = normalizeMediaUrl(photo.url)
@@ -443,13 +452,13 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                           />
                         ) : null}
                         <div
-                          className="flex h-9 w-9 items-center justify-center rounded border border-line bg-surface-sunken text-ink-faint"
+                          className="flex h-9 w-9 items-center justify-center rounded border border-line bg-surface-sunken text-ink-faint group-hover:border-primary transition"
                           style={{ display: photo ? 'none' : 'flex' }}
                         >
                           <Image className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 max-w-xs">
-                          <span className="font-mono text-xs font-bold text-ink">
+                          <span className="font-mono text-xs font-bold text-ink group-hover:text-primary transition">
                             #{shortId(r.id)}
                           </span>
                           <p className="truncate text-xs text-ink-muted">
@@ -529,22 +538,25 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
 
                         {/* Actions */}
                         <td className="px-4 py-3 text-right">
-                          <div className="flex items-center justify-end gap-2.5">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReport(r)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary hover:bg-primary/20 hover:border-primary transition cursor-pointer"
+                              title="View complete report details"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>View Details</span>
+                            </button>
                             <button
                               type="button"
                               onClick={() => setRemoveTarget(r)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-status-critical hover:underline"
+                              className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50/70 px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition cursor-pointer"
                               title="Discard report with audit notes"
                             >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Remove
+                              <Trash2 className="h-3 w-3" />
+                              <span>Remove</span>
                             </button>
-                            <Link
-                              to="/admin/queue"
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
-                            >
-                              Moderate
-                            </Link>
                           </div>
                         </td>
                       </>
@@ -615,6 +627,16 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['admin-reports'] })
           }}
+        />
+      )}
+
+      {/* Full Report Details Modal */}
+      {selectedReport && (
+        <ReportDetailModal
+          open={Boolean(selectedReport)}
+          onClose={() => setSelectedReport(null)}
+          report={selectedReport}
+          onRemove={(rep) => setRemoveTarget(rep)}
         />
       )}
     </div>

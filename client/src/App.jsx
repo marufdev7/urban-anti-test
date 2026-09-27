@@ -40,14 +40,6 @@ function AuthorityQueueDetailRoute() {
 }
 
 function CitizenReportDetailRoute() {
-  const { user } = useAuth()
-  const { reportId } = useParams()
-  if (user?.role === 'admin') {
-    return <Navigate to={`/admin/queue/${reportId}`} replace />
-  }
-  if (user?.role === 'authority') {
-    return <Navigate to={`/authority/queue/${reportId}`} replace />
-  }
   return <ReportTrackingPage />
 }
 
@@ -99,6 +91,7 @@ export default function App() {
                 <Route path="/authority/my-issues" element={<QueuePage />} />
                 <Route path="/authority/map" element={<AuthorityMapPage />} />
                 <Route path="/authority/reports" element={<AuthorityReportsPage />} />
+                <Route path="/authority/reports/:reportId" element={<ReportTrackingPage />} />
                 <Route path="/authority/settings" element={<AuthoritySettingsPage />} />
               </Route>
             </Route>
@@ -112,6 +105,7 @@ export default function App() {
                 <Route path="/admin/moderation/:flagId" element={<ModerationQueuePage />} />
                 <Route path="/admin/map" element={<AdminMapPage />} />
                 <Route path="/admin/reports" element={<AdminReportsPage />} />
+                <Route path="/admin/reports/:reportId" element={<ReportTrackingPage />} />
                 <Route path="/admin/deleted-reports" element={<AdminReportsPage defaultTab="deleted" />} />
                 <Route path="/admin/authorities" element={<AuthoritiesPage />} />
                 <Route path="/admin/authorities/new" element={<ProvisionAuthorityPage />} />
