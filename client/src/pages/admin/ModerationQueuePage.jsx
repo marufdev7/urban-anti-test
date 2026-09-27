@@ -6,6 +6,10 @@ import {
   AlertTriangle,
   Check,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   Clock,
   ExternalLink,
   EyeOff,
@@ -32,6 +36,23 @@ function useAllReports() {
   })
 }
 
+function getPageNumbers(current, total) {
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, i) => i + 1)
+  }
+  const pages = []
+  pages.push(1)
+  if (current > 3) pages.push('...')
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  if (current < total - 2) pages.push('...')
+  pages.push(total)
+  return pages
+}
+
 /**
  * Admin Moderation & Work Queue.
  * Displays ALL actual issues from the database.
@@ -44,12 +65,18 @@ export default function ModerationQueuePage() {
   const [severityFilter, setSeverityFilter] = useState('all') // 'all' | 'critical' | 'high' | 'medium' | 'low'
   const [search, setSearch] = useState(urlQuery)
   const [localStatusMap, setLocalStatusMap] = useState({}) // { [issueId]: { status, action } }
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
   useEffect(() => {
     if (urlQuery !== undefined && urlQuery !== search) {
       setSearch(urlQuery)
     }
   }, [urlQuery])
+
+  useEffect(() => {
+    setPage(1)
+  }, [statusFilter, severityFilter, search, pageSize])
 
   const { data: categories } = useCategories()
   const issuesQuery = useIssues({ limit: '100' }, { refetchInterval: 15_000 })
@@ -83,13 +110,6 @@ export default function ModerationQueuePage() {
     } catch (err) {
       setSubmitError(err.message)
     }
-  }
-
-  const handleMoveToInProcess = (id) => {
-    setLocalStatusMap((prev) => ({
-      ...prev,
-      [id]: { status: 'in_process' },
-    }))
   }
 
   const handleResolveDirectly = (id) => {
@@ -228,6 +248,18 @@ export default function ModerationQueuePage() {
     })
   }, [queueItems, statusFilter, severityFilter, search, categories])
 
+  const totalItems = filteredItems.length
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
+  const currentPage = Math.min(Math.max(1, page), totalPages)
+
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return filteredItems.slice(start, start + pageSize)
+  }, [filteredItems, currentPage, pageSize])
+
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const endItem = Math.min(currentPage * pageSize, totalItems)
+
   return (
     <div>
       {/* Header */}
@@ -317,7 +349,7 @@ export default function ModerationQueuePage() {
               onClick={() => setSeverityFilter('high')}
               className={`rounded-full px-3 py-1 font-semibold transition ${
                 severityFilter === 'high'
-                  ? 'bg-surface-panel text-amber-700 shadow-xs'
+                  ? 'bg-surface-panel text-orange-700 shadow-xs'
                   : 'text-ink-muted hover:text-ink'
               }`}
             >
@@ -328,7 +360,7 @@ export default function ModerationQueuePage() {
               onClick={() => setSeverityFilter('medium')}
               className={`rounded-full px-3 py-1 font-semibold transition ${
                 severityFilter === 'medium'
-                  ? 'bg-surface-panel text-sky-700 shadow-xs'
+                  ? 'bg-surface-panel text-amber-700 shadow-xs'
                   : 'text-ink-muted hover:text-ink'
               }`}
             >
@@ -403,7 +435,7 @@ export default function ModerationQueuePage() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredItems.map((item) => {
+          {paginatedItems.map((item) => {
             const isResolved = item.workflowStatus === 'resolved'
             const isCritical = item.severity === 'critical'
             const isHigh = item.severity === 'high'
@@ -412,9 +444,9 @@ export default function ModerationQueuePage() {
             const borderColor = isCritical
               ? 'border-l-rose-500'
               : isHigh
-              ? 'border-l-amber-500'
+              ? 'border-l-orange-500'
               : isMedium
-              ? 'border-l-sky-500'
+              ? 'border-l-amber-500'
               : 'border-l-emerald-500'
 
             return (
@@ -426,26 +458,26 @@ export default function ModerationQueuePage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2.5">
                     <span
-                      className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-0.5 text-xs font-bold text-black ${
+                      className={`inline-flex items-center gap-1.5 rounded border px-2.5 py-0.5 text-xs font-bold ${
                         isCritical
-                          ? 'border-rose-300 bg-rose-50'
+                          ? 'border-rose-300 bg-rose-50 text-rose-800'
                           : isHigh
-                          ? 'border-amber-300 bg-amber-50'
+                          ? 'border-orange-300 bg-orange-50 text-orange-900'
                           : isMedium
-                          ? 'border-sky-300 bg-sky-50'
-                          : 'border-emerald-300 bg-emerald-50'
+                          ? 'border-amber-300 bg-amber-50 text-amber-900'
+                          : 'border-emerald-300 bg-emerald-50 text-emerald-800'
                       }`}
                     >
                       {isCritical ? (
                         <AlertCircle className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" />
                       ) : isHigh ? (
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
+                        <AlertTriangle className="h-3.5 w-3.5 text-orange-600" aria-hidden="true" />
                       ) : isMedium ? (
-                        <AlertTriangle className="h-3.5 w-3.5 text-sky-600" aria-hidden="true" />
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600" aria-hidden="true" />
                       ) : (
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
                       )}
-                      <span className="text-black">{item.flagSeverity}</span>
+                      <span>{item.flagSeverity}</span>
                     </span>
 
                     <span className="font-mono text-xs text-ink-muted">
@@ -454,19 +486,19 @@ export default function ModerationQueuePage() {
 
                     {/* Workflow Status Pill */}
                     {item.workflowStatus === 'new' && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 border border-sky-200 px-2.5 py-0.5 text-[11px] font-semibold text-black">
-                        <Clock className="h-3 w-3 text-sky-600" />
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[11px] font-semibold text-slate-800">
+                        <Clock className="h-3 w-3 text-slate-600" />
                         New
                       </span>
                     )}
                     {item.workflowStatus === 'in_process' && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-black">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[11px] font-semibold text-amber-900">
                         <Clock className="h-3 w-3 text-amber-600" />
                         In Process
                       </span>
                     )}
                     {item.workflowStatus === 'resolved' && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[11px] font-bold text-black">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 text-[11px] font-bold text-emerald-900">
                         <CheckCircle2 className="h-3 w-3 text-emerald-600" />
                         Resolved
                       </span>
@@ -493,7 +525,7 @@ export default function ModerationQueuePage() {
                 </h3>
 
                 {/* Description Quote Box */}
-                <div className="mt-3 rounded-lg bg-sky-50/70 p-3.5 text-xs leading-relaxed text-ink/90">
+                <div className="mt-3 rounded-lg bg-surface-sunken/60 border border-line/60 p-3.5 text-xs leading-relaxed text-ink/90">
                   <span>&ldquo;{item.snippet}&rdquo;</span>
                 </div>
 
@@ -513,7 +545,7 @@ export default function ModerationQueuePage() {
                   {/* Contextual Action Buttons */}
                   {isResolved ? (
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-bold text-black">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
                         Resolved
                       </span>
@@ -530,17 +562,6 @@ export default function ModerationQueuePage() {
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
-                      {item.workflowStatus === 'new' && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => handleMoveToInProcess(item.id)}
-                          className="text-xs bg-sky-50 text-sky-700 border-sky-200 hover:bg-sky-100 flex items-center gap-1"
-                        >
-                          <Clock className="h-3.5 w-3.5" />
-                          Start Review
-                        </Button>
-                      )}
                       <Button
                         variant="secondary"
                         size="sm"
@@ -574,6 +595,104 @@ export default function ModerationQueuePage() {
               </div>
             )
           })}
+
+          {/* Pagination Footer */}
+          {totalItems > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-line bg-surface-panel px-4 py-3 text-xs text-ink-muted shadow-2xs mt-4">
+              <div className="flex items-center gap-3">
+                <span>
+                  Showing <strong className="font-semibold text-ink">{startItem}–{endItem}</strong> of{' '}
+                  <strong className="font-semibold text-ink">{totalItems}</strong> issues
+                </span>
+                <div className="flex items-center gap-1.5 border-l border-line pl-3">
+                  <span>Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="rounded border border-line bg-surface-sunken px-2 py-0.5 text-xs text-ink focus:border-primary cursor-pointer"
+                  >
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage(1)}
+                    className="text-xs px-2.5 py-1"
+                    title="First Page"
+                  >
+                    <ChevronsLeft className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">First</span>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="text-xs px-2.5 py-1"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Prev</span>
+                  </Button>
+
+                  <div className="flex items-center gap-1 px-1">
+                    {getPageNumbers(currentPage, totalPages).map((p, idx) =>
+                      p === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="px-1 text-ink-muted font-bold">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPage(p)}
+                          className={`h-7 min-w-7 rounded-md px-2 text-xs font-semibold transition cursor-pointer ${
+                            p === currentPage
+                              ? 'bg-primary text-white shadow-2xs'
+                              : 'border border-line bg-surface-sunken text-ink hover:bg-surface-panel'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="text-xs px-2.5 py-1"
+                    title="Next Page"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setPage(totalPages)}
+                    className="text-xs px-2.5 py-1"
+                    title="Last Page"
+                  >
+                    <span className="hidden sm:inline">Last</span>
+                    <ChevronsRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
