@@ -16,10 +16,12 @@ import EmptyState from '../../components/ui/EmptyState'
 import PageHeader from '../../components/ui/PageHeader'
 import ReportCard from '../../components/report/ReportCard'
 import CommunityIssueCard from '../../components/issue/CommunityIssueCard'
+import { SkeletonCards } from '../../components/ui/Skeleton'
 import { useAuth } from '../../auth/AuthContext'
 
 /** Haversine distance in km between two {lat, lng} points. */
 function haversineKm(a, b) {
+  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return 9999
   const toRad = (deg) => (deg * Math.PI) / 180
   const R = 6371 // Earth's radius in km
   const dLat = toRad(b.lat - a.lat)
@@ -33,15 +35,19 @@ function haversineKm(a, b) {
 /** Citizen dashboard with real live database data. */
 export default function DashboardPage() {
   const { user } = useAuth()
-  const { data: reportsData, isLoading, isError, error } = useQuery({
+  const { data: reportsData, isLoading: isReportsLoading, isError, error } = useQuery({
     queryKey: ['reports', 'mine', 'dashboard'],
     queryFn: () => api('/reports?limit=100'),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
     refetchInterval: 10_000,
   })
 
-  const { data: issuesData } = useQuery({
+  const { data: issuesData, isLoading: isIssuesLoading } = useQuery({
     queryKey: ['issues', 'public', 'dashboard'],
     queryFn: () => api('/issues?limit=100'),
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
     refetchInterval: 10_000,
   })
 
@@ -199,13 +205,17 @@ export default function DashboardPage() {
               />
             </div>
             <div className="mt-3 flex items-baseline gap-2">
-              <span
-                className={`text-3xl font-bold tracking-tight ${
-                  tone === 'critical' ? 'text-status-critical' : 'text-ink'
-                }`}
-              >
-                {value}
-              </span>
+              {isReportsLoading && !reportsData ? (
+                <div className="h-9 w-14 rounded-panel bg-surface-sunken animate-pulse" />
+              ) : (
+                <span
+                  className={`text-3xl font-bold tracking-tight ${
+                    tone === 'critical' ? 'text-status-critical' : 'text-ink'
+                  }`}
+                >
+                  {value}
+                </span>
+              )}
               <span
                 className={`text-xs ${
                   tone === 'resolved'
@@ -241,19 +251,26 @@ export default function DashboardPage() {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-ink">Nearby Activity</h2>
-            {nearbyRadiusKm && (
+            {isIssuesLoading && !issuesData ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-ping" />
+                Scanning District...
+              </span>
+            ) : nearbyRadiusKm ? (
               <span className="inline-flex items-center gap-1 rounded-full bg-[#005a4c]/10 px-2 py-0.5 text-[11px] font-semibold text-[#005a4c]">
                 <MapPin className="h-3 w-3" />
                 {nearbyRadiusKm} km
               </span>
-            )}
+            ) : null}
           </div>
           <p className="text-xs text-ink-muted">
-            {nearbyRadiusKm === 1
-              ? 'Community issues within 1 km of your location.'
-              : nearbyRadiusKm === 5
-                ? 'No issues within 1 km — showing community issues within 5 km.'
-                : 'Recent community infrastructure issues reported in your district.'}
+            {isIssuesLoading && !issuesData
+              ? 'Locating active community issues and calculating proximity…'
+              : nearbyRadiusKm === 1
+                ? 'Community issues within 1 km of your location.'
+                : nearbyRadiusKm === 5
+                  ? 'No issues within 1 km — showing community issues within 5 km.'
+                  : 'Recent community infrastructure issues reported in your district.'}
           </p>
         </div>
         <Link
@@ -265,7 +282,9 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      {nearbyItems.length === 0 ? (
+      {isIssuesLoading && !issuesData ? (
+        <SkeletonCards count={6} />
+      ) : nearbyItems.length === 0 ? (
         <Card className="p-8 text-center">
           <EmptyState
             title="No nearby issues found"
