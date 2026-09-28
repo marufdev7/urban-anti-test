@@ -2,12 +2,20 @@ import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
+  Check,
+  Copy,
   Download,
+  Eye,
+  EyeOff,
   FileText,
+  Layers,
   Lock,
+  Mail,
   MapPin,
   Pencil,
+  Phone,
   Search,
+  Shield,
   ShieldCheck,
   UserCheck,
   UserPlus,
@@ -122,8 +130,13 @@ function EditAuthorityModal({ authority, onClose, categories }) {
   const [assignedArea, setAssignedArea] = useState(authority?.assignedArea || '')
   const [status, setStatus] = useState(authority?.status || 'active')
   const [categoryScope, setCategoryScope] = useState(authority?.categoryScope || [])
+  const [requireTwoFactor, setRequireTwoFactor] = useState(
+    Boolean(authority?.requireTwoFactor ?? authority?.require_two_factor),
+  )
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
 
@@ -143,6 +156,39 @@ function EditAuthorityModal({ authority, onClose, categories }) {
     }
   }
 
+  const applyPreset = (presetType) => {
+    const allKeys = activeCategories.map((c) => c.key)
+    switch (presetType) {
+      case 'all':
+        setCategoryScope(allKeys)
+        break
+      case 'infrastructure':
+        setCategoryScope(
+          allKeys.filter((k) =>
+            ['roads_transport', 'street_lighting', 'public_structures'].includes(k),
+          ),
+        )
+        break
+      case 'sanitation_water':
+        setCategoryScope(
+          allKeys.filter((k) =>
+            ['water_drainage', 'sanitation_waste'].includes(k),
+          ),
+        )
+        break
+      default:
+        break
+    }
+  }
+
+  const handleCopyId = () => {
+    if (authority?.id) {
+      navigator.clipboard?.writeText(authority.id)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError(null)
@@ -150,7 +196,7 @@ function EditAuthorityModal({ authority, onClose, categories }) {
 
     if (password) {
       if (password.length < 8) {
-        setError('Password must be at least 8 characters.')
+        setError('Password must be at least 8 characters long.')
         return
       }
       if (password !== confirmPassword) {
@@ -159,61 +205,102 @@ function EditAuthorityModal({ authority, onClose, categories }) {
       }
     }
 
+    if (phone.trim() && !/^\+?[0-9]{7,15}$/.test(phone.trim())) {
+      setError('Please enter a valid phone number in international format (e.g. +8801700000000).')
+      return
+    }
+
     try {
       const payload = {
         userId: authority.id,
         assignedArea,
         status,
         categoryScope,
+        requireTwoFactor,
       }
-      if (email && email !== authority.email) payload.email = email
-      if (phone !== (authority.phone ?? '')) payload.phone = phone
+      if (email && email !== authority.email) payload.email = email.trim()
+      if (phone !== (authority.phone ?? '')) payload.phone = phone.trim()
       if (password) payload.password = password
 
       await adminUpdate.mutateAsync(payload)
       setSuccess(true)
       setTimeout(() => {
         onClose()
-      }, 600)
+      }, 700)
     } catch (err) {
       setError(err.message || 'Failed to update authority.')
     }
   }
+
+  const initials = (authority?.email || 'AU').slice(0, 2).toUpperCase()
 
   return (
     <Dialog
       open={Boolean(authority)}
       onClose={onClose}
       title="Edit Authority Officer"
-      className="max-w-xl"
+      className="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Officer name & ID badge */}
-        <div className="flex items-center justify-between rounded-panel bg-surface-sunken/60 p-3">
-          <div>
-            <p className="text-xs font-semibold text-ink-muted">Authority Account</p>
-            <p className="text-sm font-bold text-ink">{authority?.email}</p>
+        {/* Officer Profile Header Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-sunken/60 p-3.5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
+              {initials}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-ink">{authority?.email}</p>
+              <div className="flex items-center gap-2 text-2xs text-ink-muted mt-0.5">
+                <span>{authority?.phone || 'No phone recorded'}</span>
+                <span>•</span>
+                <span>{getJurisdictionLabel(authority?.assignedArea)}</span>
+              </div>
+            </div>
           </div>
-          <span className="rounded border border-line bg-surface-panel px-2 py-0.5 text-xs text-ink-muted font-mono">
-            ID: {shortId(authority?.id)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-md border border-line bg-surface-panel px-2.5 py-1 text-2xs font-mono font-bold text-ink">
+              <span>#UM-{shortId(authority?.id)}</span>
+              <button
+                type="button"
+                onClick={handleCopyId}
+                title="Copy Full UUID"
+                className="ml-1 text-ink-muted hover:text-ink transition cursor-pointer"
+              >
+                {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+              </button>
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-2xs font-bold capitalize ${
+                status === 'active'
+                  ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
+                  : status === 'suspended'
+                  ? 'border border-rose-300 bg-rose-50 text-rose-800'
+                  : 'border border-line bg-surface-panel text-ink-muted'
+              }`}
+            >
+              {status}
+            </span>
+          </div>
         </div>
 
         {/* Email & Phone */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Input
-            label="Email Address"
+            label="Official Email Address"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="off"
           />
           <Input
-            label="Phone Number"
+            label="Contact Phone Number"
             type="tel"
             placeholder="+8801700000000"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            autoComplete="off"
+            hint="E.164 phone with country code."
           />
         </div>
 
@@ -221,7 +308,7 @@ function EditAuthorityModal({ authority, onClose, categories }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-semibold text-ink">
-              Jurisdiction Area
+              Territorial Jurisdiction
             </label>
             <Select
               options={JURISDICTION_AREAS}
@@ -241,12 +328,12 @@ function EditAuthorityModal({ authority, onClose, categories }) {
               aria-label="Account status"
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-panel border border-line bg-surface-panel px-3 py-2 text-sm focus:border-primary"
+              className="w-full rounded-panel border border-line bg-surface-panel px-3 py-2 text-sm focus:border-primary cursor-pointer"
             >
-              <option value="active">Active</option>
+              <option value="active">Active (Full operational access)</option>
               <option value="verified">Verified</option>
               <option value="registered">Registered</option>
-              <option value="suspended">Suspended</option>
+              <option value="suspended">Suspended (Access blocked)</option>
               <option value="deprovisioned">Deprovisioned</option>
             </select>
             <p className="mt-1 text-2xs text-ink-muted">
@@ -255,64 +342,143 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           </div>
         </div>
 
-        {/* Category Scope */}
+        {/* Departmental Category Scope */}
         <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-xs font-semibold text-ink">
-              Departmental Category Scope
-            </label>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <label className="text-xs font-semibold text-ink">
+                Departmental Category Scope
+              </label>
+              <p className="text-2xs text-ink-muted mt-0.5">
+                Categories the officer is permitted to triage, dispatch, and resolve.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-bold text-primary">
+                {categoryScope.length} of {activeCategories.length} Selected
+              </span>
+              <button
+                type="button"
+                onClick={selectAllCategories}
+                className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+              >
+                {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
+              </button>
+            </div>
+          </div>
+
+          {/* Quick preset chips */}
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            <span className="text-2xs text-ink-muted font-medium">Presets:</span>
             <button
               type="button"
-              onClick={selectAllCategories}
-              className="text-xs font-semibold text-primary hover:underline"
+              onClick={() => applyPreset('all')}
+              className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-2xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
             >
-              {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
+              All ({activeCategories.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('infrastructure')}
+              className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-2xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+            >
+              Infrastructure
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('sanitation_water')}
+              className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-2xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+            >
+              Water &amp; Sanitation
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-2 rounded-panel border border-line p-2.5 bg-surface-sunken/30 max-h-36 overflow-y-auto">
+
+          {/* Clean Grid of Categories (no cramped scroll) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-line p-3 bg-surface-sunken/30">
             {activeCategories.map((cat) => {
               const checked = categoryScope.includes(cat.key)
               return (
                 <label
                   key={cat.key}
-                  className={`flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs transition ${
+                  className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs transition select-none ${
                     checked
-                      ? 'bg-primary-soft/50 font-semibold text-primary-dark'
-                      : 'hover:bg-surface-sunken text-ink'
+                      ? 'border-primary bg-primary/5 text-primary-dark font-semibold shadow-2xs'
+                      : 'border-line bg-surface-panel hover:bg-surface-sunken/60 text-ink'
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => toggleCategory(cat.key)}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  <span className="truncate">{cat.label.en}</span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleCategory(cat.key)}
+                      className="h-3.5 w-3.5 accent-primary cursor-pointer shrink-0"
+                    />
+                    <span className="truncate">{cat.label?.en || cat.key}</span>
+                  </div>
+                  {checked && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
                 </label>
               )
             })}
           </div>
         </div>
 
+        {/* Security Policy (2FA) */}
+        <div className="rounded-xl border border-line bg-surface-sunken/30 p-3">
+          <label className="flex cursor-pointer items-start gap-2.5 select-none">
+            <input
+              type="checkbox"
+              checked={requireTwoFactor}
+              onChange={(e) => setRequireTwoFactor(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded accent-primary cursor-pointer"
+            />
+            <div>
+              <span className="text-xs font-bold text-ink flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                Require Two-Factor Authentication (2FA)
+              </span>
+              <p className="mt-0.5 text-2xs text-ink-muted">
+                Mandates TOTP authentication device confirmation on sign-in.
+              </p>
+            </div>
+          </label>
+        </div>
+
         {/* Set / Reset Password */}
-        <div className="rounded-panel border border-line bg-surface-sunken/40 p-3 space-y-2.5">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-            <Lock className="h-3.5 w-3.5 text-primary" />
-            <span>Set New Login Password (Optional)</span>
+        <div className="rounded-xl border border-line bg-surface-sunken/40 p-3.5 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-ink">
+              <Lock className="h-3.5 w-3.5 text-primary" />
+              <span>Set New Login Password (Optional)</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="inline-flex items-center gap-1 text-2xs font-medium text-ink-muted hover:text-ink cursor-pointer"
+            >
+              {showPassword ? (
+                <>
+                  <EyeOff className="h-3 w-3" /> Hide
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3 w-3" /> Show
+                </>
+              )}
+            </button>
           </div>
           <p className="text-2xs text-ink-muted">
             Leave blank if you do not want to change the officer's password.
           </p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
             <Input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="New password (min 8 chars)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
             />
             <Input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               placeholder="Confirm new password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
@@ -322,21 +488,21 @@ function EditAuthorityModal({ authority, onClose, categories }) {
         </div>
 
         {error && (
-          <p className="text-xs font-medium text-status-critical" role="alert">
+          <div className="rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs text-rose-800" role="alert">
             {error}
-          </p>
+          </div>
         )}
 
         {success && (
-          <p className="text-xs font-semibold text-status-resolved" role="status">
-            ✓ Authority updated successfully!
-          </p>
+          <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-2.5 text-xs font-semibold text-emerald-800" role="status">
+            ✓ Authority officer updated successfully!
+          </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t border-line">
+        <div className="flex items-center justify-between pt-3 border-t border-line">
           <Link
             to={`/admin/authorities/${authority?.id}`}
-            className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+            className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
           >
             <span>Full Profile &amp; Audit Log</span>
             <ArrowRight className="h-3 w-3" />
@@ -351,8 +517,10 @@ function EditAuthorityModal({ authority, onClose, categories }) {
               type="submit"
               loading={adminUpdate.isPending}
               disabled={adminUpdate.isPending}
+              className="flex items-center gap-1.5"
             >
-              Save Changes
+              <Check className="h-3.5 w-3.5" />
+              <span>Save Changes</span>
             </Button>
           </div>
         </div>
