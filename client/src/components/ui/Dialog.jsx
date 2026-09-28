@@ -35,7 +35,7 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose?.()
       }}
@@ -46,21 +46,21 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`w-full ${hasCustomMaxWidth ? '' : 'max-w-md'} max-h-[90vh] flex flex-col rounded-panel bg-surface-panel shadow-menu border border-line ${className}`}
+        className={`w-full ${hasCustomMaxWidth ? '' : 'max-w-md'} max-h-[90vh] flex flex-col rounded-xl bg-surface-panel shadow-2xl shadow-slate-950/25 border border-line ring-1 ring-black/5 ${className}`}
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
+        <header className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3.5">
           <h2 className="text-base font-semibold text-ink">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-panel p-1 text-ink-muted hover:bg-surface-sunken"
+            className="rounded-lg p-1 text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </header>
         <div className="overflow-y-auto px-5 py-4 text-sm text-ink">{children}</div>
-        {footer && <footer className="shrink-0 flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
+        {footer && <footer className="shrink-0 flex justify-end gap-2 border-t border-line bg-surface-sunken/30 px-5 py-3 rounded-b-xl">{footer}</footer>}
       </div>
     </div>
   )

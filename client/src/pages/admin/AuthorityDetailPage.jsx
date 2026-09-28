@@ -11,6 +11,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  FileDown,
   FileText,
   History,
   Layers,
@@ -27,9 +28,16 @@ import {
   UserCheck,
   UserPlus,
 } from 'lucide-react'
+import { useAuth } from '../../auth/AuthContext'
 import { useAuthorityProfile, useUpdateUser } from '../../hooks/admin'
 import { useCategories } from '../../hooks/data'
 import { formatDate, formatDateTime, shortId, timeAgo } from '../../lib/format'
+import {
+  exportOfficerAuditPdf,
+  exportAuditLogCsv,
+  formatActionTitle,
+  getActorDisplayName,
+} from '../../lib/pdfExport'
 import { JURISDICTION_AREAS, getJurisdictionLabel } from '../../lib/zones'
 import Button from '../../components/ui/Button'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
@@ -176,8 +184,275 @@ function getEventActionMeta(event) {
   }
 }
 
+const PARAM_KEY_LABELS = {
+  name: 'Full Name',
+  title: 'Title',
+  status: 'Account Status',
+  category_scope: 'Category Scope',
+  categoryScope: 'Category Scope',
+  assigned_area: 'Territorial Zone / Jurisdiction',
+  assignedArea: 'Territorial Zone / Jurisdiction',
+  assignee_id: 'Assigned Response Crew',
+  assigneeId: 'Assigned Response Crew',
+  severity: 'Severity Level',
+  email: 'Official Email',
+  phone: 'Contact Phone',
+  require_two_factor: 'Two-Factor Authentication',
+  requireTwoFactor: 'Two-Factor Authentication',
+  priority: 'Priority Flag',
+  comment: 'Directive Note',
+  description: 'Incident Description',
+  resolution_notes: 'Resolution Summary',
+  resolutionNotes: 'Resolution Summary',
+}
+
+function formatParamValue(v) {
+  if (v === null || v === undefined) return <span className="text-ink-muted italic">None</span>
+  if (typeof v === 'boolean') {
+    return (
+      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold ${v ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}`}>
+        {v ? 'Enabled' : 'Disabled'}
+      </span>
+    )
+  }
+  if (Array.isArray(v)) {
+    if (v.length === 0) return <span className="text-ink-muted italic">Empty list</span>
+    return (
+      <div className="flex flex-wrap gap-1">
+        {v.map((item, idx) => (
+          <span key={idx} className="bg-surface-sunken border border-line text-ink rounded px-1.5 py-0.5 text-2xs font-medium">
+            {String(item).replace(/_/g, ' ')}
+          </span>
+        ))}
+      </div>
+    )
+  }
+  if (typeof v === 'object') {
+    return (
+      <div className="space-y-0.5 text-2xs">
+        {Object.entries(v).map(([k, val]) => (
+          <div key={k} className="flex gap-1.5">
+            <span className="font-semibold text-ink-muted">{k}:</span>
+            <span className="text-ink">{String(val)}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
+  return <span className="font-medium text-ink">{String(v).replace(/_/g, ' ')}</span>
+}
+
+/**
+ * Human-readable inspector for individual audit events (replaces raw JSON).
+ */
+function OfficerInspectModalContent({ event, onClose }) {
+  if (!event) return null
+
+  const meta = getEventActionMeta(event)
+  const ActionIcon = meta.Icon || Activity
+  const actorDisplayName = getActorDisplayName(event)
+  const isActorAdmin = event.actorRole === 'admin' || (event.actorEmail || '').includes('admin')
+
+  const beforeObj = event.before && typeof event.before === 'object' ? event.before : null
+  const afterObj = event.after && typeof event.after === 'object' ? event.after : null
+
+  const diffRows = useMemo(() => {
+    if (!beforeObj && !afterObj) return []
+    if (beforeObj && afterObj) {
+      const allKeys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]))
+      const nonIdKeys = allKeys.filter(
+        (k) => !['id', '_id', 'uuid', 'pk', 'created_at', 'updated_at', 'at'].includes(k)
+      )
+      const keysToCheck = nonIdKeys.length > 0 ? nonIdKeys : allKeys
+      return keysToCheck
+        .filter((k) => JSON.stringify(beforeObj[k]) !== JSON.stringify(afterObj[k]))
+        .map((k) => ({
+          key: k,
+          label: PARAM_KEY_LABELS[k] || k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          before: beforeObj[k],
+          after: afterObj[k],
+        }))
+    }
+    return []
+  }, [beforeObj, afterObj])
+
+  const reason =
+    event.metadata?.reason ||
+    event.after?.reason ||
+    event.before?.reason ||
+    (event.action === 'issue.comment_created' ? event.after?.comment : null) ||
+    event.metadata?.comment
+
+  return (
+    <div className="space-y-4 text-xs">
+      {/* 1. Header Overview Card */}
+      <div className="rounded-xl border border-line bg-surface-sunken/40 p-3.5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold ${meta.badgeColor}`}>
+              <ActionIcon className="h-3.5 w-3.5" />
+              <span>{meta.label}</span>
+            </span>
+            <span className="text-2xs font-mono text-ink-muted">#{shortId(event.id)}</span>
+          </div>
+          <span className="text-2xs text-ink-muted">
+            {formatDateTime(event.at)} ({timeAgo(event.at)})
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div>
+            <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted block mb-0.5">
+              Operating Officer / Actor
+            </span>
+            <div className="flex items-center gap-2">
+              <div className={`flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold ${isActorAdmin ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'}`}>
+                {actorDisplayName.charAt(0)}
+              </div>
+              <div>
+                <p className="font-bold text-ink leading-none">{actorDisplayName}</p>
+                <p className="text-2xs text-ink-muted mt-0.5">{event.actorEmail || 'System Officer'} &bull; <span className="uppercase font-semibold">{event.actorRole || 'System'}</span></p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted block mb-0.5">
+              Target Entity Record
+            </span>
+            <div>
+              <p className="font-bold text-ink uppercase tracking-wide text-2xs">{event.targetType || 'User Record'}</p>
+              <p className="font-mono text-xs font-semibold text-primary mt-0.5">
+                {event.targetType === 'issue' ? (
+                  <Link to={`/admin/queue/${event.targetId}`} className="hover:underline">
+                    #UM-{shortId(event.targetId)}
+                  </Link>
+                ) : event.targetType === 'user' ? (
+                  <Link to={`/admin/authorities/${event.targetId}`} className="hover:underline">
+                    #USR-{shortId(event.targetId)}
+                  </Link>
+                ) : (
+                  `#${shortId(event.targetId)}`
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Structured Normal Text Diff Display */}
+      {diffRows.length > 0 ? (
+        <div className="rounded-xl border border-line overflow-hidden shadow-xs">
+          <div className="bg-surface-sunken px-4 py-2 border-b border-line flex items-center justify-between">
+            <span className="font-bold text-xs text-ink">Decision &amp; State Modifications</span>
+            <span className="text-2xs text-ink-muted">{diffRows.length} field{diffRows.length === 1 ? '' : 's'} updated</span>
+          </div>
+          <div className="divide-y divide-line bg-surface-panel">
+            {diffRows.map((row) => (
+              <div key={row.key} className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
+                <span className="font-semibold text-ink text-xs">{row.label}</span>
+                <div className="rounded-lg bg-surface-sunken/60 p-2 border border-line/60">
+                  <span className="text-3xs uppercase tracking-wider font-bold text-ink-muted block mb-1">
+                    Previous State
+                  </span>
+                  <div className="line-through text-slate-500 text-xs">
+                    {formatParamValue(row.before)}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-emerald-50/70 p-2 border border-emerald-200/70">
+                  <span className="text-3xs uppercase tracking-wider font-bold text-emerald-800 block mb-1">
+                    Updated State
+                  </span>
+                  <div className="text-xs">
+                    {formatParamValue(row.after)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : afterObj ? (
+        <div className="rounded-xl border border-line overflow-hidden shadow-xs">
+          <div className="bg-surface-sunken px-4 py-2 border-b border-line font-bold text-xs text-ink">
+            Provisioned Entity Parameters
+          </div>
+          <div className="p-3 bg-surface-panel divide-y divide-line">
+            {Object.entries(afterObj).map(([k, val]) => {
+              if (['id', '_id', 'uuid', 'pk'].includes(k)) return null
+              return (
+                <div key={k} className="py-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-ink-muted">{PARAM_KEY_LABELS[k] || k.replace(/_/g, ' ')}:</span>
+                  <span className="font-medium text-ink">{formatParamValue(val)}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-line bg-surface-panel p-4 text-xs text-ink">
+          <p className="font-medium">{meta.narrative}</p>
+        </div>
+      )}
+
+      {/* 3. Reason Callout */}
+      {reason && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3 text-xs space-y-1">
+          <span className="font-bold text-sky-900 block">Audit Reason &amp; Operational Directive</span>
+          <p className="italic text-ink/90 leading-relaxed">&ldquo;{reason}&rdquo;</p>
+        </div>
+      )}
+
+      {/* 4. Subtle Collapsible Technical Details (Hidden by default) */}
+      <details className="group rounded-lg border border-line bg-surface-sunken/30 text-2xs">
+        <summary className="px-3 py-2 font-semibold text-ink-muted cursor-pointer hover:text-ink select-none flex items-center justify-between">
+          <span>Technical JSON Payload (For Auditors &amp; Developers)</span>
+          <span className="text-3xs text-ink-muted">Click to toggle</span>
+        </summary>
+        <div className="p-3 border-t border-line space-y-2">
+          {event.before && (
+            <div>
+              <span className="font-bold text-ink">Raw State Before:</span>
+              <pre className="rounded bg-slate-900 text-slate-100 p-2 overflow-x-auto font-mono text-3xs mt-1">
+                {JSON.stringify(event.before, null, 2)}
+              </pre>
+            </div>
+          )}
+          {event.after && (
+            <div>
+              <span className="font-bold text-ink">Raw State After:</span>
+              <pre className="rounded bg-slate-900 text-emerald-300 p-2 overflow-x-auto font-mono text-3xs mt-1">
+                {JSON.stringify(event.after, null, 2)}
+              </pre>
+            </div>
+          )}
+          {event.metadata && Object.keys(event.metadata).length > 0 && (
+            <div>
+              <span className="font-bold text-ink">Context Metadata:</span>
+              <pre className="rounded bg-slate-900 text-slate-200 p-2 overflow-x-auto font-mono text-3xs mt-1">
+                {JSON.stringify(event.metadata, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </details>
+
+      {/* 5. Footer */}
+      <div className="flex items-center justify-between border-t border-line pt-3">
+        <span className="text-2xs text-ink-muted flex items-center gap-1.5 font-medium">
+          <ShieldCheck className="h-4 w-4 text-emerald-600" />
+          Cryptographically recorded in immutable audit ledger
+        </span>
+        <Button size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function AuthorityDetailPage() {
   const { authorityId } = useParams()
+  const { user } = useAuth()
   const { data: categories } = useCategories()
   const { data, isLoading, isError, error, refetch, isFetching } = useAuthorityProfile(authorityId)
 
@@ -722,15 +997,47 @@ export default function AuthorityDetailPage() {
             <div className="text-xs text-ink-muted">
               Chronological immutable ledger of actions performed by or targeting this officer account.
             </div>
-            <div className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-ink-faint" />
-              <input
-                type="text"
-                placeholder="Search audit actions, actors..."
-                value={activitySearch}
-                onChange={(e) => setActivitySearch(e.target.value)}
-                className="w-full rounded-panel border border-line bg-surface-panel pl-8 pr-3 py-1.5 text-xs focus:border-primary focus:outline-none"
-              />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-ink-faint" />
+                <input
+                  type="text"
+                  placeholder="Search audit actions, actors..."
+                  value={activitySearch}
+                  onChange={(e) => setActivitySearch(e.target.value)}
+                  className="w-full rounded-panel border border-line bg-surface-panel pl-8 pr-3 py-1.5 text-xs focus:border-primary focus:outline-none"
+                />
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  exportOfficerAuditPdf({
+                    events: filteredActivityLog,
+                    officer: authority,
+                    user,
+                  })
+                }
+                className="h-8 gap-1.5 text-xs font-semibold text-primary hover:bg-primary/5 flex items-center border-primary/30"
+                title="Export this officer's activity log and audit history as PDF"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                <span>Export as PDF</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  exportAuditLogCsv({
+                    events: filteredActivityLog,
+                    filename: `audit_officer_${(authority?.name || 'officer').replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.csv`,
+                  })
+                }
+                className="h-8 text-xs text-ink-muted hover:text-ink hover:bg-surface-sunken"
+                title="Export this officer's activity log as CSV"
+              >
+                <span>CSV</span>
+              </Button>
             </div>
           </div>
 
@@ -1053,65 +1360,12 @@ export default function AuthorityDetailPage() {
 
       {/* Inspect Diff Modal */}
       <Dialog
-        open={!!inspectEvent}
+        open={Boolean(inspectEvent)}
         onClose={() => setInspectEvent(null)}
-        title={inspectEvent ? `Audit Record: ${inspectEvent.action}` : 'Audit Record'}
+        title={inspectEvent ? `Audit Record: ${formatActionTitle(inspectEvent.action)}` : 'Audit Record'}
+        className="max-w-2xl"
       >
-        {inspectEvent && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="p-2.5 rounded bg-surface-sunken border border-line">
-                <span className="text-ink-muted block text-2xs uppercase font-bold">Timestamp</span>
-                <span className="font-medium text-ink">{formatDateTime(inspectEvent.at)}</span>
-              </div>
-              <div className="p-2.5 rounded bg-surface-sunken border border-line">
-                <span className="text-ink-muted block text-2xs uppercase font-bold">Actor</span>
-                <span className="font-medium text-ink">{inspectEvent.actorName} ({inspectEvent.actorEmail || 'System'})</span>
-              </div>
-              <div className="p-2.5 rounded bg-surface-sunken border border-line">
-                <span className="text-ink-muted block text-2xs uppercase font-bold">Target Type</span>
-                <span className="font-medium text-ink">{inspectEvent.targetType || 'User'}</span>
-              </div>
-              <div className="p-2.5 rounded bg-surface-sunken border border-line">
-                <span className="text-ink-muted block text-2xs uppercase font-bold">Target ID</span>
-                <span className="font-medium font-mono text-ink">{inspectEvent.targetId}</span>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-ink-muted">State Diff (Before vs After)</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="rounded-panel border border-line bg-slate-50 p-3">
-                  <span className="text-2xs font-bold uppercase text-amber-700 block mb-1">State Before Change</span>
-                  <pre className="text-2xs font-mono text-ink overflow-x-auto whitespace-pre-wrap max-h-48">
-                    {inspectEvent.before ? JSON.stringify(inspectEvent.before, null, 2) : '(none / empty)'}
-                  </pre>
-                </div>
-                <div className="rounded-panel border border-line bg-emerald-50/50 p-3">
-                  <span className="text-2xs font-bold uppercase text-emerald-700 block mb-1">State After Change</span>
-                  <pre className="text-2xs font-mono text-ink overflow-x-auto whitespace-pre-wrap max-h-48">
-                    {inspectEvent.after ? JSON.stringify(inspectEvent.after, null, 2) : '(none / empty)'}
-                  </pre>
-                </div>
-              </div>
-            </div>
-
-            {inspectEvent.metadata && Object.keys(inspectEvent.metadata).length > 0 && (
-              <div className="rounded-panel border border-line bg-surface-sunken p-3">
-                <span className="text-2xs font-bold uppercase text-ink-muted block mb-1">Context Metadata</span>
-                <pre className="text-2xs font-mono text-ink overflow-x-auto whitespace-pre-wrap max-h-32">
-                  {JSON.stringify(inspectEvent.metadata, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <Button variant="ghost" onClick={() => setInspectEvent(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
+        <OfficerInspectModalContent event={inspectEvent} onClose={() => setInspectEvent(null)} />
       </Dialog>
     </div>
   )

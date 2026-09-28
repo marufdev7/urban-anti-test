@@ -479,7 +479,7 @@ export function formatActionTitle(action = '') {
         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
         .join(' '),
     )
-    .join(' — ')
+    .join(' - ')
 }
 
 /**
@@ -522,15 +522,20 @@ export function formatAuditChangeDetails(event) {
 
   if (before && after && typeof before === 'object' && typeof after === 'object') {
     const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
-    for (const key of allKeys) {
-      if (['id', 'created_at', 'updated_at', 'at'].includes(key) && allKeys.length > 2) {
-        continue
-      }
+    // Filter out technical id / timestamp keys if any business key changed
+    const nonTechnicalKeys = allKeys.filter(
+      (k) => !['id', '_id', 'uuid', 'pk', 'created_at', 'updated_at', 'at'].includes(k)
+    )
+    const keysToCheck = nonTechnicalKeys.length > 0 ? nonTechnicalKeys : allKeys
+
+    for (const key of keysToCheck) {
       const bVal = before[key]
       const aVal = after[key]
       if (JSON.stringify(bVal) !== JSON.stringify(aVal)) {
         const label = keyLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-        changes.push(`${label}: ${formatVal(bVal)} ➔ ${formatVal(aVal)}`)
+        const formattedB = ['id', '_id', 'uuid', 'pk'].includes(key) ? shortId(bVal) : formatVal(bVal)
+        const formattedA = ['id', '_id', 'uuid', 'pk'].includes(key) ? shortId(aVal) : formatVal(aVal)
+        changes.push(`${label}: ${formattedB} -> ${formattedA}`)
       }
     }
   } else if (!before && after && typeof after === 'object') {
@@ -728,4 +733,151 @@ export function exportAuditLogCsv({ events = [], filename = null }) {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+/**
+ * Export an individual authority officer's audit trail and activity history to PDF.
+ */
+export function exportOfficerAuditPdf({
+  events = [],
+  officer = null,
+  user = null,
+  filename = null,
+}) {
+  const doc = new jsPDF({
+    orientation: 'landscape',
+    unit: 'mm',
+    format: 'a4',
+  })
+
+  const pageWidth = doc.internal.pageSize.getWidth()
+  const pageHeight = doc.internal.pageSize.getHeight()
+
+  const primaryColor = [14, 116, 144] // #0e7490 Deep Cyan
+  const darkTextColor = [15, 23, 42] // #0f172a Slate-900
+  const mutedTextColor = [100, 116, 139] // #64748b Slate-500
+  const lightBg = [248, 250, 252] // #f8fafc
+
+  // Header Banner
+  doc.setFillColor(...primaryColor)
+  doc.rect(0, 0, pageWidth, 24, 'F')
+
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(16)
+  doc.text('UrbanMend Officer Activity & Audit Record', 14, 11)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  const officerName = officer?.name || officer?.email || 'Officer'
+  doc.text(`PERSONNEL AUDIT LEDGER - ${officerName.toUpperCase()}`, 14, 18)
+
+  const nowStr = new Date().toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+  doc.setFontSize(8)
+  doc.text(`Generated: ${nowStr}`, pageWidth - 14, 11, { align: 'right' })
+  doc.text(
+    `Exported by: ${user?.name || user?.email || 'System Administrator'}`,
+    pageWidth - 14,
+    18,
+    { align: 'right' }
+  )
+
+  // Officer Profile Scope Card
+  let currentY = 30
+  doc.setFillColor(...lightBg)
+  doc.setDrawColor(226, 232, 240)
+  doc.roundedRect(14, currentY, pageWidth - 28, 16, 2, 2, 'FD')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(...primaryColor)
+  doc.text('OFFICER CREDENTIALS & OPERATIONAL SCOPE:', 18, currentY + 5.5)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(...darkTextColor)
+
+  const zone = officer?.assignedArea || officer?.assigned_area || 'All Municipal Zones'
+  const officerStatus = (officer?.status || 'Active').toUpperCase()
+
+  doc.text(`Officer: ${officerName} (${officer?.email || 'N/A'})`, 18, currentY + 11.5)
+  doc.text(`Jurisdiction: ${zone}`, 110, currentY + 11.5)
+  doc.text(`Status: ${officerStatus} | Recorded Events: ${events.length}`, 200, currentY + 11.5)
+
+  currentY += 22
+
+  const tableData = events.map((e) => {
+    const timeStr = formatDateTime(e.at)
+    const actorName = getActorDisplayName(e)
+    const roleLabel = (e.actorRole || 'System').toUpperCase()
+    const actorStr = `${actorName}\n(${e.actorEmail || (e.actorId ? shortId(e.actorId) : 'N/A')})\n${roleLabel}`
+    const actionStr = formatActionTitle(e.action)
+    const targetStr = `${(e.targetType || 'entity').toUpperCase()} #${shortId(e.targetId)}`
+    const details = formatAuditChangeDetails(e)
+
+    return [
+      timeStr,
+      actorStr,
+      actionStr,
+      targetStr,
+      details,
+    ]
+  })
+
+  autoTable(doc, {
+    startY: currentY,
+    head: [['Timestamp', 'Actor (Who)', 'Action Taken', 'Target Entity', 'Change Details & Audit Reason']],
+    body: tableData.length > 0 ? tableData : [['No activity records found for this officer', '', '', '', '']],
+    theme: 'grid',
+    headStyles: {
+      fillColor: primaryColor,
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+      fontSize: 8,
+      cellPadding: 3,
+    },
+    bodyStyles: {
+      fontSize: 7.5,
+      textColor: darkTextColor,
+      cellPadding: 2.5,
+    },
+    alternateRowStyles: {
+      fillColor: [250, 250, 250],
+    },
+    columnStyles: {
+      0: { cellWidth: 32 },
+      1: { cellWidth: 55 },
+      2: { cellWidth: 44, fontStyle: 'bold' },
+      3: { cellWidth: 32 },
+      4: { cellWidth: 'auto' },
+    },
+    didDrawPage: (data) => {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.5)
+      doc.setTextColor(...mutedTextColor)
+      const footerY = pageHeight - 8
+      doc.setDrawColor(226, 232, 240)
+      doc.line(14, footerY - 2, pageWidth - 14, footerY - 2)
+      doc.text(
+        'UrbanMend Personnel Audit - Individual Officer Ledger - Confidential',
+        14,
+        footerY + 2
+      )
+      doc.text(
+        `Page ${data.pageNumber} of ${doc.internal.getNumberOfPages()}`,
+        pageWidth - 14,
+        footerY + 2,
+        { align: 'right' }
+      )
+    },
+    margin: { left: 14, right: 14, bottom: 14 },
+  })
+
+  const safeOfficerName = (officer?.name || officer?.email || 'officer')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+  const defaultFilename = `audit_officer_${safeOfficerName}_${new Date().toISOString().slice(0, 10)}.pdf`
+  doc.save(filename || defaultFilename)
 }
