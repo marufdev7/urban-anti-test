@@ -147,4 +147,39 @@ export async function forwardGeocode(query) {
   }
 }
 
+/**
+ * Multi-result place search for interactive autocomplete.
+ */
+export async function searchPlaces(query, city = '', limit = 5) {
+  if (!query?.trim() || query.trim().length < 2) return []
+  try {
+    const sanitized = query.trim()
+    const fullQuery = city && !sanitized.toLowerCase().includes(city.toLowerCase())
+      ? `${sanitized}, ${city}, Bangladesh`
+      : `${sanitized}, Bangladesh`
+    const res = await fetch(
+      `/nominatim-proxy/search?format=jsonv2&q=${encodeURIComponent(fullQuery)}&limit=${limit}&accept-language=en,bn`,
+    )
+    if (!res.ok) return []
+    const data = await res.json()
+    if (!Array.isArray(data)) return []
+    return data.map((item) => {
+      const parts = (item.display_name || '').split(',')
+      const shortName = item.name || parts[0]?.trim() || 'Location'
+      const secondary = parts.slice(1, 4).join(', ').trim()
+      return {
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+        displayName: item.display_name,
+        shortName,
+        secondaryText: secondary,
+        category: item.category || item.class || 'place',
+        type: item.type || 'location',
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
 

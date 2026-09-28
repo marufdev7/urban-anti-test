@@ -150,7 +150,7 @@ export default function Sidebar({ onNavigate }) {
           }
         >
           <Settings className="h-5 w-5" aria-hidden="true" />
-          Settings
+          Profile &amp; Settings
         </NavLink>
       </div>
     </aside>

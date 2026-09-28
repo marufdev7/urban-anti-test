@@ -45,6 +45,7 @@ import Input from '../../components/ui/Input'
 import PageHeader from '../../components/ui/PageHeader'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
+import TabLoadingSkeleton from '../../components/ui/TabLoadingSkeleton'
 
 const MUNICIPAL_SHIELD_AVATAR = {
   id: 'official-shield',
@@ -61,6 +62,31 @@ export default function AuthoritySettingsPage() {
 
   // Active Settings Tab
   const [activeTab, setActiveTab] = useState('profile') // 'profile' | 'scope' | 'security' | 'notifications'
+  const [isTabLoading, setIsTabLoading] = useState(false)
+  const tabTimerRef = useRef(null)
+
+  const TAB_LABELS = {
+    profile: 'Profile & Contact Details',
+    scope: 'Jurisdiction & Mandate Scope',
+    security: 'Security & Two-Factor Authentication',
+    notifications: 'Notification Settings',
+  }
+
+  useEffect(() => {
+    return () => {
+      if (tabTimerRef.current) clearTimeout(tabTimerRef.current)
+    }
+  }, [])
+
+  const handleTabChange = (tabId) => {
+    if (tabId === activeTab && !isTabLoading) return
+    setActiveTab(tabId)
+    setIsTabLoading(true)
+    if (tabTimerRef.current) clearTimeout(tabTimerRef.current)
+    tabTimerRef.current = setTimeout(() => {
+      setIsTabLoading(false)
+    }, 500)
+  }
 
   // Profile Form state
   const [displayName, setDisplayName] = useState(user?.fullName || '')
@@ -327,8 +353,8 @@ export default function AuthoritySettingsPage() {
             </div>
 
             <div className="flex items-center gap-2 rounded-full bg-black/35 backdrop-blur-md px-3.5 py-1 text-[11px] font-semibold text-white/90 border border-white/20 shadow-xs">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Active Operational Duty</span>
+              <span className={`h-2 w-2 rounded-full ${user?.status === 'suspended' ? 'bg-rose-400' : 'bg-emerald-400 animate-pulse'}`} />
+              <span>{user?.status === 'suspended' ? 'Account Suspended' : 'Active Duty'}</span>
             </div>
           </div>
         </div>
@@ -380,9 +406,14 @@ export default function AuthoritySettingsPage() {
                   </button>
                 </div>
 
-                {/* Clear label placed under profile picture */}
-                <span className="mt-2 hidden sm:inline-block text-[10px] font-bold tracking-wider uppercase text-ink-faint">
-                  Municipal Official
+                {/* Dynamic account status placed under profile picture */}
+                <span className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  user?.status === 'suspended'
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${user?.status === 'suspended' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                  {user?.status === 'suspended' ? 'Suspended' : 'Active Account'}
                 </span>
               </div>
 
@@ -395,10 +426,6 @@ export default function AuthoritySettingsPage() {
                   <span className="inline-flex items-center gap-1 rounded-full border border-[#005a4c]/20 bg-[#005a4c]/10 px-3 py-1 text-xs font-bold text-[#005a4c]">
                     <ShieldCheck className="h-3.5 w-3.5" />
                     <span>Authority Command</span>
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                    <span>Verified Staff</span>
                   </span>
                 </div>
 
@@ -475,7 +502,7 @@ export default function AuthoritySettingsPage() {
           <div className="overflow-hidden rounded-2xl border border-line bg-surface-panel p-2 shadow-xs space-y-1">
             <button
               type="button"
-              onClick={() => setActiveTab('profile')}
+              onClick={() => handleTabChange('profile')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'profile'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -496,7 +523,7 @@ export default function AuthoritySettingsPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('scope')}
+              onClick={() => handleTabChange('scope')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'scope'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -517,7 +544,7 @@ export default function AuthoritySettingsPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('security')}
+              onClick={() => handleTabChange('security')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'security'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -538,7 +565,7 @@ export default function AuthoritySettingsPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('notifications')}
+              onClick={() => handleTabChange('notifications')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'notifications'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -608,8 +635,12 @@ export default function AuthoritySettingsPage() {
 
         {/* Right Rail: Settings Panels (lg:col-span-8 xl:col-span-9) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-6">
-          {/* TAB 1: PROFILE & CONTACT DETAILS (Red marked duplicate photo area removed!) */}
-          {activeTab === 'profile' && (
+          {isTabLoading ? (
+            <TabLoadingSkeleton title={TAB_LABELS[activeTab] || 'Section'} />
+          ) : (
+            <>
+              {/* TAB 1: PROFILE & CONTACT DETAILS (Red marked duplicate photo area removed!) */}
+              {activeTab === 'profile' && (
             <div className="space-y-6 animate-fade-in">
               {/* Personnel Credentials Form */}
               <Card>
@@ -972,6 +1003,8 @@ export default function AuthoritySettingsPage() {
                 </CardBody>
               </Card>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

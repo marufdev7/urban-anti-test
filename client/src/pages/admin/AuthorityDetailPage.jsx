@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Activity,
@@ -47,6 +47,7 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import StatusBadge from '../../components/ui/StatusBadge'
+import TabLoadingSkeleton from '../../components/ui/TabLoadingSkeleton'
 
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -470,6 +471,30 @@ export default function AuthorityDetailPage() {
   const update = useUpdateUser(authorityId)
 
   const [activeTab, setActiveTab] = useState('issues') // 'issues' | 'activity' | 'settings'
+  const [isTabLoading, setIsTabLoading] = useState(false)
+  const tabTimerRef = useRef(null)
+
+  const TAB_LABELS = {
+    issues: 'Assigned Reports & Issues',
+    activity: 'Activity Log & Audit Trail',
+    settings: 'Account Settings & Scope',
+  }
+
+  useEffect(() => {
+    return () => {
+      if (tabTimerRef.current) clearTimeout(tabTimerRef.current)
+    }
+  }, [])
+
+  const handleTabChange = (tabId) => {
+    if (tabId === activeTab && !isTabLoading) return
+    setActiveTab(tabId)
+    setIsTabLoading(true)
+    if (tabTimerRef.current) clearTimeout(tabTimerRef.current)
+    tabTimerRef.current = setTimeout(() => {
+      setIsTabLoading(false)
+    }, 500)
+  }
   const [issueStatusFilter, setIssueStatusFilter] = useState('all')
   const [issueSearch, setIssueSearch] = useState('')
   const [activitySearch, setActivitySearch] = useState('')
@@ -807,8 +832,8 @@ export default function AuthorityDetailPage() {
       <div className="flex items-center border-b border-line gap-2">
         <button
           type="button"
-          onClick={() => setActiveTab('issues')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+          onClick={() => handleTabChange('issues')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition cursor-pointer ${
             activeTab === 'issues'
               ? 'border-primary text-primary'
               : 'border-transparent text-ink-muted hover:text-ink hover:border-line'
@@ -827,8 +852,8 @@ export default function AuthorityDetailPage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab('activity')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+          onClick={() => handleTabChange('activity')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition cursor-pointer ${
             activeTab === 'activity'
               ? 'border-primary text-primary'
               : 'border-transparent text-ink-muted hover:text-ink hover:border-line'
@@ -847,8 +872,8 @@ export default function AuthorityDetailPage() {
 
         <button
           type="button"
-          onClick={() => setActiveTab('settings')}
-          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition ${
+          onClick={() => handleTabChange('settings')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition cursor-pointer ${
             activeTab === 'settings'
               ? 'border-primary text-primary'
               : 'border-transparent text-ink-muted hover:text-ink hover:border-line'
@@ -859,9 +884,14 @@ export default function AuthorityDetailPage() {
         </button>
       </div>
 
-      {/* TAB 1: Assigned Issues & Field Reports */}
-      {activeTab === 'issues' && (
-        <div className="space-y-4">
+      {/* Tab Content Panels */}
+      {isTabLoading ? (
+        <TabLoadingSkeleton title={TAB_LABELS[activeTab] || 'Section'} />
+      ) : (
+        <>
+          {/* TAB 1: Assigned Issues & Field Reports */}
+          {activeTab === 'issues' && (
+            <div className="space-y-4 animate-fade-in">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-1.5">
               {[
@@ -992,7 +1022,7 @@ export default function AuthorityDetailPage() {
 
       {/* TAB 2: Activity Log & Audit Trail */}
       {activeTab === 'activity' && (
-        <div className="space-y-4">
+        <div className="space-y-4 animate-fade-in">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-xs text-ink-muted">
               Chronological immutable ledger of actions performed by or targeting this officer account.
@@ -1124,7 +1154,7 @@ export default function AuthorityDetailPage() {
 
       {/* TAB 3: Account Settings & Scope */}
       {activeTab === 'settings' && (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-fade-in">
           <div className="grid gap-5 lg:grid-cols-2">
             {/* Card 1: Account Status */}
             <Card>
@@ -1328,6 +1358,8 @@ export default function AuthorityDetailPage() {
             </Card>
           )}
         </div>
+      )}
+        </>
       )}
 
       {/* Status Confirmation Modal */}

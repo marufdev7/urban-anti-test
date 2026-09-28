@@ -33,6 +33,7 @@ import Input from '../../components/ui/Input'
 import PageHeader from '../../components/ui/PageHeader'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
+import TabLoadingSkeleton from '../../components/ui/TabLoadingSkeleton'
 
 export default function CitizenSettingsPage() {
   const { user, logout, updateAvatar, updateDisplayName } = useAuth()
@@ -42,6 +43,30 @@ export default function CitizenSettingsPage() {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState('profile') // 'profile' | 'notifications' | 'privacy'
+  const [isTabLoading, setIsTabLoading] = useState(false)
+  const tabTimerRef = useRef(null)
+
+  const TAB_LABELS = {
+    profile: 'Profile & Identity',
+    notifications: 'Notification Preferences',
+    privacy: 'Privacy & Security',
+  }
+
+  useEffect(() => {
+    return () => {
+      if (tabTimerRef.current) clearTimeout(tabTimerRef.current)
+    }
+  }, [])
+
+  const handleTabChange = (tabId) => {
+    if (tabId === activeTab && !isTabLoading) return
+    setActiveTab(tabId)
+    setIsTabLoading(true)
+    if (tabTimerRef.current) clearTimeout(tabTimerRef.current)
+    tabTimerRef.current = setTimeout(() => {
+      setIsTabLoading(false)
+    }, 500)
+  }
 
   // Profile Form state
   const [displayName, setDisplayName] = useState(user?.fullName || '')
@@ -316,8 +341,14 @@ export default function CitizenSettingsPage() {
                   </button>
                 </div>
 
-                <span className="mt-2 hidden sm:inline-block text-[10px] font-bold tracking-wider uppercase text-ink-faint">
-                  Citizen Member
+                {/* Dynamic account status placed under profile picture */}
+                <span className={`mt-2.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  user?.status === 'suspended'
+                    ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${user?.status === 'suspended' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                  {user?.status === 'suspended' ? 'Suspended' : 'Active Account'}
                 </span>
               </div>
 
@@ -327,10 +358,6 @@ export default function CitizenSettingsPage() {
                   <h2 className="text-xl sm:text-2xl lg:text-3xl font-black text-ink tracking-tight">
                     {user?.fullName || 'Citizen User'}
                   </h2>
-                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                    <span>Verified Citizen</span>
-                  </span>
                   <span className="inline-flex items-center gap-1 rounded-full border border-[#005a4c]/20 bg-[#005a4c]/10 px-2.5 py-1 text-xs font-bold text-[#005a4c]">
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Civic Contributor</span>
@@ -400,7 +427,7 @@ export default function CitizenSettingsPage() {
           <div className="overflow-hidden rounded-2xl border border-line bg-surface-panel p-2 shadow-xs space-y-1">
             <button
               type="button"
-              onClick={() => setActiveTab('profile')}
+              onClick={() => handleTabChange('profile')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'profile'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -421,7 +448,7 @@ export default function CitizenSettingsPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('notifications')}
+              onClick={() => handleTabChange('notifications')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'notifications'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -442,7 +469,7 @@ export default function CitizenSettingsPage() {
 
             <button
               type="button"
-              onClick={() => setActiveTab('privacy')}
+              onClick={() => handleTabChange('privacy')}
               className={`w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-xl text-left text-xs font-bold transition-all cursor-pointer ${
                 activeTab === 'privacy'
                   ? 'bg-[#005a4c] text-white shadow-xs'
@@ -507,8 +534,12 @@ export default function CitizenSettingsPage() {
 
         {/* Right Rail: Active Settings Panels (lg:col-span-8 xl:col-span-9) */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-6">
-          {/* TAB 1: PROFILE & IDENTITY */}
-          {activeTab === 'profile' && (
+          {isTabLoading ? (
+            <TabLoadingSkeleton title={TAB_LABELS[activeTab] || 'Section'} />
+          ) : (
+            <>
+              {/* TAB 1: PROFILE & IDENTITY */}
+              {activeTab === 'profile' && (
             <div className="space-y-6 animate-fade-in">
               <Card>
                 <CardHeader
@@ -755,6 +786,8 @@ export default function CitizenSettingsPage() {
                 </CardBody>
               </Card>
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

@@ -171,7 +171,11 @@ function MapViewController({ center, zoom, bounds }) {
         prevCenterRef.current = { lat: center.lat, lng: center.lng }
         prevZoomRef.current = zoom
         const targetZoom = zoomChanged ? zoom : map.getZoom()
-        map.setView([center.lat, center.lng], targetZoom, { animate: true })
+        try {
+          map.flyTo([center.lat, center.lng], targetZoom, { duration: 0.8 })
+        } catch {
+          map.setView([center.lat, center.lng], targetZoom, { animate: true })
+        }
       }
     }
   }, [map, center?.lat, center?.lng, zoom, bounds])
@@ -277,6 +281,101 @@ function MarkersLayer({ features, onSelectIssue, getDetailLink }) {
   )
 }
 
+function SearchMarkerPin({ marker, onInspect, onClear }) {
+  const markerRef = useRef(null)
+
+  useEffect(() => {
+    if (markerRef.current) {
+      const timer = setTimeout(() => {
+        try {
+          markerRef.current?.openPopup()
+        } catch {}
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [marker.lat, marker.lng, marker.label])
+
+  const icon = useMemo(
+    () =>
+      L.divIcon({
+        className: 'interactive-search-pin',
+        html: `<div style="
+          position: relative;
+          width: 34px;
+          height: 34px;
+        ">
+          <div style="
+            position: absolute;
+            inset: -4px;
+            background: rgba(37, 99, 235, 0.4);
+            border-radius: 50%;
+            animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+          "></div>
+          <div style="
+            position: relative;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 2.5px solid white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+          ">📍</div>
+        </div>`,
+        iconSize: [34, 34],
+        iconAnchor: [17, 34],
+        popupAnchor: [0, -34],
+      }),
+    [],
+  )
+
+  return (
+    <Marker ref={markerRef} position={[marker.lat, marker.lng]} icon={icon}>
+      <Popup autoPan={true} className="interactive-search-popup">
+        <div className="p-2 text-xs min-w-[210px] space-y-2">
+          <div className="flex items-start gap-2">
+            <span className="text-base leading-none">📍</span>
+            <div>
+              <p className="font-bold text-ink leading-snug">{marker.label || 'Search Location'}</p>
+              {marker.sublabel && (
+                <p className="text-[10px] text-ink-muted leading-tight mt-0.5">{marker.sublabel}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-[10px] font-mono text-ink-muted bg-surface-sunken px-2 py-1 rounded">
+            <span>Lat: {marker.lat.toFixed(4)}</span>
+            <span>Lng: {marker.lng.toFixed(4)}</span>
+          </div>
+          <div className="pt-1.5 flex items-center gap-1.5 border-t border-line">
+            {onInspect && (
+              <button
+                type="button"
+                onClick={() => onInspect(marker)}
+                className="flex-1 rounded bg-[#005a4c] px-2 py-1 text-[11px] font-semibold !text-white hover:bg-[#004a3e] transition text-center shadow-xs"
+              >
+                🎯 Inspect Radius
+              </button>
+            )}
+            {onClear && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="rounded border border-line bg-surface-sunken px-2 py-1 text-[11px] font-medium text-ink-muted hover:text-status-critical hover:bg-surface transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+      </Popup>
+    </Marker>
+  )
+}
+
 export default function InteractiveMap({
   center,
   zoom = 13,
@@ -288,7 +387,8 @@ export default function InteractiveMap({
   activeZoneId = '',
   activeZonePolygon = null,
   activeZoneName = '',
-  showAllZones = true,
+  showAllZones = false,
+  showBoundary = true,
   focalCircle = null,
   searchMarker = null,
   drawnPolygonPoints = [],
@@ -298,6 +398,8 @@ export default function InteractiveMap({
   onMapClick,
   onZoneClick,
   onSelectIssue,
+  onInspectSearchPin,
+  onClearSearchPin,
   getDetailLink,
   className = 'h-full w-full',
 }) {
@@ -315,16 +417,17 @@ export default function InteractiveMap({
       <MapViewController center={center} zoom={zoom} bounds={bounds} />
 
       {/* Database city boundary polygons (if any) */}
-      {polygons.map((polygon, index) => (
-        <Polygon
-          key={`db-poly-${index}`}
-          positions={polygon}
-          pathOptions={{ color: '#0e7c6d', weight: 1.8, fillOpacity: 0.03 }}
-        />
-      ))}
+      {showBoundary &&
+        polygons.map((polygon, index) => (
+          <Polygon
+            key={`db-poly-${index}`}
+            positions={polygon}
+            pathOptions={{ color: '#0e7c6d', weight: 1.8, fillOpacity: 0.03 }}
+          />
+        ))}
 
       {/* Selected City Corporation Official Boundary Outline */}
-      {boundaryPolygon && (
+      {showBoundary && boundaryPolygon && (
         <Polygon
           positions={boundaryPolygon}
           pathOptions={{
@@ -480,36 +583,13 @@ export default function InteractiveMap({
         />
       )}
 
-      {/* Temporary Search Pin */}
+      {/* Interactive Search Pin with Auto-Opening Action Popup */}
       {searchMarker && (
-        <Marker
-          position={[searchMarker.lat, searchMarker.lng]}
-          icon={L.divIcon({
-            className: 'search-pin',
-            html: `<div style="
-              background: #2563eb;
-              width: 30px;
-              height: 30px;
-              border-radius: 50%;
-              border: 2px solid white;
-              box-shadow: 0 3px 8px rgba(0,0,0,0.35);
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 14px;
-            ">📍</div>`,
-            iconSize: [30, 30],
-            iconAnchor: [15, 30],
-          })}
-        >
-          {searchMarker.label && (
-            <Popup>
-              <div className="p-1 text-xs font-medium text-ink">
-                {searchMarker.label}
-              </div>
-            </Popup>
-          )}
-        </Marker>
+        <SearchMarkerPin
+          marker={searchMarker}
+          onInspect={onInspectSearchPin}
+          onClear={onClearSearchPin}
+        />
       )}
 
       <MapEventsListener onViewportChange={onViewportChange} onMapClick={onMapClick} />

@@ -1,11 +1,17 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
+  AlertTriangle,
+  Building,
   Check,
+  CheckCircle2,
+  Clock,
   Compass,
+  CornerDownLeft,
   Crosshair,
   Edit3,
+  ExternalLink,
   FilterX,
   Flame,
   Globe,
@@ -20,13 +26,15 @@ import {
   Settings,
   Shield,
   Sliders,
+  Sparkles,
   Trash2,
   Undo2,
   X,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
-import { boundaryBBox, DHAKA_CENTER, forwardGeocode } from '../../lib/geo'
+import { boundaryBBox, DHAKA_CENTER, forwardGeocode, searchPlaces } from '../../lib/geo'
+import { shortId } from '../../lib/format'
 import {
   BANGLADESH_CITIES,
   haversineDistanceMeters,
@@ -83,17 +91,22 @@ export default function AdminMapPage() {
   const [customBounds, setCustomBounds] = useState(null)
   const [mapCenter, setMapCenter] = useState(null)
   const [mapZoom, setMapZoom] = useState(12)
-  const [showAllZones, setShowAllZones] = useState(true)
+  const [showAllZones, setShowAllZones] = useState(false)
+  const [showBoundary, setShowBoundary] = useState(true)
 
   // Interactive Area Marking / Polygon Drawing
   const [isDrawingArea, setIsDrawingArea] = useState(false)
   const [drawnPoints, setDrawnPoints] = useState([]) // Array of [lat, lng]
   const [customMarkedArea, setCustomMarkedArea] = useState(null) // Array of [lat, lng]
 
-  // Address Search State
+  // Interactive Address, Ward & Incident Search State
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchFocused, setSearchFocused] = useState(false)
   const [searching, setSearching] = useState(false)
   const [searchMarker, setSearchMarker] = useState(null)
+  const [placeResults, setPlaceResults] = useState([])
+  const [highlightedIndex, setHighlightedIndex] = useState(-1)
+  const searchContainerRef = useRef(null)
 
   // Focal Radius Inspection Area Tool
   const [focalMode, setFocalMode] = useState(false)
@@ -106,6 +119,17 @@ export default function AdminMapPage() {
   const [customBoundaryName, setCustomBoundaryName] = useState('')
   const [boundaryError, setBoundaryError] = useState(null)
   const [boundarySuccess, setBoundarySuccess] = useState(false)
+
+  // Detect whether database active boundary is a custom sector / marked area
+  const activeBoundaryName = boundaryFeature?.properties?.name || ''
+  const isCustomBoundaryActive = Boolean(
+    activeBoundaryName &&
+      (activeBoundaryName.toLowerCase().includes('custom') ||
+        activeBoundaryName.toLowerCase().includes('sector') ||
+        activeBoundaryName.toLowerCase().includes('pts') ||
+        activeBoundaryName.toLowerCase().includes('vertices') ||
+        activeBoundaryName.toLowerCase().includes('marked'))
+  )
 
   // Determine current active city and zone objects
   const currentCity = BANGLADESH_CITIES.find((c) => c.id === selectedCityId) || BANGLADESH_CITIES[0]
@@ -221,23 +245,195 @@ export default function AdminMapPage() {
     }
   }
 
-  // Handle Location Search
+  // Debounced Place Search via Nominatim Proxy
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+      setPlaceResults([])
+      setSearching(false)
+      return
+    }
+
+    setSearching(true)
+    const timeout = setTimeout(async () => {
+      try {
+        const places = await searchPlaces(searchQuery, currentCity.nameEn.split(' ')[0], 4)
+        setPlaceResults(places)
+      } catch {
+        setPlaceResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 280)
+
+    return () => clearTimeout(timeout)
+  }, [searchQuery, currentCity.nameEn])
+
+  // Click outside listener to dismiss search dropdown
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setSearchFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Matched Wards & Zones in Current City
+  const matchedZones = useMemo(() => {
+    if (!searchQuery.trim()) return []
+    const q = searchQuery.toLowerCase().trim()
+    return cityZones
+      .filter((z) => !z.id.endsWith('_all'))
+      .filter(
+        (z) =>
+          z.nameEn?.toLowerCase().includes(q) ||
+          z.nameBn?.includes(q) ||
+          (q.includes('ward') && z.nameEn) ||
+          (q.includes('zone') && z.nameEn)
+      )
+      .slice(0, 4)
+  }, [searchQuery, cityZones])
+
+  // Matched Incidents on Active Map
+  const matchedIncidents = useMemo(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2) return []
+    const q = searchQuery.toLowerCase().trim()
+    const cleanQ = q.replace(/^#/, '')
+    return rawFeatures
+      .filter((f) => {
+        const sId = shortId(f.id).toLowerCase()
+        const fId = (f.id || '').toLowerCase()
+        const title = (f.properties?.title || '').toLowerCase()
+        const cat = (f.properties?.category || '').toLowerCase()
+        const addr = (f.properties?.address || '').toLowerCase()
+        const sev = (f.properties?.severity || '').toLowerCase()
+        return (
+          sId.includes(cleanQ) ||
+          fId.includes(cleanQ) ||
+          title.includes(q) ||
+          cat.includes(q) ||
+          addr.includes(q) ||
+          sev === q
+        )
+      })
+      .slice(0, 4)
+  }, [searchQuery, rawFeatures])
+
+  // Flattened items for keyboard navigation
+  const allSelectableItems = useMemo(() => {
+    const list = []
+    matchedZones.forEach((z) => list.push({ type: 'zone', item: z }))
+    matchedIncidents.forEach((inc) => list.push({ type: 'incident', item: inc }))
+    placeResults.forEach((p) => list.push({ type: 'place', item: p }))
+    return list
+  }, [matchedZones, matchedIncidents, placeResults])
+
+  // Result Selection Handlers
+  const handleSelectZoneResult = (zone) => {
+    handleZoneSelect(zone.id)
+    setSearchMarker({
+      lat: zone.center.lat,
+      lng: zone.center.lng,
+      label: zone.nameBn || zone.nameEn,
+      sublabel: `${currentCity.nameEn} • Ward/Zone Jurisdiction`,
+      type: 'zone',
+    })
+    setSearchQuery(zone.nameEn)
+    setSearchFocused(false)
+    setHighlightedIndex(-1)
+  }
+
+  const handleSelectIncidentResult = (incident) => {
+    const coords = incident.geometry?.coordinates
+    if (!coords || coords.length < 2) return
+    const [lng, lat] = coords
+    setCustomBounds(null)
+    setMapCenter({ lat, lng })
+    setMapZoom(17)
+    setSearchMarker({
+      lat,
+      lng,
+      label: `Issue #${shortId(incident.id)}: ${categoryLabel(incident.properties?.category, categories) || incident.properties?.category || 'Civic Issue'}`,
+      sublabel: `${incident.properties?.severity?.toUpperCase()} • ${incident.properties?.address || 'Reported Incident'}`,
+      type: 'incident',
+      id: incident.id,
+    })
+    setSearchQuery(`Issue #${shortId(incident.id)}`)
+    setSearchFocused(false)
+    setHighlightedIndex(-1)
+  }
+
+  const handleSelectPlaceResult = (place) => {
+    setCustomBounds(null)
+    setMapCenter({ lat: place.lat, lng: place.lng })
+    setMapZoom(16)
+    setSearchMarker({
+      lat: place.lat,
+      lng: place.lng,
+      label: place.shortName || place.displayName,
+      sublabel: place.secondaryText,
+      type: 'place',
+    })
+    setSearchQuery(place.shortName || place.displayName)
+    setSearchFocused(false)
+    setHighlightedIndex(-1)
+  }
+
+  const handleSelectIndexedItem = (index) => {
+    const target = allSelectableItems[index]
+    if (!target) return
+    if (target.type === 'zone') handleSelectZoneResult(target.item)
+    else if (target.type === 'incident') handleSelectIncidentResult(target.item)
+    else if (target.type === 'place') handleSelectPlaceResult(target.item)
+  }
+
+  // Handle Location Search Form Submit
   const handleSearch = async (e) => {
     e?.preventDefault()
+    if (highlightedIndex >= 0 && allSelectableItems[highlightedIndex]) {
+      handleSelectIndexedItem(highlightedIndex)
+      return
+    }
+    if (allSelectableItems.length > 0) {
+      handleSelectIndexedItem(0)
+      return
+    }
     if (!searchQuery.trim()) return
     setSearching(true)
     try {
       const cityQuery = `${searchQuery.trim()}, ${currentCity.nameEn.split(' ')[0]}, Bangladesh`
       const result = await forwardGeocode(cityQuery)
       if (result) {
-        setSearchMarker({ lat: result.lat, lng: result.lng, label: result.displayName })
+        setSearchMarker({
+          lat: result.lat,
+          lng: result.lng,
+          label: result.displayName,
+          type: 'place',
+        })
         setMapCenter({ lat: result.lat, lng: result.lng })
-        setMapZoom(15)
+        setMapZoom(16)
         setCustomBounds(null)
+        setSearchFocused(false)
+        setHighlightedIndex(-1)
       }
     } catch {
     } finally {
       setSearching(false)
+    }
+  }
+
+  const handleKeyDown = (e) => {
+    if (!searchFocused) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightedIndex((prev) => (allSelectableItems.length ? (prev + 1) % allSelectableItems.length : -1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightedIndex((prev) => (allSelectableItems.length ? (prev - 1 + allSelectableItems.length) % allSelectableItems.length : -1))
+    } else if (e.key === 'Escape') {
+      setSearchFocused(false)
+      setHighlightedIndex(-1)
     }
   }
 
@@ -284,6 +480,7 @@ export default function AdminMapPage() {
   const handleClearMarkedArea = () => {
     setCustomMarkedArea(null)
     setDrawnPoints([])
+    setIsDrawingArea(false)
   }
 
   // Mutation to replace municipal boundary
@@ -302,32 +499,76 @@ export default function AdminMapPage() {
     onError: (err) => setBoundaryError(err.message),
   })
 
+  // Reset database municipal boundary back to current city's default
+  const handleResetBoundaryToDefault = () => {
+    setBoundaryError(null)
+    const defaultPoly = currentCity.boundaryPolygon
+    if (!defaultPoly || defaultPoly.length < 3) {
+      setBoundaryError('Default boundary coordinates not found for this city.')
+      return
+    }
+    const geoJson = pointsToGeoJsonMultiPolygon(defaultPoly)
+    if (!geoJson) {
+      setBoundaryError('Failed to format default boundary geometry.')
+      return
+    }
+
+    const uniqueTag = `${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}_${Date.now().toString().slice(-4)}`
+    const name = `${currentCity.nameEn} Metropolitan Boundary (${uniqueTag})`
+
+    replaceBoundaryMutation.mutate(
+      { name, geometry: geoJson },
+      {
+        onSuccess: () => {
+          setCustomMarkedArea(null)
+          setDrawnPoints([])
+          setIsDrawingArea(false)
+          setCustomBounds(currentCity.bounds)
+          setMapCenter(currentCity.center)
+          setMapZoom(currentCity.zoom)
+          setBoundaryModalOpen(false)
+        },
+      }
+    )
+  }
+
   const handleSaveBoundary = () => {
     setBoundaryError(null)
     let selectedPolygon = null
     let name = ''
+    const uniqueTag = `${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}_${Date.now().toString().slice(-4)}`
 
     if (boundarySource === 'custom') {
       if (!customMarkedArea || customMarkedArea.length < 3) {
         setBoundaryError('Please mark at least 3 vertices on the map first.')
         return
       }
-      name = customBoundaryName.trim() || `Custom Marked Area (${currentCity.nameEn} - ${new Date().toLocaleDateString()})`
+      name = customBoundaryName.trim()
+        ? `${customBoundaryName.trim()} (${uniqueTag})`
+        : `${currentCity.nameEn} Custom Sector (${customMarkedArea.length} pts - ${uniqueTag})`
       selectedPolygon = customMarkedArea
     } else if (boundarySource === 'current_city') {
-      name = customBoundaryName.trim() || `${currentCity.nameEn} Municipal Boundary`
+      name = customBoundaryName.trim()
+        ? `${customBoundaryName.trim()} (${uniqueTag})`
+        : `${currentCity.nameEn} Municipal Boundary (${uniqueTag})`
       selectedPolygon = currentCity.boundaryPolygon
     } else {
       // Find preset city
       const city = BANGLADESH_CITIES.find((c) => c.id === boundarySource)
       if (city) {
-        name = customBoundaryName.trim() || `${city.nameEn} Municipal Boundary`
+        name = customBoundaryName.trim()
+          ? `${customBoundaryName.trim()} (${uniqueTag})`
+          : `${city.nameEn} Municipal Boundary (${uniqueTag})`
         selectedPolygon = city.boundaryPolygon
       } else if (boundarySource === 'dncc') {
-        name = customBoundaryName.trim() || 'Dhaka North City Corporation (DNCC)'
+        name = customBoundaryName.trim()
+          ? `${customBoundaryName.trim()} (${uniqueTag})`
+          : `Dhaka North City Corporation (DNCC - ${uniqueTag})`
         selectedPolygon = BANGLADESH_CITIES[0].zones.find((z) => z.id === 'dncc')?.polygon
       } else if (boundarySource === 'dscc') {
-        name = customBoundaryName.trim() || 'Dhaka South City Corporation (DSCC)'
+        name = customBoundaryName.trim()
+          ? `${customBoundaryName.trim()} (${uniqueTag})`
+          : `Dhaka South City Corporation (DSCC - ${uniqueTag})`
         selectedPolygon = BANGLADESH_CITIES[0].zones.find((z) => z.id === 'dscc')?.polygon
       }
     }
@@ -414,31 +655,234 @@ export default function AdminMapPage() {
               </div>
             </div>
 
-            {/* Address / Location Search Bar */}
-            <form onSubmit={handleSearch} className="flex items-center gap-2">
-              <div className="relative w-64 sm:w-80">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search road, ward, landmark in ${currentCity.nameEn.split(' ')[0]}...`}
-                  className="w-full rounded-button border border-line bg-surface py-1.5 pl-8 pr-8 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                )}
-              </div>
-              <Button size="sm" type="submit" disabled={searching} className="text-xs">
-                {searching ? <Spinner size="sm" /> : 'Search'}
-              </Button>
-            </form>
+            {/* Interactive Multi-Source Search Bar */}
+            <div ref={searchContainerRef} className="relative w-full sm:w-96">
+              <form onSubmit={handleSearch} className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  {searching ? (
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-primary">
+                      <Spinner size="xs" />
+                    </div>
+                  ) : (
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
+                  )}
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onFocus={() => setSearchFocused(true)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setSearchFocused(true)
+                      setHighlightedIndex(-1)
+                    }}
+                    onKeyDown={handleKeyDown}
+                    placeholder={`Search ward, place, road or issue #ID in ${currentCity.nameEn.split(' ')[0]}...`}
+                    className="w-full rounded-button border border-line bg-surface py-1.5 pl-8 pr-16 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-xs transition-colors"
+                  />
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('')
+                          setSearchMarker(null)
+                          setPlaceResults([])
+                          setHighlightedIndex(-1)
+                        }}
+                        className="rounded p-0.5 text-ink-muted hover:text-ink hover:bg-surface-sunken"
+                        title="Clear search"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                    <kbd className="hidden sm:inline-block rounded border border-line bg-surface-sunken px-1 text-[9px] font-mono text-ink-faint">
+                      ↵
+                    </kbd>
+                  </div>
+                </div>
+                <Button size="sm" type="submit" disabled={searching} className="text-xs shrink-0">
+                  Search
+                </Button>
+              </form>
+
+              {/* Interactive Autocomplete Dropdown */}
+              {searchFocused && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 z-[1500] max-h-[380px] overflow-y-auto rounded-panel border border-line bg-surface/98 backdrop-blur-md shadow-2xl py-2 text-xs divide-y divide-line/40 animate-in fade-in slide-in-from-top-1">
+                  {/* Empty Input Quick Suggestions */}
+                  {searchQuery.trim().length === 0 && (
+                    <div className="p-2 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-ink-muted px-1">
+                        <span className="flex items-center gap-1">
+                          <Sparkles className="h-3 w-3 text-primary" />
+                          Quick Jump to {currentCity.nameEn.split(' ')[0]} Wards
+                        </span>
+                        <span className="text-[10px] text-ink-faint">Popular</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 px-1">
+                        {cityZones
+                          .filter((z) => !z.id.endsWith('_all'))
+                          .slice(0, 6)
+                          .map((z) => (
+                            <button
+                              key={z.id}
+                              type="button"
+                              onClick={() => handleSelectZoneResult(z)}
+                              className="rounded-full border border-line bg-surface-sunken px-2.5 py-1 text-[11px] font-medium text-ink hover:border-primary hover:text-primary hover:bg-primary-soft/20 transition-all flex items-center gap-1"
+                            >
+                              <span>📍</span>
+                              <span>{z.nameBn || z.nameEn}</span>
+                            </button>
+                          ))}
+                      </div>
+                      <p className="text-[10px] text-ink-faint px-1 pt-1 italic">
+                        Tip: You can search by ward name, road/place name, or incident ticket #ID (e.g. #0d6b).
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Section 1: Wards & Administrative Zones */}
+                  {matchedZones.length > 0 && (
+                    <div className="py-1">
+                      <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-primary">
+                          <Building className="h-3 w-3" />
+                          Wards & Sectors ({matchedZones.length})
+                        </span>
+                        <span className="text-[9px]">Administrative</span>
+                      </div>
+                      {matchedZones.map((z, idx) => {
+                        const itemIndex = idx
+                        const isHighlighted = highlightedIndex === itemIndex
+                        return (
+                          <button
+                            key={z.id}
+                            type="button"
+                            onClick={() => handleSelectZoneResult(z)}
+                            className={`w-full px-3 py-1.5 text-left flex items-center justify-between transition-colors ${
+                              isHighlighted ? 'bg-primary-soft/40 text-primary font-semibold' : 'hover:bg-surface-sunken text-ink'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">🏛️</span>
+                              <div>
+                                <p className="font-semibold text-xs leading-snug">{z.nameBn || z.nameEn}</p>
+                                <p className="text-[10px] text-ink-muted leading-none mt-0.5">{z.nameEn}</p>
+                              </div>
+                            </div>
+                            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary uppercase">
+                              Jump to Ward
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Section 2: Civic Incidents on Map */}
+                  {matchedIncidents.length > 0 && (
+                    <div className="py-1">
+                      <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-status-critical">
+                          <AlertTriangle className="h-3 w-3" />
+                          Live Incidents on Map ({matchedIncidents.length})
+                        </span>
+                        <span className="text-[9px]">Triage Report</span>
+                      </div>
+                      {matchedIncidents.map((inc, idx) => {
+                        const itemIndex = matchedZones.length + idx
+                        const isHighlighted = highlightedIndex === itemIndex
+                        const sev = inc.properties?.severity || 'medium'
+                        return (
+                          <button
+                            key={inc.id}
+                            type="button"
+                            onClick={() => handleSelectIncidentResult(inc)}
+                            className={`w-full px-3 py-1.5 text-left flex items-center justify-between transition-colors ${
+                              isHighlighted ? 'bg-primary-soft/40 text-primary font-semibold' : 'hover:bg-surface-sunken text-ink'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-2">
+                              <span className="text-sm">🚨</span>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-xs leading-snug truncate">
+                                  #{shortId(inc.id)} — {categoryLabel(inc.properties?.category, categories) || inc.properties?.category || 'Civic Issue'}
+                                </p>
+                                <p className="text-[10px] text-ink-muted leading-none mt-0.5 truncate">
+                                  {inc.properties?.address || inc.properties?.title || 'Reported Location'}
+                                </p>
+                              </div>
+                            </div>
+                            <span
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-bold uppercase shrink-0 text-white ${
+                                sev === 'critical' || sev === 'high'
+                                  ? 'bg-status-critical'
+                                  : sev === 'medium'
+                                  ? 'bg-status-medium'
+                                  : 'bg-status-low'
+                              }`}
+                            >
+                              {sev}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Section 3: Geocoded Places & Addresses */}
+                  {placeResults.length > 0 && (
+                    <div className="py-1">
+                      <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint flex items-center justify-between">
+                        <span className="flex items-center gap-1 text-[#0e7c6d]">
+                          <MapPin className="h-3 w-3" />
+                          Places & Landmarks ({placeResults.length})
+                        </span>
+                        <span className="text-[9px]">OpenStreetMap</span>
+                      </div>
+                      {placeResults.map((p, idx) => {
+                        const itemIndex = matchedZones.length + matchedIncidents.length + idx
+                        const isHighlighted = highlightedIndex === itemIndex
+                        return (
+                          <button
+                            key={`${p.lat}-${p.lng}-${idx}`}
+                            type="button"
+                            onClick={() => handleSelectPlaceResult(p)}
+                            className={`w-full px-3 py-1.5 text-left flex items-center justify-between transition-colors ${
+                              isHighlighted ? 'bg-primary-soft/40 text-primary font-semibold' : 'hover:bg-surface-sunken text-ink'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-2">
+                              <span className="text-sm">📍</span>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-xs leading-snug truncate">{p.shortName}</p>
+                                <p className="text-[10px] text-ink-muted leading-none mt-0.5 truncate">{p.secondaryText}</p>
+                              </div>
+                            </div>
+                            <span className="rounded bg-surface-sunken border border-line px-1.5 py-0.5 text-[9px] font-medium text-ink-muted uppercase shrink-0">
+                              {p.category}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Empty Search Result Notice */}
+                  {searchQuery.trim().length >= 2 &&
+                    matchedZones.length === 0 &&
+                    matchedIncidents.length === 0 &&
+                    placeResults.length === 0 &&
+                    !searching && (
+                      <div className="p-3 text-center text-ink-muted">
+                        <p className="font-semibold">No direct matches found</p>
+                        <p className="text-[11px] mt-0.5 text-ink-faint">
+                          Press <kbd className="font-mono bg-surface-sunken px-1 rounded border">Enter</kbd> to run an extended area search for &ldquo;{searchQuery}&rdquo;.
+                        </p>
+                      </div>
+                    )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Quick City Pills for 1-click Switching */}
@@ -703,6 +1147,47 @@ export default function AdminMapPage() {
         </div>
       )}
 
+      {/* ACTIVE CUSTOM BOUNDARY PERSISTENT HUD BANNER */}
+      {isCustomBoundaryActive && !customMarkedArea && !isDrawingArea && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-panel border border-primary/40 bg-primary-soft/30 p-2.5 text-xs shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-ink text-xs">Custom Municipal Boundary Active in Database</span>
+                <span className="rounded bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary">
+                  {boundaryFeature?.properties?.name}
+                </span>
+              </div>
+              <p className="text-ink-muted text-[11px] mt-0.5">
+                The saved custom sector is currently active as the official city jurisdiction.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setBoundaryModalOpen(true)}
+              className="text-xs"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Manage Boundary
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={replaceBoundaryMutation.isPending}
+              onClick={handleResetBoundaryToDefault}
+              className="flex items-center gap-1 text-xs text-status-critical hover:bg-status-critical/10 font-semibold"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              {replaceBoundaryMutation.isPending ? 'Resetting...' : 'Reset to Default City Boundary'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* FOCAL HUD BANNER */}
       {(focalMode || focalCenter) && (
         <div className="flex items-center justify-between rounded-panel border border-primary/30 bg-primary-soft/50 px-4 py-2 text-xs">
@@ -740,8 +1225,8 @@ export default function AdminMapPage() {
           isDrawingArea || focalMode ? 'cursor-crosshair' : ''
         }`}
       >
-        {/* Floating City & Jurisdiction Overlay Badge */}
-        <div className="absolute top-3 left-3 z-[1000] flex flex-wrap items-center gap-2 rounded-panel border border-line/80 bg-surface/90 backdrop-blur-md px-3 py-1.5 text-xs shadow-md">
+        {/* Floating City & Jurisdiction Overlay Badge (Docked to Top-Right to prevent zoom control overlap) */}
+        <div className="absolute top-3 right-3 z-[1000] flex flex-wrap items-center gap-2 rounded-panel border border-line/80 bg-surface/90 backdrop-blur-md px-3 py-1.5 text-xs shadow-md max-w-[calc(100%-2rem)]">
           <div className="flex items-center gap-1.5">
             <span className="flex h-2.5 w-2.5 rounded-full bg-[#0e7c6d] animate-pulse" />
             <span className="font-bold text-ink">{currentCity.nameBn || currentCity.nameEn}</span>
@@ -763,6 +1248,26 @@ export default function AdminMapPage() {
           >
             {showAllZones ? 'Hide Wards' : 'Show All Wards'}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowBoundary(!showBoundary)}
+            className="rounded px-2 py-0.5 text-[10px] font-medium border border-line bg-surface-sunken hover:bg-surface text-ink-muted hover:text-ink transition-colors"
+            title="Toggle display of official municipal boundary outline"
+          >
+            {showBoundary ? 'Hide Boundary' : 'Show Boundary'}
+          </button>
+          {isCustomBoundaryActive && (
+            <button
+              type="button"
+              onClick={handleResetBoundaryToDefault}
+              disabled={replaceBoundaryMutation.isPending}
+              className="flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold border border-status-critical/30 bg-status-critical/10 text-status-critical hover:bg-status-critical/20 transition-colors"
+              title="Reset municipal boundary back to city default"
+            >
+              <RotateCcw className="h-3 w-3" />
+              Reset Boundary
+            </button>
+          )}
         </div>
 
         <InteractiveMap
@@ -777,17 +1282,75 @@ export default function AdminMapPage() {
           activeZonePolygon={currentZone?.polygon}
           activeZoneName={currentZone?.nameBn || currentZone?.nameEn}
           showAllZones={showAllZones}
+          showBoundary={showBoundary}
           onZoneClick={handleZoneSelect}
           drawnPolygonPoints={drawnPoints}
           customMarkedArea={customMarkedArea}
           focalCircle={focalCenter ? { center: focalCenter, radius: focalRadius } : null}
           searchMarker={searchMarker}
+          onInspectSearchPin={(marker) => {
+            setFocalCenter({ lat: marker.lat, lng: marker.lng })
+            setFocalRadius(1000)
+            setFocalMode(false)
+          }}
+          onClearSearchPin={() => {
+            setSearchMarker(null)
+            setSearchQuery('')
+          }}
           features={features}
           onViewportChange={setViewport}
           onMapClick={handleMapClick}
           getDetailLink={(id) => `/admin/queue/${id}`}
           className="h-full w-full"
         />
+
+        {/* Floating Active Search HUD Pill on Map */}
+        {searchMarker && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] flex max-w-[90%] flex-wrap items-center gap-2 rounded-panel border border-primary/40 bg-surface/95 backdrop-blur-md px-3.5 py-1.5 text-xs shadow-xl animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-primary animate-ping" />
+              <span className="font-bold text-primary text-[11px] uppercase tracking-wide shrink-0">
+                Pinned:
+              </span>
+              <span
+                className="font-semibold text-ink truncate max-w-[200px] sm:max-w-[320px]"
+                title={searchMarker.label}
+              >
+                {searchMarker.label}
+              </span>
+              <span className="text-[10px] font-mono text-ink-muted hidden md:inline shrink-0">
+                ({searchMarker.lat.toFixed(4)}, {searchMarker.lng.toFixed(4)})
+              </span>
+            </div>
+            <div className="h-3 w-px bg-line" />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setFocalCenter({ lat: searchMarker.lat, lng: searchMarker.lng })
+                  setFocalRadius(1000)
+                  setFocalMode(false)
+                }}
+                className="flex items-center gap-1 rounded bg-[#005a4c] px-2 py-0.5 text-[11px] font-bold !text-white hover:bg-[#004a3e] transition shadow-xs"
+                title="Inspect 1km radius around pinned location"
+              >
+                <Crosshair className="h-3 w-3" />
+                Inspect 1km
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchMarker(null)
+                  setSearchQuery('')
+                }}
+                className="rounded p-1 text-ink-muted hover:text-status-critical transition hover:bg-surface-sunken"
+                title="Remove search pin"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* MUNICIPAL BOUNDARY MANAGEMENT DIALOG */}
@@ -880,16 +1443,28 @@ export default function AdminMapPage() {
             </p>
           )}
 
-          <div className="mt-4 flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={() => setBoundaryModalOpen(false)}>
-              Cancel
-            </Button>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-line">
             <Button
-              disabled={replaceBoundaryMutation.isPending || boundarySuccess}
-              onClick={handleSaveBoundary}
+              variant="ghost"
+              size="sm"
+              disabled={replaceBoundaryMutation.isPending}
+              onClick={handleResetBoundaryToDefault}
+              className="text-xs text-status-critical hover:bg-status-critical/10 flex items-center gap-1.5 font-medium"
             >
-              {replaceBoundaryMutation.isPending ? <Spinner size="sm" /> : 'Save & Activate Boundary'}
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset to City Default
             </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={() => setBoundaryModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                disabled={replaceBoundaryMutation.isPending || boundarySuccess}
+                onClick={handleSaveBoundary}
+              >
+                {replaceBoundaryMutation.isPending ? <Spinner size="sm" /> : 'Save & Activate Boundary'}
+              </Button>
+            </div>
           </div>
         </div>
       </Dialog>

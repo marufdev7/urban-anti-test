@@ -92,11 +92,21 @@ export default function UserMenu() {
           </div>
         </div>
         <Link
-          to={`/${user?.role}/settings`}
+          to={`/${user?.role}/settings?tab=profile`}
           role="menuitem"
           tabIndex={open ? 0 : -1}
           onClick={() => setOpen(false)}
           className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors"
+        >
+          <UserRound className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+          Profile
+        </Link>
+        <Link
+          to={`/${user?.role}/settings`}
+          role="menuitem"
+          tabIndex={open ? 0 : -1}
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors border-t border-line/40"
         >
           <Settings className="h-4 w-4 text-ink-muted" aria-hidden="true" />
           Settings
@@ -107,7 +117,7 @@ export default function UserMenu() {
           tabIndex={open ? 0 : -1}
           disabled={logout.isPending || !open}
           onClick={() => logout.mutate()}
-          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-status-critical hover:bg-status-critical-soft transition-colors disabled:opacity-50"
+          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-status-critical hover:bg-status-critical-soft transition-colors disabled:opacity-50 border-t border-line/40"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
           {logout.isPending ? 'Signing out…' : 'Sign out'}
