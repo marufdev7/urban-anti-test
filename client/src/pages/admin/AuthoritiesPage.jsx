@@ -127,6 +127,7 @@ const ROLE_COLORS = [
 
 function EditAuthorityModal({ authority, onClose, categories }) {
   const adminUpdate = useAdminUpdateUser()
+  const [activeTab, setActiveTab] = useState('general')
   const [email, setEmail] = useState(authority?.email || '')
   const [phone, setPhone] = useState(authority?.phone || '')
   const [assignedArea, setAssignedArea] = useState(authority?.assignedArea || '')
@@ -135,7 +136,6 @@ function EditAuthorityModal({ authority, onClose, categories }) {
   const [requireTwoFactor, setRequireTwoFactor] = useState(
     Boolean(authority?.requireTwoFactor ?? authority?.require_two_factor),
   )
-  const [showPasswordSection, setShowPasswordSection] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -200,16 +200,19 @@ function EditAuthorityModal({ authority, onClose, categories }) {
     if (password) {
       if (password.length < 8) {
         setError('Password must be at least 8 characters long.')
+        setActiveTab('security')
         return
       }
       if (password !== confirmPassword) {
         setError('Passwords do not match.')
+        setActiveTab('security')
         return
       }
     }
 
     if (phone.trim() && !/^\+?[0-9]{7,15}$/.test(phone.trim())) {
       setError('Please enter a valid phone number in international format (e.g. +8801700000000).')
+      setActiveTab('general')
       return
     }
 
@@ -242,11 +245,11 @@ function EditAuthorityModal({ authority, onClose, categories }) {
       open={Boolean(authority)}
       onClose={onClose}
       title="Edit Authority Officer"
-      className="max-w-4xl"
+      className="max-w-3xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Officer Snapshot Header Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-sunken/40 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-sunken/40 px-4 py-2.5 text-sm">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
               {initials}
@@ -258,11 +261,11 @@ function EditAuthorityModal({ authority, onClose, categories }) {
                 <span className="text-xs text-ink-muted hidden sm:inline">{getJurisdictionLabel(authority?.assignedArea)}</span>
               </div>
               {authority?.phone && (
-                <p className="text-xs text-ink-muted mt-0.5">{authority.phone}</p>
+                <p className="text-2xs text-ink-muted mt-0.5">{authority.phone}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={handleCopyId}
@@ -286,222 +289,327 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           </div>
         </div>
 
-        {/* 2-Column Side-by-Side Content */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-          {/* Left Column: Account Details, Jurisdiction & Security */}
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1.5">
-                Official Email Address <span className="text-status-critical">*</span>
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="off"
-                className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
-              />
-            </div>
+        {/* Tab Navigation Bar */}
+        <div className="flex items-center gap-1.5 border-b border-line pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              activeTab === 'general'
+                ? 'bg-primary text-white shadow-2xs'
+                : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            <span>General &amp; Jurisdiction</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('scope')}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              activeTab === 'scope'
+                ? 'bg-primary text-white shadow-2xs'
+                : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+            }`}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span>Category Scope</span>
+            <span
+              className={`rounded-full px-1.5 py-0.2 text-3xs font-bold ${
+                activeTab === 'scope'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-primary/10 text-primary'
+              }`}
+            >
+              {categoryScope.length}/{activeCategories.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('security')}
+            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+              activeTab === 'security'
+                ? 'bg-primary text-white shadow-2xs'
+                : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+            }`}
+          >
+            <Lock className="h-3.5 w-3.5" />
+            <span>Security &amp; Password</span>
+            {password && (
+              <span className="h-2 w-2 rounded-full bg-amber-400" title="Password update entered" />
+            )}
+          </button>
+        </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-ink mb-1.5">
-                  Contact Phone
-                </label>
-                <input
-                  type="tel"
-                  placeholder="+8801700000000"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  autoComplete="off"
-                  className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none"
-                />
+        {/* Tab Content Panels (Fixed stable min-height to prevent jumping) */}
+        <div className="min-h-[290px]">
+          {/* TAB 1: General & Jurisdiction */}
+          {activeTab === 'general' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">
+                    Official Email Address <span className="text-status-critical">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
+                  />
+                  <p className="mt-1 text-2xs text-ink-muted">
+                    Primary address used for officer sign-in and system notifications.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">
+                    Contact Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="+8801700000000"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none"
+                  />
+                  <p className="mt-1 text-2xs text-ink-muted">
+                    Direct mobile line for dispatch &amp; field ops.
+                  </p>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-ink mb-1.5">
-                  Account Status
-                </label>
-                <select
-                  aria-label="Account status"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none cursor-pointer"
-                >
-                  <option value="active">Active (Operational)</option>
-                  <option value="verified">Verified</option>
-                  <option value="registered">Registered</option>
-                  <option value="suspended">Suspended (Blocked)</option>
-                  <option value="deprovisioned">Deprovisioned</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">
+                    Territorial Jurisdiction Zone
+                  </label>
+                  <select
+                    aria-label="Territorial Jurisdiction"
+                    value={assignedArea}
+                    onChange={(e) => setAssignedArea(e.target.value)}
+                    className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none cursor-pointer"
+                  >
+                    {JURISDICTION_AREAS.map((a) => (
+                      <option key={a.value} value={a.value}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-2xs text-ink-muted">
+                    Restricts the officer's queue &amp; map to this municipal boundary.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1.5">
+                    Account Operational Status
+                  </label>
+                  <select
+                    aria-label="Account status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none cursor-pointer"
+                  >
+                    <option value="active">Active (Operational &amp; Full Access)</option>
+                    <option value="verified">Verified (Identity confirmed)</option>
+                    <option value="registered">Registered (Pending authorization)</option>
+                    <option value="suspended">Suspended (Access immediately revoked)</option>
+                    <option value="deprovisioned">Deprovisioned (Archived)</option>
+                  </select>
+                  <p className="mt-1 text-2xs text-ink-muted">
+                    Suspended accounts cannot log in or perform dispatch actions.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-line bg-surface-sunken/40 p-3.5 flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div className="text-xs">
+                  <p className="font-semibold text-ink">
+                    Active Boundary: {getJurisdictionLabel(assignedArea)}
+                  </p>
+                  <p className="text-2xs text-ink-muted mt-0.5 leading-relaxed">
+                    New incidents submitted by citizens within this territorial area will automatically route to this officer for triage and assignment.
+                  </p>
+                </div>
               </div>
             </div>
+          )}
 
-            <div>
-              <label className="block text-xs font-semibold text-ink mb-1.5">
-                Territorial Jurisdiction Zone
-              </label>
-              <select
-                aria-label="Territorial Jurisdiction"
-                value={assignedArea}
-                onChange={(e) => setAssignedArea(e.target.value)}
-                className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none cursor-pointer"
-              >
-                {JURISDICTION_AREAS.map((a) => (
-                  <option key={a.value} value={a.value}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* TAB 2: Departmental Category Scope */}
+          {activeTab === 'scope' && (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <label className="text-xs font-semibold text-ink">Departmental Category Scope</label>
+                  <p className="text-2xs text-ink-muted mt-0.5">
+                    Select the municipal categories this officer is authorized to moderate and dispatch.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                    {categoryScope.length} of {activeCategories.length} Selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={selectAllCategories}
+                    className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+              </div>
 
-            {/* Security: 2FA & Collapsible Password */}
-            <div className="rounded-xl border border-line bg-surface-sunken/30 p-3 space-y-2.5">
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={requireTwoFactor}
-                  onChange={(e) => setRequireTwoFactor(e.target.checked)}
-                  className="h-4 w-4 rounded accent-primary cursor-pointer"
-                />
-                <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
-                  <ShieldCheck className="h-4 w-4 text-primary" />
-                  Require Two-Factor Authentication (2FA)
-                </span>
-              </label>
-
-              {/* Collapsible Password Reset */}
-              <div className="pt-2 border-t border-line/60">
+              {/* Quick preset chips */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-ink-muted font-medium">Quick Presets:</span>
                 <button
                   type="button"
-                  onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="flex items-center justify-between w-full text-left text-xs font-semibold text-ink hover:text-primary transition cursor-pointer"
+                  onClick={() => applyPreset('all')}
+                  className="rounded-full border border-line bg-surface-panel px-3 py-1 text-xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
                 >
-                  <span className="flex items-center gap-1.5">
-                    <Lock className="h-3.5 w-3.5 text-primary" />
-                    <span>Change Login Password</span>
-                    {password && <span className="text-primary text-xs font-normal">• (Pending)</span>}
-                  </span>
-                  {showPasswordSection ? (
-                    <ChevronUp className="h-4 w-4 text-ink-muted" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-ink-muted" />
-                  )}
+                  All ({activeCategories.length})
                 </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('infrastructure')}
+                  className="rounded-full border border-line bg-surface-panel px-3 py-1 text-xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+                >
+                  Infrastructure &amp; Roads
+                </button>
+                <button
+                  type="button"
+                  onClick={() => applyPreset('sanitation_water')}
+                  className="rounded-full border border-line bg-surface-panel px-3 py-1 text-xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+                >
+                  Water &amp; Sanitation
+                </button>
+              </div>
 
-                {showPasswordSection && (
-                  <div className="mt-2.5 space-y-2 pt-2 border-t border-line/40">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-ink-muted">Min 8 characters, must match</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="text-xs text-ink-muted hover:text-ink inline-flex items-center gap-1 cursor-pointer"
-                      >
-                        {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        <span>{showPassword ? 'Hide' : 'Show'}</span>
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="New password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        autoComplete="new-password"
-                        className="w-full rounded-lg border border-line bg-surface-panel px-3 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
-                      />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        placeholder="Confirm password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        autoComplete="new-password"
-                        className="w-full rounded-lg border border-line bg-surface-panel px-3 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
-                      />
-                    </div>
+              {/* Categories grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[220px] overflow-y-auto pr-1 rounded-xl border border-line p-2.5 bg-surface-sunken/30">
+                {activeCategories.map((cat) => {
+                  const checked = categoryScope.includes(cat.key)
+                  return (
+                    <label
+                      key={cat.key}
+                      className={`flex cursor-pointer items-center justify-between gap-2.5 rounded-lg border px-3 py-2 text-xs transition select-none ${
+                        checked
+                          ? 'border-primary bg-primary/5 text-primary-dark font-semibold shadow-2xs'
+                          : 'border-line bg-surface-panel hover:bg-surface-sunken/60 text-ink'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCategory(cat.key)}
+                          className="h-4 w-4 accent-primary cursor-pointer shrink-0"
+                        />
+                        <span className="truncate">{cat.label?.en || cat.key}</span>
+                      </div>
+                      {checked && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                    </label>
+                  )
+                })}
+              </div>
+              <p className="text-2xs text-ink-muted">
+                Per security policy BR-26, officers cannot review or resolve reports outside their authorized category scope.
+              </p>
+            </div>
+          )}
+
+          {/* TAB 3: Security & Password */}
+          {activeTab === 'security' && (
+            <div className="space-y-4">
+              {/* 2FA Card */}
+              <div className="rounded-xl border border-line bg-surface-sunken/40 p-4">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={requireTwoFactor}
+                    onChange={(e) => setRequireTwoFactor(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded accent-primary cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-sm font-semibold text-ink flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-primary" />
+                      Require Two-Factor Authentication (2FA)
+                    </span>
+                    <p className="mt-1 text-xs text-ink-muted leading-relaxed">
+                      Enforces TOTP authenticator device verification on every sign-in attempt. Recommended for officers with dispatch and triage rights.
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Password Reset Card */}
+              <div className="rounded-xl border border-line bg-surface-sunken/40 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+                    <Lock className="h-4 w-4 text-primary" />
+                    <span>Reset Officer Password</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="inline-flex items-center gap-1.5 text-xs text-ink-muted hover:text-ink cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    <span>{showPassword ? 'Hide' : 'Show'}</span>
+                  </button>
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Leave these fields blank if you do not want to change the officer's current password.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-2xs font-semibold text-ink mb-1">
+                      New Password
+                    </label>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Minimum 8 characters"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                      className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-2xs font-semibold text-ink mb-1">
+                      Confirm Password
+                    </label>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Repeat new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
+                      className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {password && (
+                  <div className="flex items-center gap-2 text-xs pt-1">
+                    {password.length < 8 ? (
+                      <span className="text-amber-600 font-medium">⚠️ Password must be at least 8 characters long</span>
+                    ) : password === confirmPassword ? (
+                      <span className="text-emerald-600 font-semibold">✓ Passwords match</span>
+                    ) : confirmPassword ? (
+                      <span className="text-rose-600 font-medium">✕ Passwords do not match</span>
+                    ) : null}
                   </div>
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Right Column: Category Scope */}
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold text-ink">Departmental Category Scope</label>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
-                  {categoryScope.length} of {activeCategories.length} Selected
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={selectAllCategories}
-                className="text-xs font-semibold text-primary hover:underline cursor-pointer"
-              >
-                {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
-              </button>
-            </div>
-
-            {/* Quick preset chips */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-ink-muted font-medium">Quick Presets:</span>
-              <button
-                type="button"
-                onClick={() => applyPreset('all')}
-                className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
-              >
-                All ({activeCategories.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('infrastructure')}
-                className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
-              >
-                Infrastructure
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('sanitation_water')}
-                className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
-              >
-                Water &amp; Sanitation
-              </button>
-            </div>
-
-            {/* Categories list */}
-            <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 rounded-xl border border-line p-2 bg-surface-sunken/30">
-              {activeCategories.map((cat) => {
-                const checked = categoryScope.includes(cat.key)
-                return (
-                  <label
-                    key={cat.key}
-                    className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs transition select-none ${
-                      checked
-                        ? 'border-primary/70 bg-primary/5 text-primary-dark font-semibold shadow-2xs'
-                        : 'border-transparent bg-surface-panel hover:bg-surface-panel/90 text-ink'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleCategory(cat.key)}
-                        className="h-4 w-4 accent-primary cursor-pointer shrink-0"
-                      />
-                      <span className="truncate text-xs font-medium">{cat.label?.en || cat.key}</span>
-                    </div>
-                    {checked && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                  </label>
-                )
-              })}
-            </div>
-            <p className="text-2xs text-ink-muted">
-              Only incident reports matching these categories will be routed to this officer's queue and map.
-            </p>
-          </div>
+          )}
         </div>
 
         {error && (
@@ -516,10 +624,11 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           </div>
         )}
 
+        {/* Persistent Bottom Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-line">
           <Link
             to={`/admin/authorities/${authority?.id}`}
-            className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
+            className="text-xs text-primary hover:underline inline-flex items-center gap-1.5 font-medium"
           >
             <span>Full Profile &amp; Audit Log</span>
             <ArrowRight className="h-3.5 w-3.5" />
