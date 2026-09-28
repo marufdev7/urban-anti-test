@@ -57,7 +57,12 @@ import { useIssues, ALL_ISSUE_STATUSES, issueStatusLabel } from '../../hooks/iss
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { formatHours, shortId, timeAgo, formatDateTime } from '../../lib/format'
 import { api } from '../../lib/api'
-import { exportIssuesPdf, exportIssuesCsv } from '../../lib/pdfExport'
+import {
+  exportIssuesPdf,
+  exportIssuesCsv,
+  formatActionTitle,
+  getActorDisplayName,
+} from '../../lib/pdfExport'
 import {
   BANGLADESH_CITIES,
   isPointInPolygon,
@@ -1435,23 +1440,27 @@ export default function AdminDashboardPage() {
                 (auditEventsData?.data ?? []).slice(0, 4).map((evt) => {
                   const meta = getAuditMeta(evt.action)
                   const IconC = meta.Icon
+                  const actionTitle = formatActionTitle(evt.action)
+                  const actorName = getActorDisplayName(evt)
+                  const eventTime = evt.at || evt.timestamp || evt.createdAt
+
                   return (
                     <div key={evt.id} className="py-2.5 flex items-center justify-between text-xs gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="p-1 rounded-lg bg-surface-sunken text-ink-muted">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="p-1 rounded-lg bg-surface-sunken text-ink-muted shrink-0 border border-line/50">
                           <IconC className="h-3.5 w-3.5" />
                         </span>
-                        <div>
-                          <div className="font-semibold text-ink">
-                            {meta.label}: <span className="font-normal text-ink-muted">{evt.action}</span>
+                        <div className="min-w-0">
+                          <div className="font-semibold text-ink truncate">
+                            {actionTitle}
                           </div>
-                          <div className="text-[11px] text-ink-faint">
-                            By {evt.actor?.email || 'System'}
+                          <div className="text-[11px] text-ink-faint truncate">
+                            By {actorName}
                           </div>
                         </div>
                       </div>
                       <div className="text-[11px] text-ink-muted font-medium shrink-0">
-                        {timeAgo(evt.timestamp || evt.createdAt)}
+                        {timeAgo(eventTime)}
                       </div>
                     </div>
                   )

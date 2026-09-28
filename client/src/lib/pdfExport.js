@@ -402,14 +402,15 @@ export function exportAuthoritiesPdf({ authorities = [], filename = null }) {
  */
 export function getActorDisplayName(event) {
   if (!event) return 'Automated System'
-  const email = (event.actorEmail || '').toLowerCase()
-  const prefix = email.split('@')[0]
-  const name = event.actorName || ''
+  const email = (event.actorEmail || event.actor?.email || '').toLowerCase()
+  const prefix = email ? email.split('@')[0] : ''
+  const name = event.actorName || event.actor?.name || ''
+  const role = event.actorRole || event.actor?.role || ''
 
   if (email === 'authority@urbanmend.test' || prefix === 'authority' || name === 'Authority') {
     return 'Central Operations Command'
   }
-  if (event.actorRole === 'admin' || email === 'admin@urbanmend.test') {
+  if (role === 'admin' || email === 'admin@urbanmend.test') {
     return 'Municipal Administrator'
   }
   if (prefix.includes('road')) return 'Roads & Transit Officer'
@@ -435,7 +436,7 @@ export function getActorDisplayName(event) {
     }
   }
 
-  return `${(event.actorRole || 'System').charAt(0).toUpperCase() + (event.actorRole || 'system').slice(1)} Officer`
+  return role ? `${role.charAt(0).toUpperCase() + role.slice(1)} Officer` : 'Municipal Officer'
 }
 
 /**

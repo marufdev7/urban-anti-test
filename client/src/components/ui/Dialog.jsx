@@ -42,7 +42,7 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
 
   const dialogContent = (
     <div
-      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 overflow-y-auto"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] flex items-center justify-center bg-ink/40 backdrop-blur-xs p-4 overflow-y-auto"
       style={{
         margin: 0,
         position: 'fixed',
@@ -63,25 +63,21 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`relative my-auto w-full ${hasCustomMaxWidth ? '' : 'max-w-md'} max-h-[90vh] flex flex-col rounded-2xl bg-surface-panel shadow-2xl shadow-slate-950/40 border border-line ring-1 ring-black/10 overflow-hidden ${className}`}
+        className={`relative my-auto w-full ${hasCustomMaxWidth ? '' : 'max-w-md'} max-h-[90vh] flex flex-col rounded-xl bg-surface-panel shadow-menu border border-line ${className}`}
       >
-        <header className="flex shrink-0 items-center justify-between border-b border-line bg-surface-sunken/40 px-5 py-3.5">
+        <header className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink">{title}</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="rounded-lg p-1.5 text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors cursor-pointer"
+            className="rounded-panel p-1 text-ink-muted hover:bg-surface-sunken hover:text-ink transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </header>
         <div className="overflow-y-auto px-5 py-4 text-sm text-ink">{children}</div>
-        {footer && (
-          <footer className="shrink-0 flex justify-end gap-2 border-t border-line bg-surface-sunken/40 px-5 py-3 rounded-b-2xl">
-            {footer}
-          </footer>
-        )}
+        {footer && <footer className="shrink-0 flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
       </div>
     </div>
   )
