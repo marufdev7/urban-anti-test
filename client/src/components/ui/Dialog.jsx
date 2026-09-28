@@ -44,9 +44,9 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`w-full max-w-md rounded-panel bg-surface-panel shadow-menu border border-line ${className}`}
+        className={`w-full max-w-md max-h-[90vh] flex flex-col rounded-panel bg-surface-panel shadow-menu border border-line ${className}`}
       >
-        <header className="flex items-center justify-between border-b border-line px-5 py-3">
+        <header className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink">{title}</h2>
           <button
             type="button"
@@ -57,8 +57,8 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </header>
-        <div className="px-5 py-4 text-sm text-ink">{children}</div>
-        {footer && <footer className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
+        <div className="overflow-y-auto px-5 py-4 text-sm text-ink">{children}</div>
+        {footer && <footer className="shrink-0 flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</footer>}
       </div>
     </div>
   )

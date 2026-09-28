@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Download,
   Eye,
@@ -133,6 +135,7 @@ function EditAuthorityModal({ authority, onClose, categories }) {
   const [requireTwoFactor, setRequireTwoFactor] = useState(
     Boolean(authority?.requireTwoFactor ?? authority?.require_two_factor),
   )
+  const [showPasswordSection, setShowPasswordSection] = useState(false)
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -239,38 +242,33 @@ function EditAuthorityModal({ authority, onClose, categories }) {
       open={Boolean(authority)}
       onClose={onClose}
       title="Edit Authority Officer"
-      className="max-w-2xl"
+      className="max-w-3xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Officer Profile Header Banner */}
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-sunken/60 p-3.5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-sm">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Officer Snapshot Header Strip */}
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-sunken/40 px-3 py-2 text-xs">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xs">
               {initials}
             </div>
-            <div>
-              <p className="text-sm font-bold text-ink">{authority?.email}</p>
-              <div className="flex items-center gap-2 text-2xs text-ink-muted mt-0.5">
-                <span>{authority?.phone || 'No phone recorded'}</span>
-                <span>•</span>
-                <span>{getJurisdictionLabel(authority?.assignedArea)}</span>
-              </div>
+            <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+              <span className="font-bold text-ink truncate text-xs">{authority?.email}</span>
+              <span className="text-2xs text-ink-muted">•</span>
+              <span className="text-2xs text-ink-muted">{getJurisdictionLabel(authority?.assignedArea)}</span>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-md border border-line bg-surface-panel px-2.5 py-1 text-2xs font-mono font-bold text-ink">
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleCopyId}
+              title="Copy UUID"
+              className="inline-flex items-center gap-1 rounded border border-line bg-surface-panel px-1.5 py-0.5 font-mono text-3xs font-semibold text-ink-muted hover:text-ink transition cursor-pointer"
+            >
               <span>#UM-{shortId(authority?.id)}</span>
-              <button
-                type="button"
-                onClick={handleCopyId}
-                title="Copy Full UUID"
-                className="ml-1 text-ink-muted hover:text-ink transition cursor-pointer"
-              >
-                {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-              </button>
-            </span>
+              {copied ? <Check className="h-2.5 w-2.5 text-emerald-600" /> : <Copy className="h-2.5 w-2.5" />}
+            </button>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-2xs font-bold capitalize ${
+              className={`rounded-full px-2 py-0.5 text-3xs font-bold capitalize ${
                 status === 'active'
                   ? 'border border-emerald-300 bg-emerald-50 text-emerald-800'
                   : status === 'suspended'
@@ -283,223 +281,237 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           </div>
         </div>
 
-        {/* Email & Phone */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Input
-            label="Official Email Address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="off"
-          />
-          <Input
-            label="Contact Phone Number"
-            type="tel"
-            placeholder="+8801700000000"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            autoComplete="off"
-            hint="E.164 phone with country code."
-          />
-        </div>
-
-        {/* Jurisdiction Area & Status */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-ink">
-              Territorial Jurisdiction
-            </label>
-            <Select
-              options={JURISDICTION_AREAS}
-              value={assignedArea}
-              onChange={(e) => setAssignedArea(e.target.value)}
-            />
-            <p className="mt-1 text-2xs text-ink-muted">
-              Limits this officer's queue &amp; map to this city/zone.
-            </p>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-ink">
-              Account Status
-            </label>
-            <select
-              aria-label="Account status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full rounded-panel border border-line bg-surface-panel px-3 py-2 text-sm focus:border-primary cursor-pointer"
-            >
-              <option value="active">Active (Full operational access)</option>
-              <option value="verified">Verified</option>
-              <option value="registered">Registered</option>
-              <option value="suspended">Suspended (Access blocked)</option>
-              <option value="deprovisioned">Deprovisioned</option>
-            </select>
-            <p className="mt-1 text-2xs text-ink-muted">
-              Suspended accounts cannot log in or take actions.
-            </p>
-          </div>
-        </div>
-
-        {/* Departmental Category Scope */}
-        <div>
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        {/* 2-Column Side-by-Side Content */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
+          {/* Left Column: Account Details, Jurisdiction & Security */}
+          <div className="space-y-2.5">
             <div>
-              <label className="text-xs font-semibold text-ink">
-                Departmental Category Scope
+              <label className="block text-2xs font-semibold text-ink mb-1">
+                Official Email Address <span className="text-status-critical">*</span>
               </label>
-              <p className="text-2xs text-ink-muted mt-0.5">
-                Categories the officer is permitted to triage, dispatch, and resolve.
-              </p>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="off"
+                className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none"
+              />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-2xs font-bold text-primary">
-                {categoryScope.length} of {activeCategories.length} Selected
-              </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="block text-2xs font-semibold text-ink mb-1">
+                  Contact Phone
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+8801700000000"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  autoComplete="off"
+                  className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-2xs font-semibold text-ink mb-1">
+                  Account Status
+                </label>
+                <select
+                  aria-label="Account status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none cursor-pointer"
+                >
+                  <option value="active">Active (Operational)</option>
+                  <option value="verified">Verified</option>
+                  <option value="registered">Registered</option>
+                  <option value="suspended">Suspended (Blocked)</option>
+                  <option value="deprovisioned">Deprovisioned</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-2xs font-semibold text-ink mb-1">
+                Territorial Jurisdiction Zone
+              </label>
+              <select
+                aria-label="Territorial Jurisdiction"
+                value={assignedArea}
+                onChange={(e) => setAssignedArea(e.target.value)}
+                className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-none cursor-pointer"
+              >
+                {JURISDICTION_AREAS.map((a) => (
+                  <option key={a.value} value={a.value}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Security: 2FA & Collapsible Password */}
+            <div className="rounded-lg border border-line bg-surface-sunken/30 p-2.5 space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={requireTwoFactor}
+                  onChange={(e) => setRequireTwoFactor(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded accent-primary cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-ink flex items-center gap-1.5">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                  Require Two-Factor Auth (2FA)
+                </span>
+              </label>
+
+              {/* Collapsible Password Reset */}
+              <div className="pt-1.5 border-t border-line/60">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordSection(!showPasswordSection)}
+                  className="flex items-center justify-between w-full text-left text-xs font-semibold text-ink hover:text-primary transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-primary" />
+                    <span>Change Login Password</span>
+                    {password && <span className="text-primary text-2xs font-normal">• (Pending)</span>}
+                  </span>
+                  {showPasswordSection ? (
+                    <ChevronUp className="h-3.5 w-3.5 text-ink-muted" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 text-ink-muted" />
+                  )}
+                </button>
+
+                {showPasswordSection && (
+                  <div className="mt-2 space-y-2 pt-1 border-t border-line/40">
+                    <div className="flex items-center justify-between">
+                      <span className="text-3xs text-ink-muted">Min 8 chars, match both</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="text-3xs text-ink-muted hover:text-ink inline-flex items-center gap-0.5 cursor-pointer"
+                      >
+                        {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
+                        <span>{showPassword ? 'Hide' : 'Show'}</span>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="New password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1 text-xs text-ink focus:border-primary focus:outline-none"
+                      />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="Confirm password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1 text-xs text-ink focus:border-primary focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Category Scope */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <label className="text-2xs font-semibold text-ink">Departmental Category Scope</label>
+                <span className="rounded-full bg-primary/10 px-1.5 py-0.2 text-3xs font-bold text-primary">
+                  {categoryScope.length}/{activeCategories.length}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={selectAllCategories}
-                className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                className="text-2xs font-semibold text-primary hover:underline cursor-pointer"
               >
                 {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
               </button>
             </div>
-          </div>
 
-          {/* Quick preset chips */}
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className="text-2xs text-ink-muted font-medium">Presets:</span>
-            <button
-              type="button"
-              onClick={() => applyPreset('all')}
-              className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-2xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
-            >
-              All ({activeCategories.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('infrastructure')}
-              className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-2xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
-            >
-              Infrastructure
-            </button>
-            <button
-              type="button"
-              onClick={() => applyPreset('sanitation_water')}
-              className="rounded-full border border-line bg-surface-panel px-2.5 py-0.5 text-2xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
-            >
-              Water &amp; Sanitation
-            </button>
-          </div>
-
-          {/* Clean Grid of Categories (no cramped scroll) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-xl border border-line p-3 bg-surface-sunken/30">
-            {activeCategories.map((cat) => {
-              const checked = categoryScope.includes(cat.key)
-              return (
-                <label
-                  key={cat.key}
-                  className={`flex cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs transition select-none ${
-                    checked
-                      ? 'border-primary bg-primary/5 text-primary-dark font-semibold shadow-2xs'
-                      : 'border-line bg-surface-panel hover:bg-surface-sunken/60 text-ink'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleCategory(cat.key)}
-                      className="h-3.5 w-3.5 accent-primary cursor-pointer shrink-0"
-                    />
-                    <span className="truncate">{cat.label?.en || cat.key}</span>
-                  </div>
-                  {checked && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
-                </label>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Security Policy (2FA) */}
-        <div className="rounded-xl border border-line bg-surface-sunken/30 p-3">
-          <label className="flex cursor-pointer items-start gap-2.5 select-none">
-            <input
-              type="checkbox"
-              checked={requireTwoFactor}
-              onChange={(e) => setRequireTwoFactor(e.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded accent-primary cursor-pointer"
-            />
-            <div>
-              <span className="text-xs font-bold text-ink flex items-center gap-1.5">
-                <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                Require Two-Factor Authentication (2FA)
-              </span>
-              <p className="mt-0.5 text-2xs text-ink-muted">
-                Mandates TOTP authentication device confirmation on sign-in.
-              </p>
+            {/* Quick preset chips */}
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-3xs text-ink-muted font-medium">Presets:</span>
+              <button
+                type="button"
+                onClick={() => applyPreset('all')}
+                className="rounded border border-line bg-surface-panel px-1.5 py-0.5 text-3xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('infrastructure')}
+                className="rounded border border-line bg-surface-panel px-1.5 py-0.5 text-3xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+              >
+                Infra
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('sanitation_water')}
+                className="rounded border border-line bg-surface-panel px-1.5 py-0.5 text-3xs font-medium text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+              >
+                Water/Waste
+              </button>
             </div>
-          </label>
-        </div>
 
-        {/* Set / Reset Password */}
-        <div className="rounded-xl border border-line bg-surface-sunken/40 p-3.5 space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-ink">
-              <Lock className="h-3.5 w-3.5 text-primary" />
-              <span>Set New Login Password (Optional)</span>
+            {/* Categories list */}
+            <div className="space-y-1 max-h-[195px] overflow-y-auto pr-1 rounded-lg border border-line p-1.5 bg-surface-sunken/30">
+              {activeCategories.map((cat) => {
+                const checked = categoryScope.includes(cat.key)
+                return (
+                  <label
+                    key={cat.key}
+                    className={`flex cursor-pointer items-center justify-between gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition select-none ${
+                      checked
+                        ? 'border-primary/60 bg-primary/5 text-primary-dark font-medium shadow-2xs'
+                        : 'border-transparent bg-surface-panel/80 hover:bg-surface-panel text-ink'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCategory(cat.key)}
+                        className="h-3.5 w-3.5 accent-primary cursor-pointer shrink-0"
+                      />
+                      <span className="truncate text-xs">{cat.label?.en || cat.key}</span>
+                    </div>
+                    {checked && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+                  </label>
+                )
+              })}
             </div>
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="inline-flex items-center gap-1 text-2xs font-medium text-ink-muted hover:text-ink cursor-pointer"
-            >
-              {showPassword ? (
-                <>
-                  <EyeOff className="h-3 w-3" /> Hide
-                </>
-              ) : (
-                <>
-                  <Eye className="h-3 w-3" /> Show
-                </>
-              )}
-            </button>
-          </div>
-          <p className="text-2xs text-ink-muted">
-            Leave blank if you do not want to change the officer's password.
-          </p>
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            <Input
-              type={showPassword ? 'text' : 'password'}
-              placeholder="New password (min 8 chars)"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-            <Input
-              type={showPassword ? 'text' : 'password'}
-              placeholder="Confirm new password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-            />
+            <p className="text-3xs text-ink-muted leading-tight">
+              Only reports matching these categories will be routed to this officer.
+            </p>
           </div>
         </div>
 
         {error && (
-          <div className="rounded-lg border border-rose-300 bg-rose-50 p-2.5 text-xs text-rose-800" role="alert">
+          <div className="rounded-md border border-rose-300 bg-rose-50 p-2 text-xs text-rose-800" role="alert">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-2.5 text-xs font-semibold text-emerald-800" role="status">
+          <div className="rounded-md border border-emerald-300 bg-emerald-50 p-2 text-xs font-semibold text-emerald-800" role="status">
             ✓ Authority officer updated successfully!
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-3 border-t border-line">
+        <div className="flex items-center justify-between pt-2.5 border-t border-line">
           <Link
             to={`/admin/authorities/${authority?.id}`}
             className="text-xs text-primary hover:underline inline-flex items-center gap-1 font-medium"
