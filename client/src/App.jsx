@@ -106,7 +106,7 @@ export default function App() {
                 <Route path="/admin/map" element={<AdminMapPage />} />
                 <Route path="/admin/reports" element={<AdminReportsPage />} />
                 <Route path="/admin/reports/:reportId" element={<ReportTrackingPage />} />
-                <Route path="/admin/deleted-reports" element={<AdminReportsPage defaultTab="deleted" />} />
+                <Route path="/admin/deleted-reports" element={<Navigate to="/admin/reports?tab=deleted" replace />} />
                 <Route path="/admin/authorities" element={<AuthoritiesPage />} />
                 <Route path="/admin/authorities/new" element={<ProvisionAuthorityPage />} />
                 <Route path="/admin/authorities/:authorityId" element={<AuthorityDetailPage />} />
