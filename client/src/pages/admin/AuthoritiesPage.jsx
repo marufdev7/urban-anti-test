@@ -414,8 +414,12 @@ function EditAuthorityModal({ authority, onClose, categories }) {
                     onChange={(e) => setStatus(e.target.value)}
                     className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none cursor-pointer"
                   >
+                    {!['active', 'suspended'].includes(status) && (
+                      <option value={status} disabled>
+                        {status.charAt(0).toUpperCase() + status.slice(1)} (Current)
+                      </option>
+                    )}
                     <option value="active">Active (Operational &amp; Full Access)</option>
-                    <option value="verified">Verified (Identity confirmed)</option>
                     <option value="suspended">Suspended (Access immediately revoked)</option>
                   </select>
                   <p className="mt-1 text-2xs text-ink-muted">

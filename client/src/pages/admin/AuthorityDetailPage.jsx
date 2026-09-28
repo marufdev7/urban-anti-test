@@ -42,10 +42,7 @@ import StatusBadge from '../../components/ui/StatusBadge'
 
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
-  { value: 'verified', label: 'Verified' },
-  { value: 'registered', label: 'Registered' },
   { value: 'suspended', label: 'Suspended' },
-  { value: 'deprovisioned', label: 'Deprovisioned' },
 ]
 
 const STATUS_TONES = {
@@ -824,7 +821,7 @@ export default function AuthorityDetailPage() {
           <div className="grid gap-5 lg:grid-cols-2">
             {/* Card 1: Account Status */}
             <Card>
-              <CardHeader title="Account Status" subtitle="Suspend to freeze, or deprovision to retire officer credentials." />
+              <CardHeader title="Account Status" subtitle="Suspend to freeze access, or activate operational officer credentials." />
               <CardBody>
                 <select
                   aria-label="Account status"
@@ -832,6 +829,11 @@ export default function AuthorityDetailPage() {
                   onChange={(e) => setStatusDraft(e.target.value)}
                   className="w-full rounded-panel border border-line bg-surface-panel px-3 py-2 text-sm focus:border-primary"
                 >
+                  {!STATUS_OPTIONS.some((s) => s.value === statusDraft) && (
+                    <option value={statusDraft} disabled>
+                      {STATUS_LABELS[statusDraft] ?? statusDraft} (Current)
+                    </option>
+                  )}
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
@@ -839,7 +841,7 @@ export default function AuthorityDetailPage() {
                 {statusDraft !== authority.status && (
                   <Button
                     className="mt-3 w-full"
-                    variant={statusDraft === 'suspended' || statusDraft === 'deprovisioned' ? 'danger' : 'primary'}
+                    variant={statusDraft === 'suspended' ? 'danger' : 'primary'}
                     onClick={() => setConfirmStatus(statusDraft)}
                   >
                     Apply status change
@@ -1030,11 +1032,11 @@ export default function AuthorityDetailPage() {
         <p className="text-sm text-ink-muted">
           Set this authority to{' '}
           <strong>{STATUS_LABELS[confirmStatus] ?? confirmStatus}</strong>?{' '}
-          {confirmStatus === 'deprovisioned'
-            ? 'This revokes the account and all active sessions immediately.'
-            : confirmStatus === 'suspended'
-              ? 'The account keeps its assigned area and scope but cannot act until reactivated.'
-              : ''}
+          {confirmStatus === 'suspended'
+            ? 'The account keeps its assigned area and scope but cannot log in or act until reactivated.'
+            : confirmStatus === 'active'
+              ? 'The officer will immediately regain full operational access.'
+              : ''}{' '}
           This change is recorded in the audit log.
         </p>
         <div className="mt-4 flex justify-end gap-2">
