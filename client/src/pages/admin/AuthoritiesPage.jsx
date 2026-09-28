@@ -416,9 +416,7 @@ function EditAuthorityModal({ authority, onClose, categories }) {
                   >
                     <option value="active">Active (Operational &amp; Full Access)</option>
                     <option value="verified">Verified (Identity confirmed)</option>
-                    <option value="registered">Registered (Pending authorization)</option>
                     <option value="suspended">Suspended (Access immediately revoked)</option>
-                    <option value="deprovisioned">Deprovisioned (Archived)</option>
                   </select>
                   <p className="mt-1 text-2xs text-ink-muted">
                     Suspended accounts cannot log in or perform dispatch actions.
