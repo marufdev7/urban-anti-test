@@ -31,6 +31,8 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
 
   if (!open) return null
 
+  const hasCustomMaxWidth = /\bmax-w-/.test(className)
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
@@ -44,7 +46,7 @@ export default function Dialog({ open, onClose, title, children, footer, classNa
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`w-full max-w-md max-h-[90vh] flex flex-col rounded-panel bg-surface-panel shadow-menu border border-line ${className}`}
+        className={`w-full ${hasCustomMaxWidth ? '' : 'max-w-md'} max-h-[90vh] flex flex-col rounded-panel bg-surface-panel shadow-menu border border-line ${className}`}
       >
         <header className="flex shrink-0 items-center justify-between border-b border-line px-5 py-3">
           <h2 className="text-base font-semibold text-ink">{title}</h2>
