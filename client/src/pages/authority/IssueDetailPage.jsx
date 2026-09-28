@@ -38,6 +38,7 @@ import { categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
 import { formatDateTime, shortId, timeAgo } from '../../lib/format'
 import Button from '../../components/ui/Button'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
+import Dialog from '../../components/ui/Dialog'
 import MapPanel from '../../components/MapPanel'
 import Select from '../../components/ui/Select'
 import { SkeletonDetail } from '../../components/ui/Skeleton'
@@ -741,136 +742,121 @@ export default function IssueDetailPage() {
               )}
 
               {/* Merge Modal */}
-              {mergeOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-                  <div className="w-full max-w-md rounded-panel border border-line bg-surface-panel p-6 shadow-menu">
-                    <h3 className="text-base font-bold text-ink">Merge Issue</h3>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      Merge this issue into another surviving issue. All bundled reports will transfer.
-                    </p>
-                    <form onSubmit={handleMerge} className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-ink">Surviving Issue ID (UUID)</label>
-                        <input
-                          type="text"
-                          required
-                          value={mergeWithId}
-                          onChange={(e) => setMergeWithId(e.target.value)}
-                          placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
-                          className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-ink">Merge Reason</label>
-                        <input
-                          type="text"
-                          value={mergeReason}
-                          onChange={(e) => setMergeReason(e.target.value)}
-                          placeholder="e.g. Duplicate report cluster on same street"
-                          className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" size="sm" onClick={() => setMergeOpen(false)}>Cancel</Button>
-                        <Button type="submit" size="sm" loading={mergeMutation.isPending} className="bg-primary text-white">Merge</Button>
-                      </div>
-                    </form>
+              <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Merge Issue">
+                <p className="text-xs text-ink-muted">
+                  Merge this issue into another surviving issue. All bundled reports will transfer.
+                </p>
+                <form onSubmit={handleMerge} className="mt-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink">Surviving Issue ID (UUID)</label>
+                    <input
+                      type="text"
+                      required
+                      value={mergeWithId}
+                      onChange={(e) => setMergeWithId(e.target.value)}
+                      placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    />
                   </div>
-                </div>
-              )}
+                  <div>
+                    <label className="block text-xs font-semibold text-ink">Merge Reason</label>
+                    <input
+                      type="text"
+                      value={mergeReason}
+                      onChange={(e) => setMergeReason(e.target.value)}
+                      placeholder="e.g. Duplicate report cluster on same street"
+                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="ghost" size="sm" onClick={() => setMergeOpen(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" loading={mergeMutation.isPending} className="bg-primary text-white">Merge</Button>
+                  </div>
+                </form>
+              </Dialog>
 
               {/* Split Modal */}
-              {splitOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-                  <div className="w-full max-w-md rounded-panel border border-line bg-surface-panel p-6 shadow-menu">
-                    <h3 className="text-base font-bold text-ink">Split Issue</h3>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      Select bundled reports to spin off into a new separate issue.
-                    </p>
-                    <form onSubmit={handleSplit} className="mt-4 space-y-3">
-                      <div className="max-h-48 overflow-y-auto space-y-2 border border-line rounded p-2">
-                        {reports.map((r) => (
-                          <label key={r.id} className="flex items-start gap-2 text-xs cursor-pointer p-1 hover:bg-slate-50 rounded">
-                            <input
-                              type="checkbox"
-                              checked={splitReportIds.has(r.id)}
-                              onChange={(e) => {
-                                const next = new Set(splitReportIds)
-                                if (e.target.checked) next.add(r.id)
-                                else next.delete(r.id)
-                                setSplitReportIds(next)
-                              }}
-                              className="mt-0.5 rounded border-line text-primary focus:ring-primary"
-                            />
-                            <div className="min-w-0">
-                              <span className="font-semibold text-ink block">Report #{shortId(r.id)}</span>
-                              <span className="text-ink-muted truncate block">{r.description || '(No description)'}</span>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-ink">Split Reason</label>
+              <Dialog open={splitOpen} onClose={() => setSplitOpen(false)} title="Split Issue">
+                <p className="text-xs text-ink-muted">
+                  Select bundled reports to spin off into a new separate issue.
+                </p>
+                <form onSubmit={handleSplit} className="mt-4 space-y-3">
+                  <div className="max-h-48 overflow-y-auto space-y-2 border border-line rounded p-2">
+                    {reports.map((r) => (
+                      <label key={r.id} className="flex items-start gap-2 text-xs cursor-pointer p-1 hover:bg-slate-50 rounded">
                         <input
-                          type="text"
-                          value={splitReason}
-                          onChange={(e) => setSplitReason(e.target.value)}
-                          placeholder="e.g. Unrelated incident clustered by proximity"
-                          className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                          type="checkbox"
+                          checked={splitReportIds.has(r.id)}
+                          onChange={(e) => {
+                            const next = new Set(splitReportIds)
+                            if (e.target.checked) next.add(r.id)
+                            else next.delete(r.id)
+                            setSplitReportIds(next)
+                          }}
+                          className="mt-0.5 rounded border-line text-primary focus:ring-primary"
                         />
-                      </div>
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" size="sm" onClick={() => setSplitOpen(false)}>Cancel</Button>
-                        <Button type="submit" size="sm" loading={splitMutation.isPending} disabled={splitReportIds.size === 0} className="bg-primary text-white">
-                          Split Selected
-                        </Button>
-                      </div>
-                    </form>
+                        <div className="min-w-0">
+                          <span className="font-semibold text-ink block">Report #{shortId(r.id)}</span>
+                          <span className="text-ink-muted truncate block">{r.description || '(No description)'}</span>
+                        </div>
+                      </label>
+                    ))}
                   </div>
-                </div>
-              )}
+                  <div>
+                    <label className="block text-xs font-semibold text-ink">Split Reason</label>
+                    <input
+                      type="text"
+                      value={splitReason}
+                      onChange={(e) => setSplitReason(e.target.value)}
+                      placeholder="e.g. Unrelated incident clustered by proximity"
+                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="ghost" size="sm" onClick={() => setSplitOpen(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" loading={splitMutation.isPending} disabled={splitReportIds.size === 0} className="bg-primary text-white">
+                      Split Selected
+                    </Button>
+                  </div>
+                </form>
+              </Dialog>
 
               {/* Moderate Modal */}
-              {moderateOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-                  <div className="w-full max-w-md rounded-panel border border-line bg-surface-panel p-6 shadow-menu">
-                    <h3 className="text-base font-bold text-ink">Moderate Issue</h3>
-                    <p className="mt-1 text-xs text-ink-muted">
-                      Administrators may hide or completely remove issues violating municipal policy.
-                    </p>
-                    <form onSubmit={handleModerate} className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-ink">Action</label>
-                        <select
-                          value={moderateAction}
-                          onChange={(e) => setModerateAction(e.target.value)}
-                          className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                        >
-                          <option value="hide">Hide (Returns 410 Gone publicly)</option>
-                          <option value="remove">Remove (Soft Delete)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-ink">Audit Reason (Required)</label>
-                        <textarea
-                          rows={2}
-                          required
-                          value={moderateReason}
-                          onChange={(e) => setModerateReason(e.target.value)}
-                          placeholder="Enter reason for audit record..."
-                          className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="ghost" size="sm" onClick={() => setModerateOpen(false)}>Cancel</Button>
-                        <Button type="submit" size="sm" loading={moderateMutation.isPending} disabled={!moderateReason.trim()} className="bg-rose-600 text-white">
-                          Confirm Moderation
-                        </Button>
-                      </div>
-                    </form>
+              <Dialog open={moderateOpen} onClose={() => setModerateOpen(false)} title="Moderate Issue">
+                <p className="text-xs text-ink-muted">
+                  Administrators may hide or completely remove issues violating municipal policy.
+                </p>
+                <form onSubmit={handleModerate} className="mt-4 space-y-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-ink">Action</label>
+                    <select
+                      value={moderateAction}
+                      onChange={(e) => setModerateAction(e.target.value)}
+                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    >
+                      <option value="hide">Hide (Returns 410 Gone publicly)</option>
+                      <option value="remove">Remove (Soft Delete)</option>
+                    </select>
                   </div>
-                </div>
-              )}
+                  <div>
+                    <label className="block text-xs font-semibold text-ink">Audit Reason (Required)</label>
+                    <textarea
+                      rows={2}
+                      required
+                      value={moderateReason}
+                      onChange={(e) => setModerateReason(e.target.value)}
+                      placeholder="Enter reason for audit record..."
+                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="ghost" size="sm" onClick={() => setModerateOpen(false)}>Cancel</Button>
+                    <Button type="submit" size="sm" loading={moderateMutation.isPending} disabled={!moderateReason.trim()} className="bg-rose-600 text-white">
+                      Confirm Moderation
+                    </Button>
+                  </div>
+                </form>
+              </Dialog>
             </CardBody>
           </Card>
 

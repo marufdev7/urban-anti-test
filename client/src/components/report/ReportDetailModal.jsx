@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -83,14 +84,32 @@ export default function ReportDetailModal({ open, onClose, report, onRemove }) {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  return (
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = originalOverflow
+    }
+  }, [])
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs overflow-y-auto"
+      className="fixed inset-0 top-0 left-0 right-0 bottom-0 w-screen h-screen z-[9999] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-sm overflow-y-auto animate-fade-in"
+      style={{
+        margin: 0,
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+      }}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose?.()
       }}
     >
-      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+      <div className="relative w-full max-w-4xl max-h-[92vh] flex flex-col rounded-2xl border border-line bg-surface-panel shadow-2xl shadow-slate-950/40 overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line bg-surface-sunken/60 px-6 py-4">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -365,4 +384,6 @@ export default function ReportDetailModal({ open, onClose, report, onRemove }) {
       </div>
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent
 }
