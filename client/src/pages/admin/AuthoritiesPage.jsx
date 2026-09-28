@@ -289,36 +289,36 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           </div>
         </div>
 
-        {/* Tab Navigation Bar */}
-        <div className="flex items-center gap-1.5 border-b border-line pb-2">
+        {/* Segmented Tab Navigation Bar */}
+        <div className="grid grid-cols-3 gap-1.5 rounded-xl bg-surface-sunken p-1 border border-line">
           <button
             type="button"
             onClick={() => setActiveTab('general')}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+            className={`flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'general'
-                ? 'bg-primary text-white shadow-2xs'
-                : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                ? 'bg-surface-panel text-ink shadow-xs border border-line/80 font-bold'
+                : 'text-ink-muted hover:text-ink hover:bg-surface-panel/40'
             }`}
           >
-            <UserCheck className="h-3.5 w-3.5" />
+            <UserCheck className={`h-4 w-4 ${activeTab === 'general' ? 'text-primary' : 'text-ink-muted'}`} />
             <span>General &amp; Jurisdiction</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('scope')}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+            className={`flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'scope'
-                ? 'bg-primary text-white shadow-2xs'
-                : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                ? 'bg-surface-panel text-ink shadow-xs border border-line/80 font-bold'
+                : 'text-ink-muted hover:text-ink hover:bg-surface-panel/40'
             }`}
           >
-            <Layers className="h-3.5 w-3.5" />
+            <Layers className={`h-4 w-4 ${activeTab === 'scope' ? 'text-primary' : 'text-ink-muted'}`} />
             <span>Category Scope</span>
             <span
               className={`rounded-full px-1.5 py-0.2 text-3xs font-bold ${
                 activeTab === 'scope'
-                  ? 'bg-white/20 text-white'
-                  : 'bg-primary/10 text-primary'
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : 'bg-surface-sunken text-ink-muted'
               }`}
             >
               {categoryScope.length}/{activeCategories.length}
@@ -327,22 +327,22 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           <button
             type="button"
             onClick={() => setActiveTab('security')}
-            className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-semibold transition cursor-pointer ${
+            className={`flex items-center justify-center gap-2 rounded-lg py-2 px-3 text-xs font-semibold transition cursor-pointer ${
               activeTab === 'security'
-                ? 'bg-primary text-white shadow-2xs'
-                : 'text-ink-muted hover:bg-surface-sunken hover:text-ink'
+                ? 'bg-surface-panel text-ink shadow-xs border border-line/80 font-bold'
+                : 'text-ink-muted hover:text-ink hover:bg-surface-panel/40'
             }`}
           >
-            <Lock className="h-3.5 w-3.5" />
+            <Lock className={`h-4 w-4 ${activeTab === 'security' ? 'text-primary' : 'text-ink-muted'}`} />
             <span>Security &amp; Password</span>
             {password && (
-              <span className="h-2 w-2 rounded-full bg-amber-400" title="Password update entered" />
+              <span className="h-2 w-2 rounded-full bg-amber-500" title="Password changed" />
             )}
           </button>
         </div>
 
-        {/* Tab Content Panels (Fixed stable min-height to prevent jumping) */}
-        <div className="min-h-[290px]">
+        {/* Tab Content Panels (Fixed stable height to completely prevent modal jumping) */}
+        <div className="h-[345px] overflow-y-auto pr-1">
           {/* TAB 1: General & Jurisdiction */}
           {activeTab === 'general' && (
             <div className="space-y-4">
@@ -443,25 +443,25 @@ function EditAuthorityModal({ authority, onClose, categories }) {
           {/* TAB 2: Departmental Category Scope */}
           {activeTab === 'scope' && (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <label className="text-xs font-semibold text-ink">Departmental Category Scope</label>
-                  <p className="text-2xs text-ink-muted mt-0.5">
-                    Select the municipal categories this officer is authorized to moderate and dispatch.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
-                    {categoryScope.length} of {activeCategories.length} Selected
-                  </span>
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-ink">Departmental Category Scope</h3>
+                    <span className="inline-flex items-center rounded-full bg-primary/10 border border-primary/25 px-2 py-0.5 text-2xs font-bold text-primary">
+                      {categoryScope.length} of {activeCategories.length} Selected
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={selectAllCategories}
-                    className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                    className="text-xs font-semibold text-primary hover:underline cursor-pointer shrink-0"
                   >
                     {categoryScope.length === activeCategories.length ? 'Deselect All' : 'Select All'}
                   </button>
                 </div>
+                <p className="text-2xs text-ink-muted mt-0.5">
+                  Select the municipal categories this officer is authorized to moderate and dispatch.
+                </p>
               </div>
 
               {/* Quick preset chips */}
