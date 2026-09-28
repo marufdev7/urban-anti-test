@@ -511,11 +511,8 @@ class UserAdminDetailView(APIView):
         for event in events_qs:
             actor_name = "Automated System"
             if event.actor:
-                actor_name = (
-                    event.actor.email.split("@")[0]
-                    if event.actor.email
-                    else event.actor.role
-                )
+                from urbenmend.audit.serializers import AuditEventSerializer
+                actor_name = AuditEventSerializer().get_actor_name(event)
             activity_log.append(
                 {
                     "id": str(event.id),

@@ -46,23 +46,34 @@ class AuditEventSerializer(CamelCaseSerializer):
         prefix = email.split("@")[0].lower() if email else ""
         if obj.actor.role == "admin":
             return "Municipal Administrator"
+        elif email == "authority@urbanmend.test" or prefix == "authority":
+            return "Central Operations Command"
         elif "pierson" in prefix or "disp" in prefix:
             return "Dispatcher Pierson"
         elif "lead" in prefix:
             return "Lead Inspector Tariq"
         elif "grid" in prefix:
-            return "Electrical Inspector"
+            return "Electrical Grid Inspector"
         elif "field" in prefix:
             return "Field Liaison Officer"
         elif "road" in prefix:
             return "Roads & Transit Officer"
+        elif "water" in prefix:
+            return "Water & Sanitation Specialist"
+        elif "drainage" in prefix:
+            return "Drainage & Flood Officer"
         elif "traffic" in prefix:
             return "Traffic Specialist"
         elif "health" in prefix or "sanitation" in prefix:
             return "Public Health Officer"
+        elif getattr(obj.actor, "assigned_area", None):
+            area_name = obj.actor.assigned_area.replace("_", " ").title()
+            return f"{area_name} Zone Officer"
         elif prefix:
-            parts = prefix.replace(".", " ").replace("_", " ").split()
-            return " ".join(p.capitalize() for p in parts)
+            cleaned = prefix.replace("authority.", "").replace("authority_", "").replace(".head", " Head")
+            parts = cleaned.replace(".", " ").replace("_", " ").split()
+            title = " ".join(p.capitalize() for p in parts)
+            return f"{title} Officer" if not title.lower().endswith(("officer", "specialist", "inspector", "command", "lead", "head")) else title
         return f"{obj.actor.role.capitalize()} User"
 
 

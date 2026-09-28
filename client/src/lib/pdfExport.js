@@ -398,9 +398,181 @@ export function exportAuthoritiesPdf({ authorities = [], filename = null }) {
 }
 
 /**
+ * Resolve friendly profile display name for actors across the platform.
+ */
+export function getActorDisplayName(event) {
+  if (!event) return 'Automated System'
+  const email = (event.actorEmail || '').toLowerCase()
+  const prefix = email.split('@')[0]
+  const name = event.actorName || ''
+
+  if (email === 'authority@urbanmend.test' || prefix === 'authority' || name === 'Authority') {
+    return 'Central Operations Command'
+  }
+  if (event.actorRole === 'admin' || email === 'admin@urbanmend.test') {
+    return 'Municipal Administrator'
+  }
+  if (prefix.includes('road')) return 'Roads & Transit Officer'
+  if (prefix.includes('water')) return 'Water & Sanitation Specialist'
+  if (prefix.includes('grid')) return 'Electrical Grid Inspector'
+  if (prefix.includes('field')) return 'Field Liaison Officer'
+  if (prefix.includes('drainage')) return 'Drainage & Flood Officer'
+  if (prefix.includes('traffic')) return 'Traffic Systems Specialist'
+  if (prefix.includes('health') || prefix.includes('sanitation')) return 'Public Health & Waste Inspector'
+  if (prefix.includes('chattogram')) return 'Chattogram Operations Head'
+  if (prefix.includes('marufauth')) return 'Rajshahi Zone Officer'
+
+  if (name && name !== 'Authority' && name !== 'Authority User') {
+    return name
+  }
+
+  if (prefix) {
+    const cleaned = prefix.replace(/^authority[._-]/i, '').replace(/[._-]head$/i, ' Head')
+    const parts = cleaned.replace(/[._-]/g, ' ').split(/\s+/).filter(Boolean)
+    if (parts.length > 0) {
+      const title = parts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ')
+      return title.toLowerCase().endsWith('officer') ? title : `${title} Officer`
+    }
+  }
+
+  return `${(event.actorRole || 'System').charAt(0).toUpperCase() + (event.actorRole || 'system').slice(1)} Officer`
+}
+
+/**
+ * Convert technical dot-separated action slugs into clean, human-readable action titles.
+ */
+export function formatActionTitle(action = '') {
+  const titles = {
+    'reference.city_boundary_replaced': 'City Boundary Replaced',
+    'reference.category_created': 'Category Created',
+    'reference.category_updated': 'Category Updated',
+    'reference.severity_keyword_created': 'Severity Keyword Created',
+    'reference.severity_keyword_updated': 'Severity Keyword Updated',
+    'reference.poi_created': 'Point of Interest Created',
+    'reference.poi_updated': 'Point of Interest Updated',
+    'reference.clustering_rule_created': 'Clustering Rule Created',
+    'reference.clustering_rule_updated': 'Clustering Rule Updated',
+    'identity.user_updated': 'Officer Account Updated',
+    'identity.provisioned': 'Officer Account Provisioned',
+    'authority.provisioned': 'Officer Account Provisioned',
+    'authority.scope_changed': 'Officer Scope Updated',
+    'identity.updated': 'Officer Scope Updated',
+    'issue.status_changed': 'Incident Status Changed',
+    'issue.assignment_changed': 'Crew Assignment Changed',
+    'issue.severity_overridden': 'Severity Overridden',
+    'issue.severity_changed': 'Severity Level Overridden',
+    'issue.merged': 'Incidents Merged',
+    'issue.split': 'Incident Split',
+    'issue.reopened': 'Incident Reopened',
+    'issue.comment_created': 'Internal Dispatch Note',
+    'moderation.hide': 'Report Hidden (Policy)',
+    'moderation.remove': 'Report Removed (Soft-Deleted)',
+    'moderation.restore': 'Report Restored',
+    'moderation.quarantine': 'Report Quarantined',
+  }
+  if (titles[action]) return titles[action]
+  return action
+    .split('.')
+    .map((part) =>
+      part
+        .split('_')
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' '),
+    )
+    .join(' — ')
+}
+
+/**
+ * Format audit state diffs into clean, human-readable normal text instead of raw JSON.
+ */
+export function formatAuditChangeDetails(event) {
+  if (!event) return 'Activity verified and committed.'
+  const { before, after, metadata, action } = event
+  const changes = []
+
+  const keyLabels = {
+    name: 'Name',
+    title: 'Title',
+    status: 'Status',
+    category_scope: 'Category Scope',
+    categoryScope: 'Category Scope',
+    assigned_area: 'Territorial Zone',
+    assignedArea: 'Territorial Zone',
+    assignee_id: 'Assigned Crew',
+    assigneeId: 'Assigned Crew',
+    severity: 'Severity',
+    email: 'Email',
+    phone: 'Phone',
+    require_two_factor: 'Two-Factor Auth',
+    requireTwoFactor: 'Two-Factor Auth',
+    priority: 'Priority',
+    comment: 'Directive Note',
+  }
+
+  const formatVal = (v) => {
+    if (v === null || v === undefined) return 'None'
+    if (Array.isArray(v)) {
+      return v.length > 0 ? v.map((item) => String(item).replace(/_/g, ' ')).join(', ') : 'None'
+    }
+    if (typeof v === 'boolean') return v ? 'Enabled' : 'Disabled'
+    if (typeof v === 'string') return v.replace(/_/g, ' ')
+    if (typeof v === 'object') return Object.values(v).join(', ')
+    return String(v)
+  }
+
+  if (before && after && typeof before === 'object' && typeof after === 'object') {
+    const allKeys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]))
+    for (const key of allKeys) {
+      if (['id', 'created_at', 'updated_at', 'at'].includes(key) && allKeys.length > 2) {
+        continue
+      }
+      const bVal = before[key]
+      const aVal = after[key]
+      if (JSON.stringify(bVal) !== JSON.stringify(aVal)) {
+        const label = keyLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+        changes.push(`${label}: ${formatVal(bVal)} ➔ ${formatVal(aVal)}`)
+      }
+    }
+  } else if (!before && after && typeof after === 'object') {
+    const details = []
+    if (after.name) details.push(`Name: "${after.name}"`)
+    if (after.email) details.push(`Email: ${after.email}`)
+    if (after.status) details.push(`Status: ${after.status}`)
+    if (after.assigned_area) details.push(`Zone: ${after.assigned_area}`)
+    if (after.category_scope) details.push(`Scope: ${formatVal(after.category_scope)}`)
+    if (details.length > 0) {
+      changes.push(`Provisioned with ${details.join(', ')}`)
+    }
+  }
+
+  const reason =
+    metadata?.reason ||
+    after?.reason ||
+    (action === 'issue.comment_created' ? after?.comment : null) ||
+    metadata?.comment
+
+  let result = changes.join('; ')
+  if (reason) {
+    result = result ? `${result} (Reason: "${reason}")` : `Reason: "${reason}"`
+  }
+
+  if (!result) {
+    if (action?.startsWith('moderation.remove')) {
+      return 'Soft-deleted from municipal active records'
+    }
+    if (action?.startsWith('moderation.hide')) {
+      return 'Hidden from public feed and municipal dashboard'
+    }
+    return 'Action cryptographically verified and recorded.'
+  }
+
+  return result
+}
+
+/**
  * Export complete immutable audit event log to PDF.
  */
-export function exportAuditLogPdf({ events = [], user = null, filename = null }) {
+export function exportAuditLogPdf({ events = [], user = null, filename = null, dateRangeText = null }) {
   const doc = new jsPDF({
     orientation: 'landscape',
     unit: 'mm',
@@ -425,7 +597,13 @@ export function exportAuditLogPdf({ events = [], user = null, filename = null })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(9)
-  doc.text('IMMUTABLE SYSTEM ACTIVITY & DECISION RECORD', 14, 18)
+  doc.text(
+    dateRangeText
+      ? `IMMUTABLE SYSTEM RECORD • PERIOD: ${dateRangeText.toUpperCase()}`
+      : 'IMMUTABLE SYSTEM ACTIVITY & DECISION RECORD',
+    14,
+    18,
+  )
 
   const nowStr = new Date().toLocaleString('en-US', {
     dateStyle: 'medium',
@@ -442,23 +620,13 @@ export function exportAuditLogPdf({ events = [], user = null, filename = null })
 
   const tableData = events.map((e) => {
     const timeStr = formatDateTime(e.at)
-    const actorStr = `${e.actorName || 'System'} (${e.actorEmail || (e.actorId ? shortId(e.actorId) : 'N/A')})\n[Role: ${(e.actorRole || 'System').toUpperCase()}]`
-    const actionStr = e.action
+    const actorName = getActorDisplayName(e)
+    const roleLabel = (e.actorRole || 'System').toUpperCase()
+    // Normal text actor cell: Profile Name, Email, and only the Role label (no "[Role: ]" brackets)
+    const actorStr = `${actorName}\n(${e.actorEmail || (e.actorId ? shortId(e.actorId) : 'N/A')})\n${roleLabel}`
+    const actionStr = formatActionTitle(e.action)
     const targetStr = `${(e.targetType || 'entity').toUpperCase()} #${shortId(e.targetId)}`
-
-    // Format changes summary
-    let details = ''
-    if (e.before || e.after) {
-      const parts = []
-      if (e.before) parts.push(`Before: ${JSON.stringify(e.before)}`)
-      if (e.after) parts.push(`After: ${JSON.stringify(e.after)}`)
-      details = parts.join(' | ')
-    }
-    const reason = e.metadata?.reason || e.after?.reason || ''
-    if (reason) {
-      details = details ? `${details} — Reason: "${reason}"` : `Reason: "${reason}"`
-    }
-    if (!details) details = 'Activity verified and committed.'
+    const details = formatAuditChangeDetails(e)
 
     return [
       timeStr,
@@ -520,7 +688,7 @@ export function exportAuditLogPdf({ events = [], user = null, filename = null })
 }
 
 /**
- * Export audit events to CSV.
+ * Export audit events to CSV with clean human-readable text.
  */
 export function exportAuditLogCsv({ events = [], filename = null }) {
   const headers = [
@@ -529,26 +697,22 @@ export function exportAuditLogCsv({ events = [], filename = null }) {
     'Actor Name',
     'Actor Email',
     'Actor Role',
-    'Action',
-    'Target Type',
+    'Action Taken',
+    'Target Entity Type',
     'Target ID',
-    'Before State',
-    'After State',
-    'Reason / Metadata',
+    'Change Details & Reason',
   ]
 
   const rows = events.map((e) => [
     e.id || '',
     `"${e.at || ''}"`,
-    `"${(e.actorName || '').replace(/"/g, '""')}"`,
+    `"${(getActorDisplayName(e)).replace(/"/g, '""')}"`,
     `"${(e.actorEmail || '').replace(/"/g, '""')}"`,
-    `"${(e.actorRole || '').replace(/"/g, '""')}"`,
-    `"${(e.action || '').replace(/"/g, '""')}"`,
+    `"${(e.actorRole || '').toUpperCase().replace(/"/g, '""')}"`,
+    `"${(formatActionTitle(e.action)).replace(/"/g, '""')}"`,
     `"${(e.targetType || '').replace(/"/g, '""')}"`,
     `"${(e.targetId || '').replace(/"/g, '""')}"`,
-    `"${JSON.stringify(e.before || {}).replace(/"/g, '""')}"`,
-    `"${JSON.stringify(e.after || {}).replace(/"/g, '""')}"`,
-    `"${(e.metadata?.reason || e.after?.reason || '').replace(/"/g, '""')}"`,
+    `"${(formatAuditChangeDetails(e)).replace(/"/g, '""')}"`,
   ])
 
   const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')

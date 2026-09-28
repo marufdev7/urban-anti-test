@@ -28,7 +28,13 @@ import {
 import { useAuditEvents } from '../../hooks/admin'
 import { useAuth } from '../../auth/AuthContext'
 import { formatDateTime, shortId, timeAgo } from '../../lib/format'
-import { exportAuditLogPdf, exportAuditLogCsv } from '../../lib/pdfExport'
+import {
+  exportAuditLogPdf,
+  exportAuditLogCsv,
+  getActorDisplayName,
+  formatActionTitle,
+  formatAuditChangeDetails,
+} from '../../lib/pdfExport'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Dialog from '../../components/ui/Dialog'
@@ -41,12 +47,13 @@ import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
  * Format human-readable narrative and badge styling for each audit action
  */
 function getActionMeta(action, before, after, metadata) {
+  const title = formatActionTitle(action)
   switch (action) {
     case 'issue.status_changed': {
       const fromStatus = before?.status || 'unknown'
       const toStatus = after?.status || 'updated'
       return {
-        label: 'Status Transition',
+        label: title,
         badgeColor: 'border-sky-300 bg-sky-50 text-sky-700',
         Icon: RefreshCw,
         narrative: `Changed status from "${fromStatus.replace('_', ' ')}" to "${toStatus.replace('_', ' ')}"`,
@@ -59,7 +66,7 @@ function getActionMeta(action, before, after, metadata) {
       const hadAssignee = Boolean(before?.assignee_id)
       const hasAssignee = Boolean(after?.assignee_id)
       return {
-        label: 'Crew Assignment',
+        label: title,
         badgeColor: 'border-teal-300 bg-teal-50 text-teal-700',
         Icon: Users,
         narrative: hasAssignee
@@ -70,22 +77,22 @@ function getActionMeta(action, before, after, metadata) {
         diffAfter: hasAssignee ? `Unit #${shortId(after.assignee_id)}` : 'Unassigned',
       }
     }
-    case 'issue.severity_changed': {
-      const fromSev = before?.severity || 'unrated'
+    case 'issue.severity_changed':
+    case 'issue.severity_overridden': {
       const toSev = after?.severity || 'overridden'
       return {
-        label: 'Severity Override',
+        label: title,
         badgeColor: 'border-rose-300 bg-rose-50 text-rose-700',
         Icon: AlertTriangle,
         narrative: `Manual severity override applied: escalated to "${toSev.toUpperCase()}" priority`,
         hasDiff: true,
-        diffBefore: fromSev,
+        diffBefore: before?.severity || 'unrated',
         diffAfter: toSev,
       }
     }
     case 'moderation.hide': {
       return {
-        label: 'Moderation (Hidden)',
+        label: title,
         badgeColor: 'border-amber-300 bg-amber-50 text-amber-800',
         Icon: EyeOff,
         narrative: 'Hidden from public feed and municipal dashboard (Policy Enforcement)',
@@ -94,37 +101,49 @@ function getActionMeta(action, before, after, metadata) {
     }
     case 'moderation.remove': {
       return {
-        label: 'Moderation (Removed)',
+        label: title,
         badgeColor: 'border-rose-300 bg-rose-50 text-rose-700',
         Icon: Trash2,
         narrative: 'Soft-deleted or permanently removed from municipal active record',
         hasDiff: false,
       }
     }
-    case 'identity.provisioned': {
+    case 'identity.provisioned':
+    case 'authority.provisioned': {
       const email = after?.email || 'New Authority'
       return {
-        label: 'Personnel Provisioned',
+        label: title,
         badgeColor: 'border-purple-300 bg-purple-50 text-purple-700',
         Icon: UserPlus,
         narrative: `Provisioned new Authority official account for ${email}`,
         hasDiff: false,
       }
     }
-    case 'identity.updated': {
+    case 'identity.updated':
+    case 'identity.user_updated':
+    case 'authority.scope_changed': {
       return {
-        label: 'Scope & Access Updated',
+        label: title,
         badgeColor: 'border-indigo-300 bg-indigo-50 text-indigo-700',
         Icon: ShieldCheck,
-        narrative: 'Updated municipal personnel category jurisdiction and system access scope',
+        narrative: 'Updated municipal personnel credentials, category jurisdiction, and system access scope',
         hasDiff: Boolean(before && after),
         diffBefore: before?.category_scope ? before.category_scope.join(', ') : null,
         diffAfter: after?.category_scope ? after.category_scope.join(', ') : null,
       }
     }
+    case 'reference.city_boundary_replaced': {
+      return {
+        label: title,
+        badgeColor: 'border-blue-300 bg-blue-50 text-blue-700',
+        Icon: Layers,
+        narrative: 'Updated municipal GIS jurisdiction boundary geometry and reference data',
+        hasDiff: Boolean(before && after),
+      }
+    }
     case 'issue.comment_created': {
       return {
-        label: 'Internal Dispatch Note',
+        label: title,
         badgeColor: 'border-blue-300 bg-blue-50 text-blue-700',
         Icon: MessageSquare,
         narrative: after?.comment ? `Recorded dispatch directive: "${after.comment}"` : 'Added secure operational note',
@@ -133,7 +152,7 @@ function getActionMeta(action, before, after, metadata) {
     }
     case 'issue.split': {
       return {
-        label: 'Incident Split',
+        label: title,
         badgeColor: 'border-cyan-300 bg-cyan-50 text-cyan-700',
         Icon: Layers,
         narrative: 'Split clustered reports into separate distinct municipal incidents',
@@ -142,7 +161,7 @@ function getActionMeta(action, before, after, metadata) {
     }
     case 'issue.merged': {
       return {
-        label: 'Incident Merged',
+        label: title,
         badgeColor: 'border-cyan-300 bg-cyan-50 text-cyan-700',
         Icon: Layers,
         narrative: 'Merged duplicate municipal reports into primary surviving incident',
@@ -151,14 +170,449 @@ function getActionMeta(action, before, after, metadata) {
     }
     default: {
       return {
-        label: action.replace('.', ' ').replace('_', ' ').toUpperCase(),
+        label: title,
         badgeColor: 'border-slate-300 bg-slate-50 text-slate-700',
         Icon: Activity,
-        narrative: `System recorded action: ${action}`,
+        narrative: `Municipal activity recorded: ${title}`,
         hasDiff: Boolean(before && after),
       }
     }
   }
+}
+
+/**
+ * Human-readable Inspect Modal Content.
+ * Replaces developer JSON dumps with clear, formatted before-and-after change tables.
+ */
+function InspectModalContent({ event, onClose }) {
+  if (!event) return null
+  const meta = getActionMeta(event.action, event.before, event.after, event.metadata)
+  const ActionIcon = meta.Icon
+  const actorName = getActorDisplayName(event)
+  const isActorAdmin = event.actorRole === 'admin'
+  const isIssue = event.targetType === 'issue'
+  const isUser = event.targetType === 'user'
+  const reason =
+    event.metadata?.reason ||
+    event.after?.reason ||
+    (event.action === 'issue.comment_created' ? event.after?.comment : null) ||
+    event.metadata?.comment
+
+  const beforeObj = event.before && typeof event.before === 'object' ? event.before : null
+  const afterObj = event.after && typeof event.after === 'object' ? event.after : null
+
+  // Extract all modified properties
+  const diffRows = []
+  const keyLabels = {
+    name: 'Boundary / Entity Name',
+    title: 'Incident Title',
+    status: 'Operational Status',
+    category_scope: 'Department Category Scope',
+    categoryScope: 'Department Category Scope',
+    assigned_area: 'Territorial Zone Jurisdiction',
+    assignedArea: 'Territorial Zone Jurisdiction',
+    assignee_id: 'Assigned Response Crew',
+    assigneeId: 'Assigned Response Crew',
+    severity: 'Severity Level',
+    email: 'Official Email',
+    phone: 'Phone Number',
+    require_two_factor: 'Two-Factor Authentication (2FA)',
+    requireTwoFactor: 'Two-Factor Authentication (2FA)',
+    priority: 'Priority Tier',
+    comment: 'Dispatch Directive',
+  }
+
+  const formatValue = (v) => {
+    if (v === null || v === undefined) return <span className="text-ink-muted italic">None</span>
+    if (Array.isArray(v)) {
+      if (v.length === 0) return <span className="text-ink-muted italic">None</span>
+      return (
+        <div className="flex flex-wrap gap-1">
+          {v.map((item, idx) => (
+            <span key={idx} className="rounded bg-surface-sunken px-1.5 py-0.5 text-2xs font-semibold text-ink border border-line">
+              {String(item).replace(/_/g, ' ')}
+            </span>
+          ))}
+        </div>
+      )
+    }
+    if (typeof v === 'boolean') {
+      return (
+        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-2xs font-bold ${v ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600'}`}>
+          {v ? 'Enabled' : 'Disabled'}
+        </span>
+      )
+    }
+    if (typeof v === 'object') {
+      return <span>{Object.entries(v).map(([k, val]) => `${k}: ${val}`).join(', ')}</span>
+    }
+    return <span className="font-semibold text-ink">{String(v).replace(/_/g, ' ')}</span>
+  }
+
+  if (beforeObj && afterObj) {
+    const allKeys = Array.from(new Set([...Object.keys(beforeObj), ...Object.keys(afterObj)]))
+    for (const key of allKeys) {
+      if (['id', 'created_at', 'updated_at', 'at'].includes(key) && allKeys.length > 2) {
+        continue
+      }
+      const bVal = beforeObj[key]
+      const aVal = afterObj[key]
+      if (JSON.stringify(bVal) !== JSON.stringify(aVal)) {
+        diffRows.push({
+          key,
+          label: keyLabels[key] || key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+          before: bVal,
+          after: aVal,
+        })
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-4 text-xs">
+      {/* 1. Header Overview Card */}
+      <div className="rounded-xl border border-line bg-surface-sunken/40 p-3.5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-bold ${meta.badgeColor}`}>
+              <ActionIcon className="h-3.5 w-3.5" />
+              <span>{meta.label}</span>
+            </span>
+            <span className="text-2xs font-mono text-ink-muted">#{shortId(event.id)}</span>
+          </div>
+          <span className="text-2xs text-ink-muted">
+            {formatDateTime(event.at)} ({timeAgo(event.at)})
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div>
+            <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted block mb-0.5">
+              Operating Officer / Actor
+            </span>
+            <div className="flex items-center gap-2">
+              <div className={`flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold ${isActorAdmin ? 'bg-purple-100 text-purple-800' : 'bg-teal-100 text-teal-800'}`}>
+                {actorName.charAt(0)}
+              </div>
+              <div>
+                <p className="font-bold text-ink leading-none">{actorName}</p>
+                <p className="text-2xs text-ink-muted mt-0.5">{event.actorEmail || 'System Officer'} · <span className="uppercase font-semibold">{event.actorRole || 'System'}</span></p>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="text-2xs font-semibold uppercase tracking-wider text-ink-muted block mb-0.5">
+              Target Entity Record
+            </span>
+            <div>
+              <p className="font-bold text-ink uppercase tracking-wide text-2xs">{event.targetType}</p>
+              <p className="font-mono text-xs font-semibold text-primary mt-0.5">
+                {isIssue ? (
+                  <Link to={`/admin/queue/${event.targetId}`} className="hover:underline">
+                    #UM-{shortId(event.targetId)}
+                  </Link>
+                ) : isUser ? (
+                  <Link to={`/admin/authorities/${event.targetId}`} className="hover:underline">
+                    #USR-{shortId(event.targetId)}
+                  </Link>
+                ) : (
+                  `#${shortId(event.targetId)}`
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Structured Normal Text Diff Display */}
+      {diffRows.length > 0 ? (
+        <div className="rounded-xl border border-line overflow-hidden shadow-xs">
+          <div className="bg-surface-sunken px-4 py-2 border-b border-line flex items-center justify-between">
+            <span className="font-bold text-xs text-ink">Decision &amp; State Modifications</span>
+            <span className="text-2xs text-ink-muted">{diffRows.length} field{diffRows.length === 1 ? '' : 's'} updated</span>
+          </div>
+          <div className="divide-y divide-line bg-surface-panel">
+            {diffRows.map((row) => (
+              <div key={row.key} className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-start">
+                <span className="font-semibold text-ink text-xs">{row.label}</span>
+                <div className="rounded-lg bg-surface-sunken/60 p-2 border border-line/60">
+                  <span className="text-3xs uppercase tracking-wider font-bold text-ink-muted block mb-1">
+                    Previous State
+                  </span>
+                  <div className="line-through text-slate-500 text-xs">
+                    {formatValue(row.before)}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-emerald-50/70 p-2 border border-emerald-200/70">
+                  <span className="text-3xs uppercase tracking-wider font-bold text-emerald-800 block mb-1">
+                    Updated State
+                  </span>
+                  <div className="text-xs">
+                    {formatValue(row.after)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : afterObj ? (
+        <div className="rounded-xl border border-line overflow-hidden shadow-xs">
+          <div className="bg-surface-sunken px-4 py-2 border-b border-line font-bold text-xs text-ink">
+            Provisioned Entity Parameters
+          </div>
+          <div className="p-3 bg-surface-panel divide-y divide-line">
+            {Object.entries(afterObj).map(([k, val]) => (
+              <div key={k} className="py-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold text-ink-muted">{keyLabels[k] || k.replace(/_/g, ' ')}:</span>
+                <span className="font-medium text-ink">{formatValue(val)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-line bg-surface-panel p-4 text-xs text-ink">
+          <p className="font-medium">{meta.narrative}</p>
+        </div>
+      )}
+
+      {/* 3. Reason Callout */}
+      {reason && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50/70 p-3 text-xs space-y-1">
+          <span className="font-bold text-sky-900 block">Audit Reason &amp; Operational Directive</span>
+          <p className="italic text-ink/90 leading-relaxed">&ldquo;{reason}&rdquo;</p>
+        </div>
+      )}
+
+      {/* 4. Subtle Collapsible Technical Details (Hidden by default) */}
+      <details className="group rounded-lg border border-line bg-surface-sunken/30 text-2xs">
+        <summary className="px-3 py-2 font-semibold text-ink-muted cursor-pointer hover:text-ink select-none flex items-center justify-between">
+          <span>Technical JSON Payload (For Auditors &amp; Developers)</span>
+          <span className="text-3xs text-ink-muted">Click to toggle</span>
+        </summary>
+        <div className="p-3 border-t border-line space-y-2">
+          {event.before && (
+            <div>
+              <span className="font-bold text-ink">Raw State Before:</span>
+              <pre className="rounded bg-slate-900 text-slate-100 p-2 overflow-x-auto font-mono text-3xs mt-1">
+                {JSON.stringify(event.before, null, 2)}
+              </pre>
+            </div>
+          )}
+          {event.after && (
+            <div>
+              <span className="font-bold text-ink">Raw State After:</span>
+              <pre className="rounded bg-slate-900 text-emerald-300 p-2 overflow-x-auto font-mono text-3xs mt-1">
+                {JSON.stringify(event.after, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </details>
+
+      {/* 5. Footer */}
+      <div className="flex items-center justify-between border-t border-line pt-3">
+        <span className="text-2xs text-ink-muted flex items-center gap-1.5 font-medium">
+          <ShieldCheck className="h-4 w-4 text-emerald-600" />
+          Cryptographically recorded in immutable PostgreSQL trigger ledger
+        </span>
+        <Button size="sm" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Dedicated Export Dialog supporting custom date ranges for PDF and CSV.
+ */
+function ExportAuditModal({ open, onClose, events, allEvents, user }) {
+  const [dateScope, setDateScope] = useState('current')
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+
+  const exportList = useMemo(() => {
+    if (dateScope === 'current') return events
+    if (dateScope === 'all') return allEvents
+    if (dateScope === 'today') {
+      const todayStr = new Date().toISOString().slice(0, 10)
+      return allEvents.filter((e) => e.at && e.at.startsWith(todayStr))
+    }
+    if (dateScope === '7d') {
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+      return allEvents.filter((e) => e.at && new Date(e.at).getTime() >= sevenDaysAgo)
+    }
+    if (dateScope === 'custom') {
+      return allEvents.filter((e) => {
+        if (startDate) {
+          const fromTime = new Date(`${startDate}T00:00:00`).getTime()
+          if (!e.at || new Date(e.at).getTime() < fromTime) return false
+        }
+        if (endDate) {
+          const toTime = new Date(`${endDate}T23:59:59`).getTime()
+          if (!e.at || new Date(e.at).getTime() > toTime) return false
+        }
+        return true
+      })
+    }
+    return events
+  }, [dateScope, startDate, endDate, events, allEvents])
+
+  const dateRangeLabel = useMemo(() => {
+    if (dateScope === 'current') return 'Current Table Filters'
+    if (dateScope === 'all') return 'All Historical Logs'
+    if (dateScope === 'today') return 'Today'
+    if (dateScope === '7d') return 'Last 7 Days'
+    if (dateScope === 'custom') {
+      return `${startDate || 'Earliest'} to ${endDate || 'Latest'}`
+    }
+    return 'Official Log'
+  }, [dateScope, startDate, endDate])
+
+  const handleDownloadPdf = () => {
+    exportAuditLogPdf({
+      events: exportList,
+      user,
+      dateRangeText: dateRangeLabel,
+      filename: `urbanmend_audit_${dateScope}_${new Date().toISOString().slice(0, 10)}.pdf`,
+    })
+    onClose()
+  }
+
+  const handleDownloadCsv = () => {
+    exportAuditLogCsv({
+      events: exportList,
+      filename: `urbanmend_audit_${dateScope}_${new Date().toISOString().slice(0, 10)}.csv`,
+    })
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} title="Export Audit Log Records" className="max-w-md">
+      <div className="space-y-4 text-xs">
+        <p className="text-ink-muted">
+          Select date criteria to download an immutable audit record in PDF or CSV format.
+        </p>
+
+        <div className="space-y-2 rounded-xl border border-line bg-surface-sunken/40 p-3.5">
+          <span className="font-semibold text-ink block mb-1.5">Date Period Scope</span>
+          
+          <label className="flex items-center gap-2 text-ink cursor-pointer">
+            <input
+              type="radio"
+              name="dateScope"
+              value="current"
+              checked={dateScope === 'current'}
+              onChange={() => setDateScope('current')}
+              className="text-primary focus:ring-primary"
+            />
+            <span>Current Table Selection ({events.length} records)</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-ink cursor-pointer">
+            <input
+              type="radio"
+              name="dateScope"
+              value="all"
+              checked={dateScope === 'all'}
+              onChange={() => setDateScope('all')}
+              className="text-primary focus:ring-primary"
+            />
+            <span>All Historical Records ({allEvents.length} records)</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-ink cursor-pointer">
+            <input
+              type="radio"
+              name="dateScope"
+              value="today"
+              checked={dateScope === 'today'}
+              onChange={() => setDateScope('today')}
+              className="text-primary focus:ring-primary"
+            />
+            <span>Today Only</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-ink cursor-pointer">
+            <input
+              type="radio"
+              name="dateScope"
+              value="7d"
+              checked={dateScope === '7d'}
+              onChange={() => setDateScope('7d')}
+              className="text-primary focus:ring-primary"
+            />
+            <span>Past 7 Days</span>
+          </label>
+
+          <label className="flex items-center gap-2 text-ink cursor-pointer">
+            <input
+              type="radio"
+              name="dateScope"
+              value="custom"
+              checked={dateScope === 'custom'}
+              onChange={() => setDateScope('custom')}
+              className="text-primary focus:ring-primary"
+            />
+            <span>Custom Date Range</span>
+          </label>
+
+          {dateScope === 'custom' && (
+            <div className="pt-2 pl-6 grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-2xs font-semibold text-ink-muted mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1 text-xs text-ink focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-2xs font-semibold text-ink-muted mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full rounded-md border border-line bg-surface-panel px-2.5 py-1 text-xs text-ink focus:border-primary focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-lg bg-primary/10 border border-primary/20 px-3 py-2 text-xs flex items-center justify-between text-primary font-semibold">
+          <span>Records ready to export:</span>
+          <span className="text-sm font-bold">{exportList.length}</span>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line pt-3">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleDownloadCsv}
+            disabled={exportList.length === 0}
+            className="flex items-center gap-1.5"
+          >
+            <Download className="h-3.5 w-3.5 text-teal-600" />
+            <span>Download CSV</span>
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleDownloadPdf}
+            disabled={exportList.length === 0}
+            className="flex items-center gap-1.5"
+          >
+            <FileText className="h-3.5 w-3.5 text-white" />
+            <span>Download PDF</span>
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  )
 }
 
 /**
@@ -173,7 +627,10 @@ export default function AuditLogPage() {
   const [roleFilter, setRoleFilter] = useState('all')
   const [targetFilter, setTargetFilter] = useState('')
   const [datePreset, setDatePreset] = useState('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
   const [inspectEvent, setInspectEvent] = useState(null)
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportFeedback, setExportFeedback] = useState(null)
 
   // Fetch up to 100 recent audit events
@@ -224,14 +681,24 @@ export default function AuditLogPage() {
       } else if (datePreset === '7d') {
         const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
         if (!e.at || new Date(e.at).getTime() < sevenDaysAgo) return false
+      } else if (datePreset === 'custom') {
+        if (customFrom) {
+          const fromTime = new Date(`${customFrom}T00:00:00`).getTime()
+          if (!e.at || new Date(e.at).getTime() < fromTime) return false
+        }
+        if (customTo) {
+          const toTime = new Date(`${customTo}T23:59:59`).getTime()
+          if (!e.at || new Date(e.at).getTime() > toTime) return false
+        }
       }
 
-      // Keyword search (searches actor name, email, action, target id, reason)
+      // Keyword search (searches actor name, email, action title, target id, reason)
       if (search.trim()) {
         const query = search.toLowerCase()
-        const matchName = (e.actorName || '').toLowerCase().includes(query)
+        const actorName = getActorDisplayName(e).toLowerCase()
+        const matchName = (e.actorName || '').toLowerCase().includes(query) || actorName.includes(query)
         const matchEmail = (e.actorEmail || '').toLowerCase().includes(query)
-        const matchAction = (e.action || '').toLowerCase().includes(query)
+        const matchAction = (e.action || '').toLowerCase().includes(query) || formatActionTitle(e.action).toLowerCase().includes(query)
         const matchTarget = (e.targetId || '').toLowerCase().includes(query)
         const matchReason = (e.metadata?.reason || e.after?.reason || '').toLowerCase().includes(query)
         if (!matchName && !matchEmail && !matchAction && !matchTarget && !matchReason) {
@@ -241,16 +708,29 @@ export default function AuditLogPage() {
 
       return true
     })
-  }, [rawEvents, categoryTab, roleFilter, targetFilter, datePreset, search])
+  }, [rawEvents, categoryTab, roleFilter, targetFilter, datePreset, customFrom, customTo, search])
 
-  // Export handlers
-  const handleExportPdf = () => {
-    exportAuditLogPdf({ events: filteredEvents, user })
+  // Quick export handlers
+  const handleQuickExportPdf = () => {
+    const dateRangeLabel =
+      datePreset === 'custom' && (customFrom || customTo)
+        ? `${customFrom || 'Start'} to ${customTo || 'Current'}`
+        : datePreset === 'today'
+        ? 'Today'
+        : datePreset === '7d'
+        ? 'Last 7 Days'
+        : 'All Filtered'
+
+    exportAuditLogPdf({
+      events: filteredEvents,
+      user,
+      dateRangeText: dateRangeLabel,
+    })
     setExportFeedback(`Exported ${filteredEvents.length} audit records to PDF.`)
     setTimeout(() => setExportFeedback(null), 4000)
   }
 
-  const handleExportCsv = () => {
+  const handleQuickExportCsv = () => {
     exportAuditLogCsv({ events: filteredEvents })
     setExportFeedback(`Exported ${filteredEvents.length} audit records to CSV.`)
     setTimeout(() => setExportFeedback(null), 4000)
@@ -272,24 +752,34 @@ export default function AuditLogPage() {
 
         <div className="flex items-center gap-2">
           <Button
-            variant="secondary"
+            variant="primary"
             size="sm"
-            onClick={handleExportPdf}
-            className="flex items-center gap-1.5 text-xs font-semibold"
-            title="Download PDF Audit Log"
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold shadow-xs"
+            title="Configure Date Range and Export PDF/CSV"
           >
-            <FileText className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" />
-            <span>Export PDF</span>
+            <Download className="h-3.5 w-3.5 text-white" aria-hidden="true" />
+            <span>Export Log...</span>
           </Button>
           <Button
             variant="secondary"
             size="sm"
-            onClick={handleExportCsv}
+            onClick={handleQuickExportPdf}
             className="flex items-center gap-1.5 text-xs font-semibold"
-            title="Download CSV Audit Log"
+            title="Download PDF directly with current filters"
+          >
+            <FileText className="h-3.5 w-3.5 text-rose-600" aria-hidden="true" />
+            <span>PDF</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleQuickExportCsv}
+            className="flex items-center gap-1.5 text-xs font-semibold"
+            title="Download CSV directly with current filters"
           >
             <Download className="h-3.5 w-3.5 text-teal-600" aria-hidden="true" />
-            <span>Export CSV</span>
+            <span>CSV</span>
           </Button>
         </div>
       </div>
@@ -453,40 +943,85 @@ export default function AuditLogPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1 rounded-full border border-line bg-surface-sunken p-0.5 text-xs">
-          <button
-            type="button"
-            onClick={() => setDatePreset('all')}
-            className={`rounded-full px-3 py-0.5 font-semibold transition ${
-              datePreset === 'all'
-                ? 'bg-surface-panel text-ink shadow-xs'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            All Time
-          </button>
-          <button
-            type="button"
-            onClick={() => setDatePreset('today')}
-            className={`rounded-full px-3 py-0.5 font-semibold transition ${
-              datePreset === 'today'
-                ? 'bg-surface-panel text-ink shadow-xs'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => setDatePreset('7d')}
-            className={`rounded-full px-3 py-0.5 font-semibold transition ${
-              datePreset === '7d'
-                ? 'bg-surface-panel text-ink shadow-xs'
-                : 'text-ink-muted hover:text-ink'
-            }`}
-          >
-            Last 7 Days
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded-full border border-line bg-surface-sunken p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setDatePreset('all')}
+              className={`rounded-full px-3 py-0.5 font-semibold transition ${
+                datePreset === 'all'
+                  ? 'bg-surface-panel text-ink shadow-xs'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              All Time
+            </button>
+            <button
+              type="button"
+              onClick={() => setDatePreset('today')}
+              className={`rounded-full px-3 py-0.5 font-semibold transition ${
+                datePreset === 'today'
+                  ? 'bg-surface-panel text-ink shadow-xs'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setDatePreset('7d')}
+              className={`rounded-full px-3 py-0.5 font-semibold transition ${
+                datePreset === '7d'
+                  ? 'bg-surface-panel text-ink shadow-xs'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              Last 7 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => setDatePreset('custom')}
+              className={`rounded-full px-3 py-0.5 font-semibold transition ${
+                datePreset === 'custom'
+                  ? 'bg-surface-panel text-ink shadow-xs text-primary'
+                  : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              Custom Range
+            </button>
+          </div>
+
+          {datePreset === 'custom' && (
+            <div className="flex items-center gap-2 rounded-lg border border-line bg-surface-panel px-3 py-1 text-xs">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
+              <span className="text-ink-muted">From:</span>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="rounded border border-line bg-surface-sunken px-2 py-0.5 text-xs text-ink focus:border-primary focus:outline-none"
+              />
+              <span className="text-ink-muted">To:</span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="rounded border border-line bg-surface-sunken px-2 py-0.5 text-xs text-ink focus:border-primary focus:outline-none"
+              />
+              {(customFrom || customTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomFrom('')
+                    setCustomTo('')
+                  }}
+                  className="text-2xs text-rose-600 hover:underline ml-1"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -529,17 +1064,12 @@ export default function AuditLogPage() {
                     event.metadata,
                   )
                   const ActionIcon = meta.Icon
-                  const reason =
-                    event.metadata?.reason ||
-                    event.after?.reason ||
-                    (event.action === 'issue.comment_created' ? event.after?.comment : null)
                   const isIssue = event.targetType === 'issue'
                   const isUser = event.targetType === 'user'
-
-                  const actorInitial = (event.actorName || event.actorEmail || 'A')
-                    .charAt(0)
-                    .toUpperCase()
+                  const actorDisplayName = getActorDisplayName(event)
+                  const actorInitial = actorDisplayName.charAt(0).toUpperCase()
                   const isActorAdmin = event.actorRole === 'admin'
+                  const changeDetailsText = formatAuditChangeDetails(event)
 
                   return (
                     <tr key={event.id || `${event.at}-${index}`} className="hover:bg-slate-50/80 transition-colors">
@@ -569,7 +1099,7 @@ export default function AuditLogPage() {
                           <div>
                             <div className="flex items-center gap-1.5">
                               <span className="font-bold text-ink leading-tight">
-                                {event.actorName || 'Authority'}
+                                {actorDisplayName}
                               </span>
                               <span
                                 className={`rounded px-1.5 py-0.2 text-[10px] font-bold uppercase tracking-wider ${
@@ -599,9 +1129,6 @@ export default function AuditLogPage() {
                           </span>
                           <p className="text-xs font-medium text-ink leading-tight">
                             {meta.narrative}
-                          </p>
-                          <p className="font-mono text-[10px] text-ink-muted">
-                            {event.action}
                           </p>
                         </div>
                       </td>
@@ -639,34 +1166,10 @@ export default function AuditLogPage() {
                       </td>
 
                       {/* 5. Details & Reason */}
-                      <td className="px-4 py-3 max-w-xs">
-                        <div className="space-y-1.5">
-                          {/* Diff comparison pills if available */}
-                          {meta.hasDiff && meta.diffBefore && meta.diffAfter && (
-                            <div className="flex flex-wrap items-center gap-1 text-[11px]">
-                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 line-through">
-                                {meta.diffBefore}
-                              </span>
-                              <span className="text-ink-muted">➔</span>
-                              <span className="rounded bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 font-semibold text-emerald-800">
-                                {meta.diffAfter}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Reason Quote Box */}
-                          {reason && (
-                            <div className="rounded bg-sky-50/70 border border-sky-100 p-2 text-[11px] text-ink/90 leading-relaxed italic">
-                              &ldquo;{reason}&rdquo;
-                            </div>
-                          )}
-
-                          {!meta.hasDiff && !reason && (
-                            <span className="text-[11px] text-ink-muted">
-                              Action cryptographically confirmed.
-                            </span>
-                          )}
-                        </div>
+                      <td className="px-4 py-3 max-w-sm">
+                        <p className="text-xs text-ink leading-relaxed">
+                          {changeDetailsText}
+                        </p>
                       </td>
 
                       {/* 6. Inspect Button */}
@@ -676,7 +1179,7 @@ export default function AuditLogPage() {
                           size="sm"
                           onClick={() => setInspectEvent(event)}
                           className="text-xs text-primary hover:bg-primary-soft p-1.5"
-                          title="Inspect raw audit payload"
+                          title="Inspect audit record in readable format"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -694,61 +1197,20 @@ export default function AuditLogPage() {
       <Dialog
         open={Boolean(inspectEvent)}
         onClose={() => setInspectEvent(null)}
-        title="Audit Event Payload & Verification"
+        title="Audit Event Verification & Payload"
+        className="max-w-2xl"
       >
-        {inspectEvent && (
-          <div className="space-y-4 text-xs">
-            <div className="rounded-panel border border-line bg-surface-sunken p-3 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-ink">Action: {inspectEvent.action}</span>
-                <span className="font-mono text-ink-muted">ID: {inspectEvent.id || 'IMMUTABLE'}</span>
-              </div>
-              <p className="text-ink-muted">
-                Actor: {inspectEvent.actorName} ({inspectEvent.actorEmail}) · Role: {inspectEvent.actorRole}
-              </p>
-              <p className="text-ink-muted">
-                Timestamp: {formatDateTime(inspectEvent.at)} ({inspectEvent.at})
-              </p>
-              <p className="text-ink-muted">
-                Target: {inspectEvent.targetType} #{inspectEvent.targetId}
-              </p>
-            </div>
-
-            <div>
-              <p className="font-bold text-ink mb-1">State Before:</p>
-              <pre className="rounded border border-line bg-slate-900 text-slate-100 p-2.5 overflow-x-auto font-mono text-[11px]">
-                {JSON.stringify(inspectEvent.before, null, 2) || 'null'}
-              </pre>
-            </div>
-
-            <div>
-              <p className="font-bold text-ink mb-1">State After:</p>
-              <pre className="rounded border border-line bg-slate-900 text-emerald-300 p-2.5 overflow-x-auto font-mono text-[11px]">
-                {JSON.stringify(inspectEvent.after, null, 2) || 'null'}
-              </pre>
-            </div>
-
-            {inspectEvent.metadata && Object.keys(inspectEvent.metadata).length > 0 && (
-              <div>
-                <p className="font-bold text-ink mb-1">Audit Metadata &amp; Directives:</p>
-                <pre className="rounded border border-line bg-slate-900 text-amber-300 p-2.5 overflow-x-auto font-mono text-[11px]">
-                  {JSON.stringify(inspectEvent.metadata, null, 2)}
-                </pre>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between border-t border-line pt-3">
-              <span className="text-[11px] text-ink-muted flex items-center gap-1">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
-                Immutable PostgreSQL trigger enforced
-              </span>
-              <Button size="sm" onClick={() => setInspectEvent(null)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        )}
+        <InspectModalContent event={inspectEvent} onClose={() => setInspectEvent(null)} />
       </Dialog>
+
+      {/* Export Modal with Custom Date Range */}
+      <ExportAuditModal
+        open={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        events={filteredEvents}
+        allEvents={rawEvents}
+        user={user}
+      />
     </div>
   )
 }
