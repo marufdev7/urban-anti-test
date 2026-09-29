@@ -727,6 +727,8 @@ export default function AuthoritiesPage() {
   const [cursor, setCursor] = useState('')
   const [editingAuthority, setEditingAuthority] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [tabFading, setTabFading] = useState(false)
+  const [visibleTab, setVisibleTab] = useState(activeTab)
 
   useEffect(() => {
     const handleSecAlert = () => setRefreshKey((k) => k + 1)
@@ -734,10 +736,28 @@ export default function AuthoritiesPage() {
     return () => window.removeEventListener('urbanmend_security_alert', handleSecAlert)
   }, [])
 
+  // Sync visibleTab when URL param changes (e.g. browser back/forward)
+  useEffect(() => {
+    if (activeTab !== visibleTab && !tabFading) {
+      setTabFading(true)
+      const t = setTimeout(() => {
+        setVisibleTab(activeTab)
+        setTabFading(false)
+      }, 150)
+      return () => clearTimeout(t)
+    }
+  }, [activeTab])
+
   const handleTabChange = (newTab) => {
-    setSearchParams({ tab: newTab })
-    setQ('')
-    setCursor('')
+    if (newTab === activeTab) return
+    setTabFading(true)
+    setTimeout(() => {
+      setSearchParams({ tab: newTab })
+      setQ('')
+      setCursor('')
+      setVisibleTab(newTab)
+      setTabFading(false)
+    }, 150)
   }
 
   // Authorities query
@@ -987,10 +1007,15 @@ export default function AuthoritiesPage() {
         </button>
       </div>
 
+      <div
+        className={`transition-all duration-150 ${
+          tabFading ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
+        }`}
+      >
       <div className="grid gap-5 lg:grid-cols-12">
         {/* Left Column (8 cols): Table */}
         <div className="lg:col-span-8">
-          {activeTab === 'authorities' ? (
+          {visibleTab === 'authorities' ? (
             /* ── AUTHORITIES TABLE ── */
             <Card className="overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-3.5">
@@ -1343,7 +1368,7 @@ export default function AuthoritiesPage() {
 
         {/* Right Column (4 cols): Contextual Sidebar */}
         <div className="space-y-5 lg:col-span-4">
-          {activeTab === 'authorities' ? (
+          {visibleTab === 'authorities' ? (
             <>
               <Card>
                 <div className="p-4 pb-2">
@@ -1462,7 +1487,7 @@ export default function AuthoritiesPage() {
           )}
         </div>
       </div>
-
+      </div>
       {editingAuthority && (
         <EditAuthorityModal
           authority={editingAuthority}
