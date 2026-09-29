@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import Protocol, cast
 
+from django.contrib.auth.models import AnonymousUser
 from django.db.models import QuerySet
 from django.http import Http404
 from django.utils import timezone
@@ -275,7 +276,7 @@ class IssueDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request, issue_id: str) -> Response:
-        queryset = selectors.list_issues(actor=request.user).filter(pk=issue_id)
+        queryset = selectors.list_issues(actor=AnonymousUser()).filter(pk=issue_id)
         issue = queryset.first()
         if issue is None:
             raise Http404("Issue not found.")
@@ -293,7 +294,7 @@ class IssueReportsView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request, issue_id: str) -> Response:
-        issue = selectors.list_issues(actor=request.user).filter(pk=issue_id).first()
+        issue = selectors.list_issues(actor=AnonymousUser()).filter(pk=issue_id).first()
         if issue is None:
             raise Http404("Issue not found.")
         queryset = issue.reports.select_related("category").order_by("created_at", "pk")

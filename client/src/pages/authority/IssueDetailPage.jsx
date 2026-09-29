@@ -275,20 +275,26 @@ export default function IssueDetailPage() {
     }
   }, [data])
 
-  if (issue.isLoading) {
-    return <SkeletonDetail />
-  }
   if (issue.isError) {
     return (
-      <Card className="p-6">
-        <p className="text-sm text-status-critical" role="alert">
-          Could not load this incident: {issue.error.message}
-        </p>
-        <Link to={backLink} className="mt-2 inline-block text-sm text-primary hover:underline">
-          {backLabel}
-        </Link>
-      </Card>
+      <div className="p-6 max-w-4xl mx-auto">
+        <Card className="p-6 border-status-critical/30 bg-status-critical/5">
+          <p className="text-sm font-semibold text-status-critical" role="alert">
+            Could not load this incident: {issue.error?.message || 'Incident not found or inaccessible.'}
+          </p>
+          <Link
+            to={backLink}
+            className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" /> {backLabel}
+          </Link>
+        </Card>
+      </div>
     )
+  }
+
+  if (issue.isPending || issue.isLoading || !data) {
+    return <SkeletonDetail />
   }
 
   const marker = data.representativeLocation
@@ -470,8 +476,8 @@ export default function IssueDetailPage() {
             <CardBody>
               <div className="h-64 overflow-hidden rounded-panel border border-line">
                 <MapPanel
-                  center={marker ?? center}
-                  marker={marker}
+                  center={marker?.lat && marker?.lng ? marker : center}
+                  marker={marker?.lat && marker?.lng ? marker : undefined}
                   polygons={polygons}
                   interactive={false}
                   zoom={14}
@@ -895,7 +901,7 @@ export default function IssueDetailPage() {
                       <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
                       Resolution Deadline
                     </span>
-                    <SlaBadge issue={{ ...data, customDeadline: sla.deadlineDate }} />
+                    <SlaBadge issue={data} />
                   </div>
                 }
               />
@@ -929,11 +935,11 @@ export default function IssueDetailPage() {
                     <p className="text-[10px] uppercase font-bold text-ink-muted">Standard Window</p>
                     <p className="mt-0.5 font-bold text-ink">
                       {Math.round(
-                        (SLA_DURATIONS_MS[data.severity?.current || 'medium'] ||
+                        (SLA_DURATIONS_MS[(typeof data.severity === 'string' ? data.severity : data.severity?.current || 'medium').toLowerCase()] ||
                           7 * 24 * 3600 * 1000) /
                           3600000,
                       )}
-                      h ({data.severity?.current || 'medium'})
+                      h ({typeof data.severity === 'string' ? data.severity : data.severity?.current || 'medium'})
                     </p>
                   </div>
                   <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
@@ -1155,8 +1161,8 @@ export default function IssueDetailPage() {
             />
             <CardBody>
               <ol className="relative border-l border-line ml-2 space-y-4 pl-4 text-xs">
-                {(statusEvents.data?.data ?? []).length > 0 ? (
-                  statusEvents.data.data.map((event, index) => (
+                {(Array.isArray(statusEvents.data) ? statusEvents.data : (statusEvents.data?.data ?? [])).length > 0 ? (
+                  (Array.isArray(statusEvents.data) ? statusEvents.data : (statusEvents.data?.data ?? [])).map((event, index) => (
                     <li key={index} className="relative">
                       <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
                       <p className="font-bold text-ink">
