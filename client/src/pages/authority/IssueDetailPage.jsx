@@ -38,6 +38,7 @@ import {
 import { useModerate } from '../../hooks/admin'
 import { ApiError, normalizeMediaUrl } from '../../lib/api'
 import { categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
+import { formatDateTime, shortId } from '../../lib/format'
 import {
   clearCustomDeadline,
   getCustomDeadline,
@@ -228,7 +229,19 @@ export default function IssueDetailPage() {
     }
   }, [issueId])
 
-  const sla = useMemo(() => (data ? getSlaInfo(data) : null), [data, deadlineRevision])
+  const sla = useMemo(() => {
+    return (data ? getSlaInfo(data) : null) || {
+      isOverdue: false,
+      isResolved: false,
+      isDueSoon: false,
+      isCustom: false,
+      percentElapsed: 0,
+      ageHours: 0,
+      slaHours: 72,
+      deadlineFormatted: '—',
+      deadlineDate: null,
+    }
+  }, [data, deadlineRevision])
 
   const handleSetCustomDeadline = async (days) => {
     const numDays = Number(days)
