@@ -532,7 +532,7 @@ export default function QueuePage() {
                   <th className="px-4 py-3">Severity</th>
                   <th className="px-4 py-3">Issue Title &amp; ID</th>
                   <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Deadline / SLA</th>
+                  <th className="px-4 py-3">Deadline</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned To</th>
                   <th className="px-4 py-3 text-right">Time Elapsed</th>

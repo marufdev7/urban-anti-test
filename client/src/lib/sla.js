@@ -46,9 +46,12 @@ export function saveCustomDeadline(issueId, days) {
   if (typeof window === 'undefined' || !issueId) return
   const numDays = Number(days)
   if (isNaN(numDays) || numDays <= 0) return
+  const now = new Date()
+  const deadlineDate = new Date(now.getTime() + numDays * 24 * 60 * 60 * 1000).toISOString()
   const payload = {
     days: numDays,
-    updatedAt: new Date().toISOString(),
+    updatedAt: now.toISOString(),
+    deadlineDate,
   }
   try {
     localStorage.setItem(`urbanmend_custom_deadline_${issueId}`, JSON.stringify(payload))
@@ -77,14 +80,11 @@ export function getCustomDeadline(issueId) {
 }
 
 /**
- * Computes complete SLA compliance, target deadline, and remaining time for an issue or report.
- * Supports authority-fixed resolution deadlines.
+ * Computes complete resolution deadline analytics for an issue or report.
+ * Deadlines are determined by the municipal authority officers, not hardcoded by severity.
  *
  * @param {Object} issue
- * @param {string|Date} issue.openedAt
- * @param {string} issue.status
- * @param {Object|string} issue.severity
- * @returns {Object} SLA analytics object
+ * @returns {Object} SLA / Deadline analytics object
  */
 export function getSlaInfo(issue) {
   if (!issue) return null
@@ -93,18 +93,17 @@ export function getSlaInfo(issue) {
   const parsedDate = openedAtTime ? new Date(openedAtTime) : new Date()
   const openedDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date()
 
-  // Resolve severity key
-  const rawSev =
-    issue.severity?.current ||
-    issue.computedSeverity ||
-    issue.classification?.severitySignal ||
-    issue.severity ||
-    'medium'
-  const severity = String(rawSev).toLowerCase()
+  const now = Date.now()
+  const isResolved =
+    issue.status === 'resolved' ||
+    issue.status === 'closed' ||
+    issue.issueStatus === 'resolved' ||
+    issue.issueStatus === 'closed'
 
   // Check custom authority-assigned deadline
   let customDeadline = issue.customDeadline || issue.customDeadlineDate
   let customDays = issue.customDeadlineDays || null
+  let baseDate = openedDate
 
   if (!customDeadline && typeof window !== 'undefined' && issue.id) {
     try {
@@ -114,9 +113,11 @@ export function getSlaInfo(issue) {
         if (parsed.deadlineDate) {
           customDeadline = parsed.deadlineDate
           customDays = parsed.days || null
+          if (parsed.updatedAt) baseDate = new Date(parsed.updatedAt)
         } else if (parsed.days) {
           customDays = parsed.days
-          customDeadline = new Date(openedDate.getTime() + parsed.days * 24 * 60 * 60 * 1000).toISOString()
+          baseDate = parsed.updatedAt ? new Date(parsed.updatedAt) : openedDate
+          customDeadline = new Date(baseDate.getTime() + parsed.days * 24 * 60 * 60 * 1000).toISOString()
         }
       }
     } catch {
@@ -124,38 +125,47 @@ export function getSlaInfo(issue) {
     }
   }
 
-  let allowedDurationMs
-  let isCustom = false
+  // If authority has NOT set a deadline yet:
+  if (!customDeadline) {
+    const elapsedMs = Math.max(0, now - openedDate.getTime())
+    const ageHours = Math.max(0, Math.round(elapsedMs / (60 * 60 * 1000))) || 0
 
-  if (customDeadline) {
-    const customDate = new Date(customDeadline)
-    if (!isNaN(customDate.getTime())) {
-      isCustom = true
-      allowedDurationMs = Math.max(60 * 60 * 1000, customDate.getTime() - openedDate.getTime())
-      if (!customDays) {
-        customDays = Math.max(1, Math.round(allowedDurationMs / (24 * 60 * 60 * 1000)))
-      }
+    return {
+      openedDate,
+      deadlineDate: null,
+      deadline: null,
+      deadlineFormatted: 'Not Set',
+      allowedDurationMs: null,
+      allowedDurationLabel: 'Pending Authority Setting',
+      isCustom: false,
+      isSet: false,
+      customDays: null,
+      slaHours: null,
+      ageHours,
+      percentElapsed: 0,
+      remainingMs: null,
+      elapsedMs,
+      progressPercent: 0,
+      isOverdue: false,
+      isDueSoon: false,
+      isResolved,
+      tone: isResolved ? 'resolved' : 'neutral',
+      label: isResolved ? 'Resolved' : 'Pending Schedule',
+      badgeClass: isResolved
+        ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+        : 'border-slate-300 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300',
+      dotClass: isResolved ? 'bg-emerald-600' : 'bg-slate-400',
     }
   }
 
-  if (!allowedDurationMs) {
-    allowedDurationMs = SLA_DURATIONS_MS[severity] ?? SLA_DURATIONS_MS.medium
-  }
-
-  const deadlineDate = customDeadline && !isNaN(new Date(customDeadline).getTime())
-    ? new Date(customDeadline)
-    : new Date(openedDate.getTime() + allowedDurationMs)
-
-  const now = Date.now()
-
-  const isResolved =
-    issue.status === 'resolved' ||
-    issue.status === 'closed' ||
-    issue.issueStatus === 'resolved' ||
-    issue.issueStatus === 'closed'
+  // Authority deadline IS set:
+  const deadlineDate = new Date(customDeadline)
+  const allowedDurationMs = customDays
+    ? customDays * 24 * 60 * 60 * 1000
+    : Math.max(60 * 60 * 1000, deadlineDate.getTime() - baseDate.getTime())
 
   const remainingMs = deadlineDate.getTime() - now
-  const elapsedMs = Math.max(0, now - openedDate.getTime())
+  const elapsedMs = Math.max(0, now - baseDate.getTime())
 
   const rawPercent = Math.round((elapsedMs / (allowedDurationMs || 1)) * 100)
   const percentElapsed = isNaN(rawPercent) ? 0 : Math.min(100, Math.max(0, rawPercent))
@@ -201,11 +211,10 @@ export function getSlaInfo(issue) {
       minute: '2-digit',
     }),
     allowedDurationMs,
-    allowedDurationLabel: isCustom
-      ? `${customDays} Day${customDays === 1 ? '' : 's'} (Authority Fixed)`
-      : (SLA_LABELS[severity] || '7 Days'),
-    isCustom,
-    customDays,
+    allowedDurationLabel: `${customDays || Math.round(allowedDurationMs / 86400000)} Day(s) (Authority Fixed)`,
+    isCustom: true,
+    isSet: true,
+    customDays: customDays || Math.round(allowedDurationMs / 86400000),
     slaHours,
     ageHours,
     percentElapsed,

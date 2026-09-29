@@ -10,6 +10,8 @@ export default function SlaBadge({ issue, showIcon = true, className = '' }) {
 
   const IconComponent = sla.isResolved
     ? CheckCircle2
+    : !sla.isSet
+    ? Clock
     : sla.isOverdue
     ? AlertTriangle
     : Clock
@@ -17,7 +19,11 @@ export default function SlaBadge({ issue, showIcon = true, className = '' }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium tracking-tight shadow-3xs ${sla.badgeClass} ${className}`}
-      title={`Target Deadline: ${sla.deadlineFormatted} (${sla.allowedDurationLabel})`}
+      title={
+        sla.isSet
+          ? `Target Deadline: ${sla.deadlineFormatted} (${sla.allowedDurationLabel})`
+          : 'Resolution deadline has not been set by authority yet'
+      }
     >
       {showIcon && <IconComponent className="h-3 w-3 shrink-0" aria-hidden="true" />}
       <span>{sla.label}</span>
