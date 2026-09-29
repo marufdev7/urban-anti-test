@@ -365,9 +365,23 @@ export default function IssueDetailPage() {
           </h1>
         </div>
 
-        <div className="flex items-center gap-2 rounded-full border border-line bg-surface-panel px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-ink shadow-xs">
-          <Clock className="h-3.5 w-3.5 text-ink-muted" />
-          <span>{issueStatusLabel(data.status)}</span>
+        <div className="flex items-center gap-3">
+          {user?.role === 'admin' && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setRemoveModalOpen(true)}
+              className="border-rose-200 bg-rose-50/70 text-rose-700 hover:bg-rose-100 text-xs font-semibold flex items-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+              <span>Remove Issue</span>
+            </Button>
+          )}
+          <div className="flex items-center gap-2 rounded-full border border-line bg-surface-panel px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider text-ink shadow-xs">
+            <Clock className="h-3.5 w-3.5 text-ink-muted" />
+            <span>{issueStatusLabel(data.status)}</span>
+          </div>
         </div>
       </div>
 
@@ -622,166 +636,166 @@ export default function IssueDetailPage() {
 
         {/* Right Column (4 cols) */}
         <div className="space-y-5 lg:col-span-4">
-          {/* Lifecycle Actions */}
-          <Card>
-            <CardHeader
-              title={
-                <span className="flex items-center gap-2 font-bold text-ink">
-                  <RotateCw className="h-4 w-4 text-primary" aria-hidden="true" />
-                  Lifecycle Actions
-                </span>
-              }
-            />
-            <CardBody className="space-y-4">
-              <div>
-                <Select
-                  label="Current Status"
-                  value={statusDraft}
-                  onChange={(e) => setStatusDraft(e.target.value)}
-                  options={statusOptions}
-                  disabled={!isAssignedToMe}
-                  className={!isAssignedToMe ? 'opacity-60 cursor-not-allowed' : ''}
-                />
-                {!isAssignedToMe && (
-                  <p className="mt-1.5 flex items-center gap-1.5 text-2xs text-amber-700 dark:text-amber-300 font-medium bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                    <span>Status update locked. Please click &ldquo;Assign to me&rdquo; below to take ownership.</span>
+          {/* Lifecycle Actions (Only for Field Authority role) */}
+          {user?.role === 'authority' && (
+            <Card>
+              <CardHeader
+                title={
+                  <span className="flex items-center gap-2 font-bold text-ink">
+                    <RotateCw className="h-4 w-4 text-primary" aria-hidden="true" />
+                    Lifecycle Actions
+                  </span>
+                }
+              />
+              <CardBody className="space-y-4">
+                <div>
+                  <Select
+                    label="Current Status"
+                    value={statusDraft}
+                    onChange={(e) => setStatusDraft(e.target.value)}
+                    options={statusOptions}
+                    disabled={!isAssignedToMe}
+                    className={!isAssignedToMe ? 'opacity-60 cursor-not-allowed' : ''}
+                  />
+                  {!isAssignedToMe && (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-2xs text-amber-700 dark:text-amber-300 font-medium bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                      <span>Status update locked. Please click &ldquo;Assign to me&rdquo; below to take ownership.</span>
+                    </p>
+                  )}
+                  {isAssignedToMe && statusDraft === 'duplicate' && (
+                    <input
+                      type="text"
+                      required
+                      value={duplicateOfIssueId}
+                      onChange={(e) => setDuplicateOfIssueId(e.target.value)}
+                      placeholder="Original Issue ID (UUID required)"
+                      className="mt-2 block w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    />
+                  )}
+                  {isAssignedToMe && REASON_REQUIRED.has(statusDraft) && (
+                    <textarea
+                      rows={2}
+                      required
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="Reason (required for this transition)"
+                      className="mt-2 block w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-ink mb-1">Unit Assignment</label>
+                  <div className="flex items-center justify-between rounded-panel border border-line bg-surface-panel p-2.5">
+                    <span className="text-xs text-ink font-medium truncate max-w-[170px]">
+                      {data.assignedTo
+                        ? (data.assignedTo === user?.id ? 'Assigned to You' : `Unit ID: #${shortId(data.assignedTo)}`)
+                        : 'Unassigned'}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={setAssignment.isPending}
+                      onClick={handleAssignToMe}
+                      className="text-xs font-semibold shrink-0"
+                    >
+                      {data.assignedTo === user?.id ? 'Unassign me' : 'Assign to me'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Manual Severity Override Box matching authority-issu-details.png */}
+                <div className="rounded-panel border border-line bg-slate-50/70 p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-xs font-bold text-ink cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={overrideActive}
+                        onChange={(e) => setOverrideActive(e.target.checked)}
+                        className="rounded border-line text-primary focus:ring-primary"
+                      />
+                      <span>Manual Severity Override</span>
+                    </label>
+                    <AlertTriangle className="h-4 w-4 text-primary" aria-hidden="true" />
+                  </div>
+
+                  {overrideActive && (
+                    <div className="space-y-2 pt-1">
+                      <Select
+                        label="Target Severity"
+                        value={severityDraft}
+                        onChange={(e) => setSeverityDraft(e.target.value)}
+                        options={SEVERITIES}
+                      />
+                      <div>
+                        <label className="block text-[11px] font-semibold text-ink-muted">
+                          Override Reason (Required)
+                        </label>
+                        <input
+                          type="text"
+                          value={severityReason}
+                          onChange={(e) => setSeverityReason(e.target.value)}
+                          placeholder="e.g., Escalated by Mayor's office..."
+                          className="mt-1 w-full rounded-panel border border-line bg-surface-panel px-3 py-1.5 text-xs focus:border-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {actionError && (
+                  <p className="rounded-panel border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical" role="alert">
+                    {actionError}
                   </p>
                 )}
-                {isAssignedToMe && statusDraft === 'duplicate' && (
-                  <input
-                    type="text"
-                    required
-                    value={duplicateOfIssueId}
-                    onChange={(e) => setDuplicateOfIssueId(e.target.value)}
-                    placeholder="Original Issue ID (UUID required)"
-                    className="mt-2 block w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                  />
+                {actionOk && (
+                  <p className="flex items-center gap-1.5 rounded-panel border border-status-resolved/30 bg-status-resolved-soft px-3 py-2 text-xs text-status-resolved" role="status">
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                    Changes applied and logged.
+                  </p>
                 )}
-                {isAssignedToMe && REASON_REQUIRED.has(statusDraft) && (
-                  <textarea
-                    rows={2}
-                    required
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    placeholder="Reason (required for this transition)"
-                    className="mt-2 block w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                  />
-                )}
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-ink mb-1">Unit Assignment</label>
-                <div className="flex items-center justify-between rounded-panel border border-line bg-surface-panel p-2.5">
-                  <span className="text-xs text-ink font-medium truncate max-w-[170px]">
-                    {data.assignedTo
-                      ? (data.assignedTo === user?.id ? 'Assigned to You' : `Unit ID: #${shortId(data.assignedTo)}`)
-                      : 'Unassigned'}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    loading={setAssignment.isPending}
-                    onClick={handleAssignToMe}
-                    className="text-xs font-semibold shrink-0"
-                  >
-                    {data.assignedTo === user?.id ? 'Unassign me' : 'Assign to me'}
-                  </Button>
-                </div>
-              </div>
-
-              {/* Manual Severity Override Box matching authority-issu-details.png */}
-              <div className="rounded-panel border border-line bg-slate-50/70 p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-xs font-bold text-ink cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={overrideActive}
-                      onChange={(e) => setOverrideActive(e.target.checked)}
-                      className="rounded border-line text-primary focus:ring-primary"
-                    />
-                    <span>Manual Severity Override</span>
-                  </label>
-                  <AlertTriangle className="h-4 w-4 text-primary" aria-hidden="true" />
-                </div>
-
-                {overrideActive && (
-                  <div className="space-y-2 pt-1">
-                    <Select
-                      label="Target Severity"
-                      value={severityDraft}
-                      onChange={(e) => setSeverityDraft(e.target.value)}
-                      options={SEVERITIES}
-                    />
-                    <div>
-                      <label className="block text-[11px] font-semibold text-ink-muted">
-                        Override Reason (Required)
-                      </label>
-                      <input
-                        type="text"
-                        value={severityReason}
-                        onChange={(e) => setSeverityReason(e.target.value)}
-                        placeholder="e.g., Escalated by Mayor's office..."
-                        className="mt-1 w-full rounded-panel border border-line bg-surface-panel px-3 py-1.5 text-xs focus:border-primary"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {actionError && (
-                <p className="rounded-panel border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical" role="alert">
-                  {actionError}
-                </p>
-              )}
-              {actionOk && (
-                <p className="flex items-center gap-1.5 rounded-panel border border-status-resolved/30 bg-status-resolved-soft px-3 py-2 text-xs text-status-resolved" role="status">
-                  <Check className="h-4 w-4" aria-hidden="true" />
-                  Changes applied and logged.
-                </p>
-              )}
-
-              <Button
-                className="w-full bg-[#0e7490] hover:bg-[#085f76] text-white font-semibold py-2.5"
-                loading={busy}
-                disabled={
-                  reasonNeeded ||
-                  duplicateNeeded ||
-                  severityNeedsReason ||
-                  (!isAssignedToMe && statusDraft !== data.status) ||
-                  (statusDraft === data.status && !severityChanged)
-                }
-                onClick={applyChanges}
-              >
-                Apply Updates
-              </Button>
-
-              {/* Advanced Operations: Merge & Split (FRONT-PLAN §9.6) */}
-              <div className="flex gap-2 pt-2 border-t border-line/60">
                 <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => setMergeOpen(true)}
-                  className="flex-1 text-xs font-semibold"
+                  className="w-full bg-[#0e7490] hover:bg-[#085f76] text-white font-semibold py-2.5"
+                  loading={busy}
+                  disabled={
+                    reasonNeeded ||
+                    duplicateNeeded ||
+                    severityNeedsReason ||
+                    (!isAssignedToMe && statusDraft !== data.status) ||
+                    (statusDraft === data.status && !severityChanged)
+                  }
+                  onClick={applyChanges}
                 >
-                  Merge Issue
+                  Apply Updates
                 </Button>
-                {reports.length > 1 && (
+
+                {/* Advanced Operations: Merge & Split (FRONT-PLAN §9.6) */}
+                <div className="flex gap-2 pt-2 border-t border-line/60">
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
-                    onClick={() => setSplitOpen(true)}
+                    onClick={() => setMergeOpen(true)}
                     className="flex-1 text-xs font-semibold"
                   >
-                    Split Issue
+                    Merge Issue
                   </Button>
-                )}
-              </div>
+                  {reports.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setSplitOpen(true)}
+                      className="flex-1 text-xs font-semibold"
+                    >
+                      Split Issue
+                    </Button>
+                  )}
+                </div>
 
-              {/* Removal / Moderation Button for Authority and Admin */}
-              {(user?.role === 'admin' || user?.role === 'authority') && (
+                {/* Removal Button for Authority */}
                 <div className="pt-2 border-t border-line/60">
                   <Button
                     type="button"
@@ -794,126 +808,9 @@ export default function IssueDetailPage() {
                     Remove Issue with Notes
                   </Button>
                 </div>
-              )}
-
-              {/* Merge Modal */}
-              <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Merge Issue">
-                <p className="text-xs text-ink-muted">
-                  Merge this issue into another surviving issue. All bundled reports will transfer.
-                </p>
-                <form onSubmit={handleMerge} className="mt-4 space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink">Surviving Issue ID (UUID)</label>
-                    <input
-                      type="text"
-                      required
-                      value={mergeWithId}
-                      onChange={(e) => setMergeWithId(e.target.value)}
-                      placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
-                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-ink">Merge Reason</label>
-                    <input
-                      type="text"
-                      value={mergeReason}
-                      onChange={(e) => setMergeReason(e.target.value)}
-                      placeholder="e.g. Duplicate report cluster on same street"
-                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="ghost" size="sm" onClick={() => setMergeOpen(false)}>Cancel</Button>
-                    <Button type="submit" size="sm" loading={mergeMutation.isPending} className="bg-primary text-white">Merge</Button>
-                  </div>
-                </form>
-              </Dialog>
-
-              {/* Split Modal */}
-              <Dialog open={splitOpen} onClose={() => setSplitOpen(false)} title="Split Issue">
-                <p className="text-xs text-ink-muted">
-                  Select bundled reports to spin off into a new separate issue.
-                </p>
-                <form onSubmit={handleSplit} className="mt-4 space-y-3">
-                  <div className="max-h-48 overflow-y-auto space-y-2 border border-line rounded p-2">
-                    {reports.map((r) => (
-                      <label key={r.id} className="flex items-start gap-2 text-xs cursor-pointer p-1 hover:bg-slate-50 rounded">
-                        <input
-                          type="checkbox"
-                          checked={splitReportIds.has(r.id)}
-                          onChange={(e) => {
-                            const next = new Set(splitReportIds)
-                            if (e.target.checked) next.add(r.id)
-                            else next.delete(r.id)
-                            setSplitReportIds(next)
-                          }}
-                          className="mt-0.5 rounded border-line text-primary focus:ring-primary"
-                        />
-                        <div className="min-w-0">
-                          <span className="font-semibold text-ink block">Report #{shortId(r.id)}</span>
-                          <span className="text-ink-muted truncate block">{r.description || '(No description)'}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-ink">Split Reason</label>
-                    <input
-                      type="text"
-                      value={splitReason}
-                      onChange={(e) => setSplitReason(e.target.value)}
-                      placeholder="e.g. Unrelated incident clustered by proximity"
-                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="ghost" size="sm" onClick={() => setSplitOpen(false)}>Cancel</Button>
-                    <Button type="submit" size="sm" loading={splitMutation.isPending} disabled={splitReportIds.size === 0} className="bg-primary text-white">
-                      Split Selected
-                    </Button>
-                  </div>
-                </form>
-              </Dialog>
-
-              {/* Moderate Modal */}
-              <Dialog open={moderateOpen} onClose={() => setModerateOpen(false)} title="Moderate Issue">
-                <p className="text-xs text-ink-muted">
-                  Administrators may hide or completely remove issues violating municipal policy.
-                </p>
-                <form onSubmit={handleModerate} className="mt-4 space-y-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-ink">Action</label>
-                    <select
-                      value={moderateAction}
-                      onChange={(e) => setModerateAction(e.target.value)}
-                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                    >
-                      <option value="hide">Hide (Returns 410 Gone publicly)</option>
-                      <option value="remove">Remove (Soft Delete)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-ink">Audit Reason (Required)</label>
-                    <textarea
-                      rows={2}
-                      required
-                      value={moderateReason}
-                      onChange={(e) => setModerateReason(e.target.value)}
-                      placeholder="Enter reason for audit record..."
-                      className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="ghost" size="sm" onClick={() => setModerateOpen(false)}>Cancel</Button>
-                    <Button type="submit" size="sm" loading={moderateMutation.isPending} disabled={!moderateReason.trim()} className="bg-rose-600 text-white">
-                      Confirm Moderation
-                    </Button>
-                  </div>
-                </form>
-              </Dialog>
-            </CardBody>
-          </Card>
+              </CardBody>
+            </Card>
+          )}
 
           {/* Resolution Deadline Card */}
           {sla && (
@@ -1104,6 +1001,123 @@ export default function IssueDetailPage() {
           </Card>
         </div>
       </div>
+      {/* Merge Modal */}
+      <Dialog open={mergeOpen} onClose={() => setMergeOpen(false)} title="Merge Issue">
+        <p className="text-xs text-ink-muted">
+          Merge this issue into another surviving issue. All bundled reports will transfer.
+        </p>
+        <form onSubmit={handleMerge} className="mt-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-ink">Surviving Issue ID (UUID)</label>
+            <input
+              type="text"
+              required
+              value={mergeWithId}
+              onChange={(e) => setMergeWithId(e.target.value)}
+              placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink">Merge Reason</label>
+            <input
+              type="text"
+              value={mergeReason}
+              onChange={(e) => setMergeReason(e.target.value)}
+              placeholder="e.g. Duplicate report cluster on same street"
+              className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setMergeOpen(false)}>Cancel</Button>
+            <Button type="submit" size="sm" loading={mergeMutation.isPending} className="bg-primary text-white">Merge</Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Split Modal */}
+      <Dialog open={splitOpen} onClose={() => setSplitOpen(false)} title="Split Issue">
+        <p className="text-xs text-ink-muted">
+          Select bundled reports to spin off into a new separate issue.
+        </p>
+        <form onSubmit={handleSplit} className="mt-4 space-y-3">
+          <div className="max-h-48 overflow-y-auto space-y-2 border border-line rounded p-2">
+            {reports.map((r) => (
+              <label key={r.id} className="flex items-start gap-2 text-xs cursor-pointer p-1 hover:bg-slate-50 rounded">
+                <input
+                  type="checkbox"
+                  checked={splitReportIds.has(r.id)}
+                  onChange={(e) => {
+                    const next = new Set(splitReportIds)
+                    if (e.target.checked) next.add(r.id)
+                    else next.delete(r.id)
+                    setSplitReportIds(next)
+                  }}
+                  className="mt-0.5 rounded border-line text-primary focus:ring-primary"
+                />
+                <div className="min-w-0">
+                  <span className="font-semibold text-ink block">Report #{shortId(r.id)}</span>
+                  <span className="text-ink-muted truncate block">{r.description || '(No description)'}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink">Split Reason</label>
+            <input
+              type="text"
+              value={splitReason}
+              onChange={(e) => setSplitReason(e.target.value)}
+              placeholder="e.g. Unrelated incident clustered by proximity"
+              className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setSplitOpen(false)}>Cancel</Button>
+            <Button type="submit" size="sm" loading={splitMutation.isPending} disabled={splitReportIds.size === 0} className="bg-primary text-white">
+              Split Selected
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
+      {/* Moderate Modal */}
+      <Dialog open={moderateOpen} onClose={() => setModerateOpen(false)} title="Moderate Issue">
+        <p className="text-xs text-ink-muted">
+          Administrators may hide or completely remove issues violating municipal policy.
+        </p>
+        <form onSubmit={handleModerate} className="mt-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-ink">Action</label>
+            <select
+              value={moderateAction}
+              onChange={(e) => setModerateAction(e.target.value)}
+              className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+            >
+              <option value="hide">Hide (Returns 410 Gone publicly)</option>
+              <option value="remove">Remove (Soft Delete)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink">Audit Reason (Required)</label>
+            <textarea
+              rows={2}
+              required
+              value={moderateReason}
+              onChange={(e) => setModerateReason(e.target.value)}
+              placeholder="Enter reason for audit record..."
+              className="mt-1 w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setModerateOpen(false)}>Cancel</Button>
+            <Button type="submit" size="sm" loading={moderateMutation.isPending} disabled={!moderateReason.trim()} className="bg-rose-600 text-white">
+              Confirm Moderation
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+
       {removeModalOpen && data && (
         <RemoveWithNotesModal
           open={removeModalOpen}
