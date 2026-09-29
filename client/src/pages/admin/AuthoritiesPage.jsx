@@ -1,11 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowRight,
   Check,
   ChevronDown,
   ChevronUp,
   Copy,
+  Crown,
   Download,
   Eye,
   EyeOff,
@@ -20,15 +21,17 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   UserCheck,
   UserPlus,
+  Users,
 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
-import { useAuthorities, useAdminUpdateUser } from '../../hooks/admin'
+import { useAuthorities, useAdmins, useAdminUpdateUser } from '../../hooks/admin'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { exportAuthoritiesPdf } from '../../lib/pdfExport'
 import { JURISDICTION_AREAS, getJurisdictionLabel } from '../../lib/zones'
-import { shortId } from '../../lib/format'
+import { formatDate, shortId } from '../../lib/format'
 import { getAuthorityRestriction, reactivateAuthorityAccount } from '../../lib/unnaturalActivity'
 import Button from '../../components/ui/Button'
 import Card, { CardBody } from '../../components/ui/Card'
@@ -661,12 +664,65 @@ function EditAuthorityModal({ authority, onClose, categories }) {
   )
 }
 
+function formatAdmin(user) {
+  const email = user.email || ''
+  const emailPrefix = email.split('@')[0] || 'admin'
+  const isSuper = Boolean(user.isSuperuser || user.is_superuser)
+
+  let name = ''
+  if (isSuper) {
+    name =
+      email === 'admin@urbanmend.test'
+        ? 'Root Super Administrator'
+        : `${emailPrefix
+            .replace(/[._-]/g, ' ')
+            .replace(/\b\w/g, (l) => l.toUpperCase())} (Super Admin)`
+  } else {
+    name = `${emailPrefix
+      .replace(/[._-]/g, ' ')
+      .replace(/\b\w/g, (l) => l.toUpperCase())} (Staff Admin)`
+  }
+
+  const initials =
+    name
+      .split(' ')
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'AD'
+
+  return {
+    id: shortId(user.id),
+    fullId: user.id,
+    email: user.email,
+    phone: user.phone || '—',
+    name,
+    isSuper,
+    roleTitle: isSuper ? 'Super Administrator' : 'Platform Administrator',
+    assignedArea: user.assignedArea || 'Central Operations & Governance',
+    areaLabel:
+      getJurisdictionLabel(user.assignedArea) ||
+      user.assignedArea ||
+      'All Municipalities (Global)',
+    requireTwoFactor: Boolean(user.requireTwoFactor || user.require_two_factor),
+    status: user.status || 'active',
+    avatar: initials,
+    rawUser: user,
+  }
+}
+
 /**
- * Authority provisioning table and stats with 100% actual database data.
+ * Authority & Administrator provisioning table and stats with actual database data.
  */
 export default function AuthoritiesPage() {
   const { user } = useAuth()
   const { data: categories } = useCategories()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') === 'admins' ? 'admins' : 'authorities'
+  const isSuperAdmin = Boolean(
+    user?.role === 'admin' && (user?.isSuperuser || user?.is_superuser),
+  )
+
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState('')
   const [editingAuthority, setEditingAuthority] = useState(null)
@@ -678,36 +734,64 @@ export default function AuthoritiesPage() {
     return () => window.removeEventListener('urbanmend_security_alert', handleSecAlert)
   }, [])
 
-  const { data, isLoading, isError, error, refetch } = useAuthorities({
-    cursor: cursor || undefined,
+  const handleTabChange = (newTab) => {
+    setSearchParams({ tab: newTab })
+    setQ('')
+    setCursor('')
+  }
+
+  // Authorities query
+  const {
+    data: authoritiesData,
+    isLoading: authLoading,
+    isError: authIsError,
+    error: authError,
+    refetch: authRefetch,
+  } = useAuthorities({
+    cursor: activeTab === 'authorities' ? cursor || undefined : undefined,
+  })
+
+  // Admins query
+  const {
+    data: adminsData,
+    isLoading: adminLoading,
+    isError: adminIsError,
+    error: adminError,
+    refetch: adminRefetch,
+  } = useAdmins({
+    cursor: activeTab === 'admins' ? cursor || undefined : undefined,
   })
 
   const handleReactivate = (officerId, officerName) => {
-    if (!window.confirm(`Are you sure you want to lift operational restrictions and reactivate ${officerName || officerId}?`)) {
+    if (
+      !window.confirm(
+        `Are you sure you want to lift operational restrictions and reactivate ${officerName || officerId}?`,
+      )
+    ) {
       return
     }
     const success = reactivateAuthorityAccount(officerId, user)
     if (success) {
       setRefreshKey((k) => k + 1)
-      refetch()
-      alert(`Account for ${officerName || officerId} has been successfully reactivated and restrictions lifted.`)
+      authRefetch()
+      alert(
+        `Account for ${officerName || officerId} has been successfully reactivated and restrictions lifted.`,
+      )
     }
   }
 
-  const authorities = data?.data ?? []
-  const nextCursor = data?.page?.nextCursor
-
-  const activeCount = authorities.filter((a) => a.status === 'active').length
-  const revokedCount = authorities.filter((a) =>
+  // Authorities list calculations
+  const authorities = authoritiesData?.data ?? []
+  const authNextCursor = authoritiesData?.page?.nextCursor
+  const authActiveCount = authorities.filter((a) => a.status === 'active').length
+  const authRevokedCount = authorities.filter((a) =>
     ['suspended', 'deprovisioned', 'revoked'].includes(a.status),
   ).length
 
-  // Map 100% actual database authorities
   const displayAuthorities = useMemo(() => {
     return authorities.map((a) => formatAuthority(a, categories))
   }, [authorities, categories])
 
-  // Filter in memory by user search query
   const filteredAuthorities = useMemo(() => {
     if (!q.trim()) return displayAuthorities
     const lower = q.toLowerCase()
@@ -720,6 +804,33 @@ export default function AuthoritiesPage() {
         a.status.toLowerCase().includes(lower),
     )
   }, [displayAuthorities, q])
+
+  // Admins list calculations
+  const admins = adminsData?.data ?? []
+  const adminNextCursor = adminsData?.page?.nextCursor
+  const adminActiveCount = admins.filter((a) => a.status === 'active').length
+  const adminSuperCount = admins.filter((a) => Boolean(a.isSuperuser || a.is_superuser)).length
+  const adminStandardCount = admins.length - adminSuperCount
+  const adminTwoFactorCount = admins.filter((a) =>
+    Boolean(a.requireTwoFactor || a.require_two_factor),
+  ).length
+
+  const displayAdmins = useMemo(() => {
+    return admins.map((a) => formatAdmin(a))
+  }, [admins])
+
+  const filteredAdmins = useMemo(() => {
+    if (!q.trim()) return displayAdmins
+    const lower = q.toLowerCase()
+    return displayAdmins.filter(
+      (a) =>
+        a.name.toLowerCase().includes(lower) ||
+        a.email.toLowerCase().includes(lower) ||
+        a.roleTitle.toLowerCase().includes(lower) ||
+        a.assignedArea.toLowerCase().includes(lower) ||
+        a.status.toLowerCase().includes(lower),
+    )
+  }, [displayAdmins, q])
 
   // Calculate dynamic role distribution from actual authorities
   const roleDistribution = useMemo(() => {
@@ -760,336 +871,595 @@ export default function AuthoritiesPage() {
     document.body.removeChild(link)
   }
 
+  const handleExportAdminsCsv = () => {
+    if (displayAdmins.length === 0) return
+    const headers = [
+      'ID',
+      'Name',
+      'Email',
+      'Phone',
+      'Role Level',
+      'Assigned Area',
+      '2FA Enforced',
+      'Status',
+    ]
+    const rows = displayAdmins.map((a) => [
+      a.id,
+      `"${a.name}"`,
+      a.email,
+      a.phone,
+      `"${a.roleTitle}"`,
+      `"${a.areaLabel}"`,
+      a.requireTwoFactor ? 'Yes' : 'No',
+      a.status,
+    ])
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute(
+      'download',
+      `admin_personnel_report_${new Date().toISOString().slice(0, 10)}.csv`,
+    )
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   return (
     <div>
-      {/* Header matching admin-authority-provisioning.png */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+      {/* Header — dynamic based on active tab */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink">Authority Provisioning</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-ink">
+            {activeTab === 'admins' ? 'System Administrators' : 'Authority Provisioning'}
+          </h1>
           <p className="mt-1 text-sm text-ink-muted">
-            Manage system access, field roles, and category scopes for UrbanMend staff and allied agency personnel.
+            {activeTab === 'admins'
+              ? 'Manage platform administrators, privilege levels, and super admin credentials.'
+              : 'Manage system access, field roles, and category scopes for UrbanMend staff and allied agency personnel.'}
           </p>
         </div>
-        <Link to="/admin/authorities/new">
-          <Button className="flex items-center gap-2 bg-[#0e7490] px-4 py-2 font-semibold text-white hover:bg-[#085f76]">
-            <UserPlus className="h-4 w-4" aria-hidden="true" />
-            <span>Provision New Authority</span>
-          </Button>
-        </Link>
+        {activeTab === 'admins' ? (
+          isSuperAdmin ? (
+            <Link to="/admin/administrators/new">
+              <Button className="flex items-center gap-2 bg-purple-700 px-4 py-2 font-semibold text-white hover:bg-purple-800">
+                <Crown className="h-4 w-4" aria-hidden="true" />
+                <span>Provision New Admin</span>
+              </Button>
+            </Link>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-panel border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <Lock className="h-3.5 w-3.5 text-amber-600" />
+              Super Admin required
+            </span>
+          )
+        ) : (
+          <Link to="/admin/authorities/new">
+            <Button className="flex items-center gap-2 bg-[#0e7490] px-4 py-2 font-semibold text-white hover:bg-[#085f76]">
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              <span>Provision New Authority</span>
+            </Button>
+          </Link>
+        )}
+      </div>
+
+      {/* Tab Switcher */}
+      <div className="mb-5 flex items-center gap-1 rounded-panel border border-line bg-surface-sunken/50 p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => handleTabChange('authorities')}
+          className={`flex items-center gap-2 rounded-panel px-4 py-2 text-sm font-semibold transition-all ${
+            activeTab === 'authorities'
+              ? 'bg-surface-panel text-primary shadow-sm border border-line'
+              : 'text-ink-muted hover:text-ink'
+          }`}
+        >
+          <Shield className="h-4 w-4" aria-hidden="true" />
+          <span>Field Authorities</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+            activeTab === 'authorities'
+              ? 'bg-primary/10 text-primary'
+              : 'bg-surface-sunken text-ink-faint'
+          }`}>
+            {authorities.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange('admins')}
+          className={`flex items-center gap-2 rounded-panel px-4 py-2 text-sm font-semibold transition-all ${
+            activeTab === 'admins'
+              ? 'bg-surface-panel text-purple-700 shadow-sm border border-line'
+              : 'text-ink-muted hover:text-ink'
+          }`}
+        >
+          <Crown className="h-4 w-4" aria-hidden="true" />
+          <span>System Administrators</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+            activeTab === 'admins'
+              ? 'bg-purple-100 text-purple-700'
+              : 'bg-surface-sunken text-ink-faint'
+          }`}>
+            {admins.length}
+          </span>
+        </button>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-12">
         {/* Left Column (8 cols): Table */}
         <div className="lg:col-span-8">
-          <Card className="overflow-hidden">
-            {/* Search filter bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-3.5">
-              <div className="relative w-full max-w-xs">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
-                <input
-                  type="text"
-                  placeholder="Search authorities, roles, scopes..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  className="w-full rounded-panel border border-line bg-surface-panel py-1.5 pl-9 pr-3 text-xs text-ink placeholder:text-ink-muted focus:border-primary focus:outline-hidden"
-                />
+          {activeTab === 'authorities' ? (
+            /* ── AUTHORITIES TABLE ── */
+            <Card className="overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-3.5">
+                <div className="relative w-full max-w-xs">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                  <input
+                    type="text"
+                    placeholder="Search authorities, roles, scopes..."
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    className="w-full rounded-panel border border-line bg-surface-panel py-1.5 pl-9 pr-3 text-xs text-ink placeholder:text-ink-muted focus:border-primary focus:outline-hidden"
+                  />
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Showing {filteredAuthorities.length} of {displayAuthorities.length} authorities
+                </p>
               </div>
-              <p className="text-xs text-ink-muted">
-                Showing {filteredAuthorities.length} of {displayAuthorities.length} authorities
-              </p>
-            </div>
 
-            {isLoading ? (
-              <div className="space-y-3 p-5">
-                <Skeleton className="h-8 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </div>
-            ) : isError ? (
-              <div className="p-6 text-sm text-status-critical" role="alert">
-                Failed to load authorities: {error?.message}
-              </div>
-            ) : filteredAuthorities.length === 0 ? (
-              <div className="p-8">
-                <EmptyState
-                  title={q ? 'No matching authorities found' : 'No Authorities Provisioned'}
-                  message={
-                    q
-                      ? `No authority match for "${q}".`
-                      : 'Provision an authority above to assign scopes and field permissions.'
-                  }
-                />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-line bg-surface-sunken/60 text-left text-xs font-bold tracking-wider text-ink-muted uppercase">
-                      <th scope="col" className="px-4 py-3.5">
-                        Name &amp; Credential
-                      </th>
-                      <th scope="col" className="px-4 py-3.5">
-                        Role
-                      </th>
-                      <th scope="col" className="px-4 py-3.5">
-                        Jurisdiction Area
-                      </th>
-                      <th scope="col" className="px-4 py-3.5">
-                        Category Scope
-                      </th>
-                      <th scope="col" className="px-4 py-3.5">
-                        Status
-                      </th>
-                      <th scope="col" className="px-4 py-3.5 text-right">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-line">
-                    {filteredAuthorities.map((item) => {
-                      const isRevoked = item.status === 'revoked'
-                      const restriction = getAuthorityRestriction(item.fullId)
-                      return (
-                        <tr
-                          key={item.fullId}
-                          className={`transition hover:bg-slate-50/80 ${
-                            isRevoked
-                              ? 'bg-slate-100/50 text-ink-muted'
-                              : restriction?.level === 'permanent'
-                              ? 'bg-rose-50/30'
-                              : ''
-                          }`}
-                        >
-                          {/* Name & Credential */}
-                          <td className="px-4 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
-                                  isRevoked
-                                    ? 'bg-slate-200 text-slate-500'
-                                    : 'bg-primary-soft text-primary'
-                                }`}
-                              >
-                                {item.avatar}
-                              </div>
-                              <div>
-                                <Link
-                                  to={`/admin/authorities/${item.fullId}`}
-                                  className={`font-bold hover:text-primary hover:underline ${
-                                    isRevoked ? 'text-ink-muted line-through' : 'text-ink'
+              {authLoading ? (
+                <div className="space-y-3 p-5">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : authIsError ? (
+                <div className="p-6 text-sm text-status-critical" role="alert">
+                  Failed to load authorities: {authError?.message}
+                </div>
+              ) : filteredAuthorities.length === 0 ? (
+                <div className="p-8">
+                  <EmptyState
+                    title={q ? 'No matching authorities found' : 'No Authorities Provisioned'}
+                    message={
+                      q
+                        ? `No authority match for "${q}".`
+                        : 'Provision an authority above to assign scopes and field permissions.'
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line bg-surface-sunken/60 text-left text-xs font-bold tracking-wider text-ink-muted uppercase">
+                        <th scope="col" className="px-4 py-3.5">Name &amp; Credential</th>
+                        <th scope="col" className="px-4 py-3.5">Role</th>
+                        <th scope="col" className="px-4 py-3.5">Jurisdiction Area</th>
+                        <th scope="col" className="px-4 py-3.5">Category Scope</th>
+                        <th scope="col" className="px-4 py-3.5">Status</th>
+                        <th scope="col" className="px-4 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredAuthorities.map((item) => {
+                        const isRevoked = item.status === 'revoked'
+                        const restriction = getAuthorityRestriction(item.fullId)
+                        return (
+                          <tr
+                            key={item.fullId}
+                            className={`transition hover:bg-slate-50/80 ${
+                              isRevoked
+                                ? 'bg-slate-100/50 text-ink-muted'
+                                : restriction?.level === 'permanent'
+                                ? 'bg-rose-50/30'
+                                : ''
+                            }`}
+                          >
+                            <td className="px-4 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                                    isRevoked
+                                      ? 'bg-slate-200 text-slate-500'
+                                      : 'bg-primary-soft text-primary'
                                   }`}
                                 >
-                                  {item.name}
+                                  {item.avatar}
+                                </div>
+                                <div>
+                                  <Link
+                                    to={`/admin/authorities/${item.fullId}`}
+                                    className={`font-bold hover:text-primary hover:underline ${
+                                      isRevoked ? 'text-ink-muted line-through' : 'text-ink'
+                                    }`}
+                                  >
+                                    {item.name}
+                                  </Link>
+                                  <p className="text-xs text-ink-faint">
+                                    {item.email} &bull; ID: {item.id}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="inline-flex items-center gap-1 rounded border border-sky-200/60 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                                <UserCheck className="h-3 w-3 text-sky-600" aria-hidden="true" />
+                                {item.role}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <span className="inline-flex items-center gap-1 rounded border border-emerald-200/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                                <MapPin className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                                {item.areaLabel}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <div className="flex flex-wrap gap-1">
+                                {item.scope.map((cat, i) => (
+                                  <span
+                                    key={i}
+                                    className="rounded border border-line bg-surface-panel px-2 py-0.5 text-xs text-ink-muted"
+                                  >
+                                    {cat}
+                                  </span>
+                                ))}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {restriction ? (
+                                <RestrictionBadge
+                                  restriction={restriction}
+                                  onExpire={() => setRefreshKey((k) => k + 1)}
+                                />
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+                                  <span
+                                    className={`h-2 w-2 rounded-full ${
+                                      isRevoked ? 'bg-slate-400' : 'bg-status-resolved'
+                                    }`}
+                                    aria-hidden="true"
+                                  />
+                                  <span
+                                    className={
+                                      isRevoked
+                                        ? 'text-slate-500 capitalize'
+                                        : 'text-status-resolved capitalize'
+                                    }
+                                  >
+                                    {item.status}
+                                  </span>
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {restriction && (
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    onClick={() => handleReactivate(item.fullId, item.name)}
+                                    className="inline-flex items-center gap-1 py-1 px-2.5 text-xs font-bold text-emerald-800 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 shadow-2xs"
+                                    title="Lift operational restrictions and reactivate authority account"
+                                  >
+                                    Reactivate
+                                  </Button>
+                                )}
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => setEditingAuthority(item.rawUser)}
+                                  className="inline-flex items-center gap-1.5 py-1 px-2.5 text-xs font-semibold hover:border-primary hover:text-primary"
+                                >
+                                  <Pencil className="h-3 w-3 text-primary" aria-hidden="true" />
+                                  <span>Edit</span>
+                                </Button>
+                                <Link
+                                  to={`/admin/authorities/${item.fullId}`}
+                                  className="rounded-panel border border-line p-1.5 text-ink-muted transition hover:border-primary hover:text-primary hover:bg-slate-50"
+                                  title="View details & audit"
+                                >
+                                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                                 </Link>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted">
+                <span>Showing 1-{filteredAuthorities.length} of {displayAuthorities.length} Authorities</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" disabled={!cursor} onClick={() => setCursor('')} className="text-xs">
+                    First Page
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={!authNextCursor} onClick={() => authNextCursor && setCursor(authNextCursor)} className="text-xs font-semibold text-primary">
+                    Next Page &rarr;
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            /* ── ADMINISTRATORS TABLE ── */
+            <Card className="overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-3.5">
+                <div className="relative w-full max-w-xs">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                  <input
+                    type="text"
+                    placeholder="Search administrators, roles, areas..."
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    className="w-full rounded-panel border border-line bg-surface-panel py-1.5 pl-9 pr-3 text-xs text-ink placeholder:text-ink-muted focus:border-primary focus:outline-hidden"
+                  />
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Showing {filteredAdmins.length} of {displayAdmins.length} administrators
+                </p>
+              </div>
+
+              {!isSuperAdmin && (
+                <div className="mx-3.5 mt-3 flex items-start gap-3 rounded-panel border border-amber-300/50 bg-amber-50/60 p-3 text-xs leading-relaxed text-amber-900">
+                  <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Standard Administrator Access</p>
+                    <p className="mt-0.5 text-amber-800">
+                      You can view existing administrators but cannot create or modify admin accounts. Only <strong>Super Administrators</strong> have root provisioning privileges. You can still provision and manage <strong>Field Authorities</strong>.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {adminLoading ? (
+                <div className="space-y-3 p-5">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : adminIsError ? (
+                <div className="p-6 text-sm text-status-critical" role="alert">
+                  Failed to load administrators: {adminError?.message}
+                </div>
+              ) : filteredAdmins.length === 0 ? (
+                <div className="p-8">
+                  <EmptyState
+                    title={q ? 'No matching administrators found' : 'No Administrators Found'}
+                    message={
+                      q
+                        ? `No administrator match for "${q}".`
+                        : 'No admin accounts have been provisioned yet.'
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line bg-surface-sunken/60 text-left text-xs font-bold tracking-wider text-ink-muted uppercase">
+                        <th scope="col" className="px-4 py-3.5">Admin &amp; Email</th>
+                        <th scope="col" className="px-4 py-3.5">Privilege Level</th>
+                        <th scope="col" className="px-4 py-3.5">Assigned Area</th>
+                        <th scope="col" className="px-4 py-3.5">2FA</th>
+                        <th scope="col" className="px-4 py-3.5">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredAdmins.map((adm) => (
+                        <tr key={adm.fullId} className="transition hover:bg-slate-50/80">
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                                adm.isSuper
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300/50'
+                                  : 'bg-primary-soft text-primary'
+                              }`}>
+                                {adm.avatar}
+                              </div>
+                              <div>
+                                <p className="font-bold text-ink flex items-center gap-1.5">
+                                  {adm.name}
+                                  {adm.isSuper && (
+                                    <Crown className="h-3.5 w-3.5 text-amber-500" aria-label="Super Admin" />
+                                  )}
+                                </p>
                                 <p className="text-xs text-ink-faint">
-                                  {item.email} &bull; ID: {item.id}
+                                  {adm.email} &bull; ID: {adm.id}
                                 </p>
                               </div>
                             </div>
                           </td>
-
-                          {/* Role pill badge */}
                           <td className="px-4 py-3.5">
-                            <span className="inline-flex items-center gap-1 rounded border border-sky-200/60 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
-                              <UserCheck className="h-3 w-3 text-sky-600" aria-hidden="true" />
-                              {item.role}
-                            </span>
-                          </td>
-
-                          {/* Jurisdiction Area */}
-                          <td className="px-4 py-3.5">
-                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                              <MapPin className="h-3 w-3 text-emerald-600" aria-hidden="true" />
-                              {item.areaLabel}
-                            </span>
-                          </td>
-
-                          {/* Category Scope */}
-                          <td className="px-4 py-3.5">
-                            <div className="flex flex-wrap gap-1">
-                              {item.scope.map((cat, i) => (
-                                <span
-                                  key={i}
-                                  className="rounded border border-line bg-surface-panel px-2 py-0.5 text-xs text-ink-muted"
-                                >
-                                  {cat}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-
-                          {/* Status */}
-                          <td className="px-4 py-3.5">
-                            {restriction ? (
-                              <RestrictionBadge
-                                restriction={restriction}
-                                onExpire={() => setRefreshKey((k) => k + 1)}
-                              />
+                            {adm.isSuper ? (
+                              <span className="inline-flex items-center gap-1 rounded border border-amber-300/60 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900">
+                                <Crown className="h-3 w-3 text-amber-600" aria-hidden="true" />
+                                Super Admin
+                              </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-bold">
-                                <span
-                                  className={`h-2 w-2 rounded-full ${
-                                    isRevoked ? 'bg-slate-400' : 'bg-status-resolved'
-                                  }`}
-                                  aria-hidden="true"
-                                />
-                                <span
-                                  className={
-                                    isRevoked
-                                      ? 'text-slate-500 capitalize'
-                                      : 'text-status-resolved capitalize'
-                                  }
-                                >
-                                  {item.status}
-                                </span>
+                              <span className="inline-flex items-center gap-1 rounded border border-sky-200/60 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                                <Shield className="h-3 w-3 text-sky-600" aria-hidden="true" />
+                                Administrator
                               </span>
                             )}
                           </td>
-
-                          {/* Actions */}
-                          <td className="px-4 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              {restriction && (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handleReactivate(item.fullId, item.name)}
-                                  className="inline-flex items-center gap-1 py-1 px-2.5 text-xs font-bold text-emerald-800 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 shadow-2xs"
-                                  title="Lift operational restrictions and reactivate authority account"
-                                >
-                                  Reactivate
-                                </Button>
-                              )}
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => setEditingAuthority(item.rawUser)}
-                                className="inline-flex items-center gap-1.5 py-1 px-2.5 text-xs font-semibold hover:border-primary hover:text-primary"
-                              >
-                                <Pencil className="h-3 w-3 text-primary" aria-hidden="true" />
-                                <span>Edit</span>
-                              </Button>
-                              <Link
-                                to={`/admin/authorities/${item.fullId}`}
-                                className="rounded-panel border border-line p-1.5 text-ink-muted transition hover:border-primary hover:text-primary hover:bg-slate-50"
-                                title="View details & audit"
-                              >
-                                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                              </Link>
-                            </div>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                              <MapPin className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                              {adm.areaLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {adm.requireTwoFactor ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                                <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                                Enforced
+                              </span>
+                            ) : (
+                              <span className="text-xs text-ink-faint">Optional</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+                              <span
+                                className={`h-2 w-2 rounded-full ${
+                                  adm.status === 'active' ? 'bg-status-resolved' : 'bg-slate-400'
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span className={`capitalize ${
+                                adm.status === 'active' ? 'text-status-resolved' : 'text-slate-500'
+                              }`}>
+                                {adm.status}
+                              </span>
+                            </span>
                           </td>
                         </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {/* Table Footer */}
-            <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted">
-              <span>Showing 1-{filteredAuthorities.length} of {displayAuthorities.length} Authorities</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!cursor}
-                  onClick={() => setCursor('')}
-                  className="text-xs"
-                >
-                  First Page
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!nextCursor}
-                  onClick={() => nextCursor && setCursor(nextCursor)}
-                  className="text-xs font-semibold text-primary"
-                >
-                  Next Page &rarr;
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        {/* Right Column (4 cols): Panels */}
-        <div className="space-y-5 lg:col-span-4">
-          {/* Card 1: System Access Overview */}
-          <Card>
-            <div className="p-4 pb-2">
-              <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">
-                System Access Overview
-              </p>
-            </div>
-            <CardBody className="pt-2">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
-                  <p className="text-3xl font-bold text-ink">{activeCount}</p>
-                  <p className="mt-1 text-xs font-medium text-ink-muted">Active Personnel</p>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
-                  <p className="text-3xl font-bold text-rose-600">{revokedCount}</p>
-                  <p className="mt-1 text-xs font-medium text-ink-muted">Revoked</p>
-                </div>
-              </div>
-            </CardBody>
-          </Card>
-
-          {/* Card 2: Role Distribution */}
-          <Card>
-            <div className="p-4 pb-2">
-              <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">
-                Role Distribution
-              </p>
-            </div>
-            <CardBody className="space-y-3.5 pt-2">
-              {roleDistribution.length === 0 ? (
-                <p className="py-4 text-center text-xs text-ink-muted">
-                  No authority roles configured.
-                </p>
-              ) : (
-                roleDistribution.map((item, index) => (
-                  <div key={item.role}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-ink">{item.role}</span>
-                      <span className="font-bold text-ink">{item.count}</span>
-                    </div>
-                    <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          ROLE_COLORS[index % ROLE_COLORS.length]
-                        }`}
-                        style={{ width: `${Math.min(Math.max(item.pct, 10), 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
               )}
 
-              <div className="flex items-center justify-between border-t border-line pt-3">
-                <button
-                  type="button"
-                  onClick={() => exportAuthoritiesPdf({ authorities: displayAuthorities })}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
-                  title="Download official PDF compliance report"
-                >
-                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Export PDF</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleExportCompliance}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink hover:underline"
-                  title="Download CSV spreadsheet"
-                >
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                  <span>Export CSV</span>
-                </button>
+              <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted">
+                <span>Showing 1-{filteredAdmins.length} of {displayAdmins.length} Administrators</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" disabled={!cursor} onClick={() => setCursor('')} className="text-xs">
+                    First Page
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={!adminNextCursor} onClick={() => adminNextCursor && setCursor(adminNextCursor)} className="text-xs font-semibold text-primary">
+                    Next Page &rarr;
+                  </Button>
+                </div>
               </div>
-            </CardBody>
-          </Card>
+            </Card>
+          )}
+        </div>
+
+        {/* Right Column (4 cols): Contextual Sidebar */}
+        <div className="space-y-5 lg:col-span-4">
+          {activeTab === 'authorities' ? (
+            <>
+              <Card>
+                <div className="p-4 pb-2">
+                  <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">System Access Overview</p>
+                </div>
+                <CardBody className="pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-ink">{authActiveCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Active Personnel</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-rose-600">{authRevokedCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Revoked</p>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <div className="p-4 pb-2">
+                  <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">Role Distribution</p>
+                </div>
+                <CardBody className="space-y-3.5 pt-2">
+                  {roleDistribution.length === 0 ? (
+                    <p className="py-4 text-center text-xs text-ink-muted">No authority roles configured.</p>
+                  ) : (
+                    roleDistribution.map((item, index) => (
+                      <div key={item.role}>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-ink">{item.role}</span>
+                          <span className="font-bold text-ink">{item.count}</span>
+                        </div>
+                        <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className={`h-full rounded-full transition-all ${ROLE_COLORS[index % ROLE_COLORS.length]}`}
+                            style={{ width: `${Math.min(Math.max(item.pct, 10), 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div className="flex items-center justify-between border-t border-line pt-3">
+                    <button type="button" onClick={() => exportAuthoritiesPdf({ authorities: displayAuthorities })} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline" title="Download official PDF compliance report">
+                      <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Export PDF</span>
+                    </button>
+                    <button type="button" onClick={handleExportCompliance} className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink hover:underline" title="Download CSV spreadsheet">
+                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Export CSV</span>
+                    </button>
+                  </div>
+                </CardBody>
+              </Card>
+            </>
+          ) : (
+            <>
+              <Card>
+                <div className="p-4 pb-2">
+                  <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">Admin Personnel</p>
+                </div>
+                <CardBody className="pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-ink">{admins.length}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Total Admins</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-amber-600">{adminSuperCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Super Admins</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-sky-600">{adminStandardCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Standard Admins</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-emerald-600">{adminTwoFactorCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">2FA Enforced</p>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <div className="p-4 pb-2">
+                  <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">Role Hierarchy</p>
+                </div>
+                <CardBody className="space-y-3 pt-2">
+                  <div className="flex items-start gap-3 rounded-panel border border-amber-200/60 bg-amber-50/40 p-3">
+                    <Crown className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-900">Super Administrator</p>
+                      <p className="mt-0.5 text-[11px] text-amber-800 leading-relaxed">
+                        Full platform control. Can provision both Admins and Authorities. Root access to all moderation, analytics, and system configuration.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-panel border border-sky-200/60 bg-sky-50/40 p-3">
+                    <Shield className="h-5 w-5 shrink-0 text-sky-600 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-sky-900">Standard Administrator</p>
+                      <p className="mt-0.5 text-[11px] text-sky-800 leading-relaxed">
+                        Issue moderation, report triage, analytics access, and Authority provisioning. Cannot create other Admin accounts.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-line pt-3">
+                    <button type="button" onClick={handleExportAdminsCsv} className="flex items-center gap-1.5 text-xs font-semibold text-ink-muted hover:text-ink hover:underline" title="Download CSV spreadsheet">
+                      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Export CSV</span>
+                    </button>
+                  </div>
+                </CardBody>
+              </Card>
+            </>
+          )}
         </div>
       </div>
 
@@ -1103,4 +1473,3 @@ export default function AuthoritiesPage() {
     </div>
   )
 }
-

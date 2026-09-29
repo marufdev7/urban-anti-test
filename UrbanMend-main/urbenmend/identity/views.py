@@ -51,6 +51,7 @@ from urbenmend.identity.serializers import (
     PasswordForgotSerializer,
     PasswordResetSerializer,
     ProfileUpdateSerializer,
+    ProvisionAdminSerializer,
     ProvisionAuthoritySerializer,
     RegisterResponseSerializer,
     RegisterSerializer,
@@ -400,6 +401,37 @@ class ProvisionAuthorityView(APIView):
 
         return Response(
             UserSerializer(authority).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProvisionAdminView(APIView):
+    """`POST /users/admins` — provision an Admin account (Super Admin only)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        serializer = ProvisionAdminSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            admin = services.provision_admin(
+                actor=cast("User", request.user),
+                email=data["email"],
+                phone=data.get("phone"),
+                password=data.get("password"),
+                assigned_area=data.get("assigned_area", ""),
+                require_two_factor=data.get("require_two_factor", False),
+                is_superuser=data.get("is_superuser", False),
+            )
+        except services.ProvisioningError as exc:
+            raise Conflict(str(exc)) from exc
+        except DjangoValidationError as exc:
+            raise UnprocessableEntity(exc.messages[0]) from exc
+
+        return Response(
+            UserSerializer(admin).data,
             status=status.HTTP_201_CREATED,
         )
 

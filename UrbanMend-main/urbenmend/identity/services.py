@@ -905,6 +905,19 @@ def require_role(user: User, *roles: str) -> None:
         raise AuthorizationError("You do not have permission to perform this action.")
 
 
+def is_superadmin(user: User) -> bool:
+    """Whether user is an authenticated active super administrator."""
+    if not getattr(user, "is_authenticated", False) or not user.is_active:
+        return False
+    return bool(user.is_superuser or getattr(user, "is_superadmin", False))
+
+
+def require_superadmin(user: User) -> None:
+    """Assert user is an authenticated active super administrator, else raise 403."""
+    if not is_superadmin(user):
+        raise AuthorizationError("Only super administrators can perform this action.")
+
+
 def has_category_scope(user: User, category: Category) -> bool:
     """Whether `user` may act on `category` (BR-26).
 
@@ -1136,6 +1149,79 @@ def provision_authority(
     if not password:
         send_verification_code(user=authority, channel=Channel.EMAIL)
     return authority
+
+
+@transaction.atomic
+def provision_admin(
+    *,
+    actor: User,
+    email: str,
+    phone: str | None = None,
+    password: str | None = None,
+    assigned_area: str = "",
+    require_two_factor: bool = False,
+    is_superuser: bool = False,
+) -> User:
+    """Create a new Admin account (Super Admin only)."""
+    from urbenmend.identity.models import Role, User, UserStatus
+
+    require_superadmin(actor)
+
+    if not email:
+        raise ValidationError("An administrator account requires an email address.")
+
+    normalized_email = email.strip().lower() if email else None
+    normalized_phone = phone.strip() if phone else None
+
+    if normalized_email and User.objects.filter(email=normalized_email).exists():
+        raise ProvisioningError("An account with that email address already exists.")
+    if normalized_phone and User.objects.filter(phone=normalized_phone).exists():
+        raise ProvisioningError("An account with that phone number already exists.")
+
+    initial_status = UserStatus.ACTIVE if password else UserStatus.REGISTERED
+
+    try:
+        admin = User.objects.create_user(
+            email=normalized_email,
+            phone=normalized_phone,
+            password=password,
+            role=Role.ADMIN,
+            status=initial_status,
+            require_two_factor=require_two_factor,
+            is_staff=True,
+            is_superuser=is_superuser,
+        )
+    except IntegrityError as exc:
+        raise ProvisioningError(
+            "An account with that email or phone number already exists."
+        ) from exc
+
+    update_fields = []
+    if password:
+        admin.email_verified_at = timezone.now()
+        update_fields.append("email_verified_at")
+    if assigned_area:
+        admin.assigned_area = assigned_area.strip()
+        update_fields.append("assigned_area")
+
+    if update_fields:
+        admin.save(update_fields=update_fields)
+
+    audit_data = {
+        "require_two_factor": require_two_factor,
+        "is_superuser": is_superuser,
+    }
+    if admin.assigned_area:
+        audit_data["assigned_area"] = admin.assigned_area
+    _audit_privileged_action(
+        actor=actor,
+        action="admin.provisioned",
+        target=admin,
+        **audit_data,
+    )
+    if not password:
+        send_verification_code(user=admin, channel=Channel.EMAIL)
+    return admin
 
 
 @transaction.atomic

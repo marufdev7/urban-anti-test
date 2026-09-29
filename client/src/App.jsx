@@ -24,6 +24,7 @@ import AdminDashboardPage from './pages/admin/AdminDashboardPage'
 import ModerationQueuePage from './pages/admin/ModerationQueuePage'
 import AuthoritiesPage from './pages/admin/AuthoritiesPage'
 import ProvisionAuthorityPage from './pages/admin/ProvisionAuthorityPage'
+import ProvisionAdminPage from './pages/admin/ProvisionAdminPage'
 import AuthorityDetailPage from './pages/admin/AuthorityDetailPage'
 import AdminMapPage from './pages/admin/AdminMapPage'
 import AdminReportsPage from './pages/admin/AdminReportsPage'
@@ -110,6 +111,8 @@ export default function App() {
                 <Route path="/admin/authorities" element={<AuthoritiesPage />} />
                 <Route path="/admin/authorities/new" element={<ProvisionAuthorityPage />} />
                 <Route path="/admin/authorities/:authorityId" element={<AuthorityDetailPage />} />
+                <Route path="/admin/administrators/new" element={<ProvisionAdminPage />} />
+                <Route path="/admin/admins/new" element={<Navigate to="/admin/administrators/new" replace />} />
                 <Route path="/admin/settings" element={<AdminSettingsPage />} />
                 <Route path="/admin/audit-log" element={<AuditLogPage />} />
               </Route>

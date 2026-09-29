@@ -207,11 +207,43 @@ class ProvisionAuthoritySerializer(CamelCaseSerializer):
         return attrs
 
 
+class ProvisionAdminSerializer(CamelCaseSerializer):
+    """POST /users/admins request body (Super Admin only)."""
+
+    email = serializers.EmailField(required=True, allow_blank=False)
+    phone = serializers.CharField(required=False, allow_blank=False, max_length=16)
+    password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        min_length=8,
+        max_length=128,
+        trim_whitespace=False,
+    )
+    assigned_area = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=64,
+        default="",
+    )
+    require_two_factor = serializers.BooleanField(required=False, default=False)
+    is_superuser = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if not attrs.get("email"):
+            raise serializers.ValidationError(
+                "An administrator account requires an email address.",
+                code="REQUIRED",
+            )
+        return attrs
+
+
 class UserSerializer(CamelCaseModelSerializer):
     """User resource shape for API responses (API §6.2)."""
 
     verified = serializers.SerializerMethodField()
     category_scope = serializers.SerializerMethodField()
+    is_superuser = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
@@ -226,8 +258,9 @@ class UserSerializer(CamelCaseModelSerializer):
             "verified",
             "category_scope",
             "date_joined",
+            "is_superuser",
         ]
-        read_only_fields = ["id", "role", "status", "date_joined"]
+        read_only_fields = ["id", "role", "status", "date_joined", "is_superuser"]
 
     def get_verified(self, obj: User) -> dict[str, bool]:
         """API §6.2 `verified: {email, phone}` is derived from the _verified_at timestamps."""
@@ -246,6 +279,8 @@ class UserSerializer(CamelCaseModelSerializer):
         data = super().to_representation(instance)
         if not getattr(instance, "assigned_area", ""):
             data.pop("assignedArea", None)
+        if not getattr(instance, "is_superuser", False):
+            data.pop("isSuperuser", None)
         return data
 
 

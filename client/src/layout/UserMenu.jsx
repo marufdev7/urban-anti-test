@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { LogOut, Settings, UserRound } from 'lucide-react'
+import { Crown, LogOut, Settings, UserRound } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import { ROLE_LABELS } from './Sidebar'
@@ -10,10 +10,11 @@ export default function UserMenu() {
   const containerRef = useRef(null)
 
   const isGuest = Boolean(user?.isGuest)
+  const isSuperAdmin = Boolean(user?.role === 'admin' && (user?.isSuperuser || user?.is_superuser))
   const photo = isGuest ? null : (user?.photoUrl || user?.avatarUrl)
   const displayName = isGuest
     ? 'Guest Explorer'
-    : (user?.fullName || (user?.role === 'citizen' ? 'Citizen' : ROLE_LABELS[user?.role] ?? 'Account'))
+    : (user?.fullName || (isSuperAdmin ? 'Super Admin' : (user?.role === 'citizen' ? 'Citizen' : ROLE_LABELS[user?.role] ?? 'Account')))
 
   useEffect(() => {
     if (!open) return undefined
@@ -42,8 +43,11 @@ export default function UserMenu() {
           open ? 'ring-2 ring-primary/25 bg-surface-sunken border-primary/40' : ''
         }`}
       >
-        <span className="text-xs font-semibold text-ink">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
           {displayName}
+          {isSuperAdmin && (
+            <Crown className="h-3 w-3 text-amber-500" aria-label="Super Administrator" />
+          )}
         </span>
         {photo ? (
           <img
@@ -90,15 +94,20 @@ export default function UserMenu() {
             <p className="truncate text-xs text-ink-muted leading-tight mt-0.5">
               {isGuest ? 'Exploring Public Data' : (user?.email || '—')}
             </p>
-            <span
-              className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
-                isGuest
-                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                  : 'bg-surface-sunken text-ink-faint'
-              }`}
-            >
-              {isGuest ? 'Guest (Read-Only)' : (ROLE_LABELS[user?.role] ?? user?.role)}
-            </span>
+            {isGuest ? (
+              <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300">
+                Guest (Read-Only)
+              </span>
+            ) : isSuperAdmin ? (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300/60 dark:bg-amber-950/60 dark:text-amber-300">
+                <Crown className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                Super Admin
+              </span>
+            ) : (
+              <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-surface-sunken text-ink-faint">
+                {ROLE_LABELS[user?.role] ?? user?.role}
+              </span>
+            )}
           </div>
         </div>
         {isGuest ? (

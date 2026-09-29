@@ -24,10 +24,23 @@ export function useAuthorities(params = {}) {
   return useUsers({ role: 'authority', ...params })
 }
 
+/** List administrators (GET /users?role=admin). */
+export function useAdmins(params = {}) {
+  return useUsers({ role: 'admin', ...params })
+}
+
 export function useProvisionAuthority() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (body) => api('/users/authorities', { method: 'POST', body }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+  })
+}
+
+export function useProvisionAdmin() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body) => api('/users/admins', { method: 'POST', body }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   })
 }

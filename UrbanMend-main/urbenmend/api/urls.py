@@ -72,6 +72,11 @@ urlpatterns = [
         identity_views.ProvisionAuthorityView.as_view(),
         name="users-authorities",
     ),
+    path(
+        "users/admins",
+        identity_views.ProvisionAdminView.as_view(),
+        name="users-admins",
+    ),
     # API §6.2 — `/users/me` (T1.9): profile read/update and account deletion→anonymization.
     #
     # ⚠️ This route must stay registered before any `users/<id>` pattern for the same reason the
