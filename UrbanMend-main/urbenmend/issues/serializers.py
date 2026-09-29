@@ -337,6 +337,7 @@ class IssueQueueItemSerializer(CamelCaseSerializer):
     media = serializers.SerializerMethodField()
     has_confirmed = serializers.SerializerMethodField()
     address = serializers.SerializerMethodField()
+    duplicate_of = serializers.UUIDField(source="duplicate_of_id", read_only=True, allow_null=True)
 
     def get_severity(self, issue: Issue) -> dict[str, Any]:
         """§6.5's four keys — `{current, computed, overridden, rationale}` and nothing else.

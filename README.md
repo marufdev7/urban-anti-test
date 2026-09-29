@@ -136,8 +136,8 @@ flowchart TD
   * Assigns category, severity signal, and confidence score.
   * Generates an engineering rationale explaining why the issue is critical or moderate.
   * Built-in keyword fallback classifier in case of network disruptions.
-* **AI Proximity Duplicate Detection Engine (Within 100 Meters):**
-  * Real-time spatial scanning powered by the **Haversine Distance Formula** checking for active civic issues within a **100-meter radius** matching the selected category.
+* **AI Proximity Duplicate Detection Engine (Within 50 Meters):**
+  * Real-time spatial scanning powered by the **Haversine Distance Formula** checking for active civic issues within a **50-meter radius** matching the selected category.
   * Triggers an interactive **Duplicate Notice Modal (`DuplicatePromptModal`)** before final submission:
     * Informs citizen: *"This type of issue was already submitted nearby. Is your report for this same existing issue, or a new issue?"*
     * Shows nearby incident thumbnail photo, category, title, exact distance (e.g. `42m away`), and current affected citizen count.
@@ -313,7 +313,7 @@ flowchart LR
 * **Resolution Deadline & SLA Progress Card:**
   * Prominent card displaying remaining time countdown, visual progress bar, priority benchmark, and target completion timestamp.
 * **AI Duplicate & Clustered Reports Inspector:**
-  * Automatically scans for active civic issues within 100 meters matching the same category.
+  * Automatically scans for active civic issues within 50 meters matching the same category.
   * Displays spatial distance in meters (e.g. `42m away`), corroboration tally, and direct View/Merge action controls.
 * **Authoritative Severity Override Engine:**
   * Allows municipal engineers to override AI-assigned severity levels (e.g. escalating Medium to Critical) with mandatory audit reasoning stored in the immutable system ledger.

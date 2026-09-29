@@ -1002,13 +1002,13 @@ export default function ReportWizardPage() {
 
   const categoryMeta = categories?.find((c) => c.key === category)
 
-  // AI Automatic Duplicate Detection (within 100 meters and same category or category group)
+  // AI Automatic Duplicate Detection (within 50 meters and same category or category group)
   const nearbyDuplicateIssue = useMemo(() => {
     if (!activeMarker || !category) return null
     const allIssues = nearbyIssuesData?.data ?? []
     const candidates = allIssues
       .filter((iss) => {
-        if (['resolved', 'closed', 'rejected', 'hidden', 'removed'].includes(iss.status)) return false
+        if (['resolved', 'closed', 'rejected', 'hidden', 'removed', 'duplicate'].includes(iss.status)) return false
 
         const cat1 = category
         const cat2 = iss.primaryCategory || iss.category
@@ -1022,7 +1022,7 @@ export default function ReportWizardPage() {
 
         const loc = iss.representativeLocation || iss.representative_location || iss.location
         const dist = haversineMeters(activeMarker, loc)
-        return dist <= 100 // within 100 meters
+        return dist <= 50 // within 50 meters
       })
       .map((iss) => {
         const loc = iss.representativeLocation || iss.representative_location || iss.location
@@ -1078,7 +1078,7 @@ export default function ReportWizardPage() {
       return
     }
 
-    // If an existing issue within 100m is detected and citizen hasn't already chosen to force new
+    // If an existing issue within 50m is detected and citizen hasn't already chosen to force new
     if (nearbyDuplicateIssue && !forceNewIssue) {
       setDuplicateModalOpen(true)
       return
@@ -1823,7 +1823,7 @@ export default function ReportWizardPage() {
                 </div>
               )}
 
-              {/* Duplicate Notice Banner if within 100m */}
+              {/* Duplicate Notice Banner if within 50m */}
               {nearbyDuplicateIssue && !forceNewIssue && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
                   <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />

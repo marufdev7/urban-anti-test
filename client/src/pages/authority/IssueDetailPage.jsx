@@ -198,7 +198,7 @@ export default function IssueDetailPage() {
   const { data: nearbyIssuesData } = useIssues({ limit: '100' })
   const otherIssues = nearbyIssuesData?.data ?? []
 
-  // Clustered duplicate detection (within 100 meters of current incident)
+  // Clustered duplicate detection (within 50 meters of current incident)
   const nearbyClusteredIssues = useMemo(() => {
     if (!data?.representativeLocation) return []
     const curLoc = data.representativeLocation
@@ -207,7 +207,7 @@ export default function IssueDetailPage() {
         if (iss.id === data.id) return false
         if (iss.primaryCategory !== data.primaryCategory) return false
         const dist = haversineMeters(curLoc, iss.representativeLocation)
-        return dist <= 100
+        return dist <= 50
       })
       .map((iss) => ({
         ...iss,
@@ -383,6 +383,9 @@ export default function IssueDetailPage() {
       setMergeWithId('')
       setMergeReason('')
       setActionOk(true)
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['issue', issueId] })
+      queryClient.invalidateQueries({ queryKey: ['issue-reports', issueId] })
     } catch (err) {
       setActionError(err.message)
     }
@@ -480,6 +483,27 @@ export default function IssueDetailPage() {
           </div>
         </div>
       </div>
+
+      {data.status === 'duplicate' && (
+        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>
+              This incident has been marked as duplicate and merged {data.duplicateOf ? (
+                <>into primary issue <Link to={`/authority/queue/${data.duplicateOf}`} className="font-bold underline text-amber-950 hover:text-black">#UM-{shortId(data.duplicateOf)}</Link></>
+              ) : 'into another incident'}. All bundled reports are consolidated under the surviving issue.
+            </span>
+          </div>
+          {data.duplicateOf && (
+            <Link
+              to={`/authority/queue/${data.duplicateOf}`}
+              className="shrink-0 rounded-lg border border-amber-300 bg-white/90 px-2.5 py-1 text-xs font-bold text-amber-950 hover:bg-white shadow-2xs transition"
+            >
+              View Primary Issue →
+            </Link>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-12">
         {/* Left Column (8 cols) */}
@@ -880,15 +904,21 @@ export default function IssueDetailPage() {
 
                 {/* Advanced Operations: Merge & Split (FRONT-PLAN §9.6) */}
                 <div className="flex gap-2 pt-2 border-t border-line/60">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setMergeOpen(true)}
-                    className="flex-1 text-xs font-semibold"
-                  >
-                    Merge Issue
-                  </Button>
+                  {data.status === 'duplicate' ? (
+                    <div className="flex-1 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-center text-xs font-medium text-amber-900">
+                      Already merged {data.duplicateOf ? <>into <strong className="font-bold">#UM-{shortId(data.duplicateOf)}</strong></> : ''}
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setMergeOpen(true)}
+                      className="flex-1 text-xs font-semibold"
+                    >
+                      Merge Issue
+                    </Button>
+                  )}
                   {reports.length > 1 && (
                     <Button
                       type="button"
@@ -1097,7 +1127,7 @@ export default function IssueDetailPage() {
             </Card>
           )}
 
-          {/* AI Duplicate & Clustered Reports Card (Within 100m) */}
+          {/* AI Duplicate & Clustered Reports Card (Within 50m) */}
           <Card className="overflow-hidden">
             <CardHeader
               title={
@@ -1108,7 +1138,7 @@ export default function IssueDetailPage() {
                   </span>
                   {nearbyClusteredIssues.length > 0 && (
                     <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-900">
-                      {nearbyClusteredIssues.length} within 100m
+                      {nearbyClusteredIssues.length} within 50m
                     </span>
                   )}
                 </div>
@@ -1125,54 +1155,82 @@ export default function IssueDetailPage() {
               {nearbyClusteredIssues.length > 0 ? (
                 <div className="space-y-2">
                   <p className="text-[11px] text-amber-800 font-medium">
-                    ⚠️ {nearbyClusteredIssues.length} duplicate or co-located report{nearbyClusteredIssues.length > 1 ? 's' : ''} detected within 100 meters:
+                    ⚠️ {nearbyClusteredIssues.length} duplicate or co-located report{nearbyClusteredIssues.length > 1 ? 's' : ''} detected within 50 meters:
                   </p>
-                  {nearbyClusteredIssues.map((cand) => (
-                    <div
-                      key={cand.id}
-                      className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 text-xs flex items-center justify-between gap-3 hover:bg-amber-50 transition"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-ink">#UM-{shortId(cand.id)}</span>
-                          <span className="rounded-full bg-amber-200/60 text-amber-900 px-1.5 py-0.2 text-[9px] font-bold">
-                            {cand.distanceMeters}m away
-                          </span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-ink-muted truncate">
-                          {cand.address || 'Address nearby'}
-                        </p>
-                        <p className="text-[10px] text-ink-faint">
-                          {cand.corroborationCount || 1} confirmation{cand.corroborationCount === 1 ? '' : 's'} · Status: {cand.status}
-                        </p>
-                      </div>
+                  {nearbyClusteredIssues.map((cand) => {
+                    const isCandidateMerged = cand.status === 'duplicate' || Boolean(cand.duplicateOf)
+                    const isMergedWithCurrent = cand.duplicateOf === data.id
+                    const isCurrentAlreadyDuplicate = data.status === 'duplicate'
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <Link
-                          to={`/authority/queue/${cand.id}`}
-                          className="rounded border border-line bg-surface-panel px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-surface-sunken"
-                        >
-                          View
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMergeWithId(cand.id)
-                            setMergeOpen(true)
-                          }}
-                          className="rounded border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-200 cursor-pointer"
-                        >
-                          Merge
-                        </button>
+                    return (
+                      <div
+                        key={cand.id}
+                        className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 text-xs flex items-center justify-between gap-3 hover:bg-amber-50 transition"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-ink">#UM-{shortId(cand.id)}</span>
+                            <span className="rounded-full bg-amber-200/60 text-amber-900 px-1.5 py-0.2 text-[9px] font-bold">
+                              {cand.distanceMeters}m away
+                            </span>
+                            {isCandidateMerged && (
+                              <span className="rounded-full bg-slate-200 text-slate-700 px-1.5 py-0.2 text-[9px] font-bold">
+                                Merged
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-ink-muted truncate">
+                            {cand.address || 'Address nearby'}
+                          </p>
+                          <p className="text-[10px] text-ink-faint">
+                            {cand.corroborationCount || 1} confirmation{cand.corroborationCount === 1 ? '' : 's'} · Status: {cand.status}
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Link
+                            to={`/authority/queue/${cand.id}`}
+                            className="rounded border border-line bg-surface-panel px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-surface-sunken"
+                          >
+                            View
+                          </Link>
+                          {isCandidateMerged ? (
+                            <span className="inline-flex items-center gap-1 rounded border border-line bg-surface-sunken px-2 py-1 text-[11px] font-semibold text-ink-muted">
+                              <Check className="h-3 w-3 text-emerald-600" />
+                              {isMergedWithCurrent ? (
+                                'Merged into this issue'
+                              ) : cand.duplicateOf ? (
+                                <>Already merged with <span className="font-bold text-ink">#UM-{shortId(cand.duplicateOf)}</span></>
+                              ) : (
+                                'Already merged'
+                              )}
+                            </span>
+                          ) : isCurrentAlreadyDuplicate ? (
+                            <span className="inline-flex items-center rounded border border-line bg-surface-sunken px-2 py-1 text-[11px] font-medium text-ink-muted">
+                              Current issue merged
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMergeWithId(cand.id)
+                                setMergeOpen(true)
+                              }}
+                              className="rounded border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-200 cursor-pointer"
+                            >
+                              Merge
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-line bg-surface-sunken/30 p-3.5 text-center text-xs text-ink-muted">
                   <p className="font-semibold text-ink">No Duplicate Clusters Detected</p>
                   <p className="text-[11px] mt-0.5">
-                    No active reports of the same category exist within 100 meters.
+                    No active reports of the same category exist within 50 meters.
                   </p>
                 </div>
               )}
