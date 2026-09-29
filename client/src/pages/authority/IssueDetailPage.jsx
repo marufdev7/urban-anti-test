@@ -223,6 +223,7 @@ export default function IssueDetailPage() {
   }
 
   const marker = data.representativeLocation
+  const isAssignedToMe = Boolean(data.assignedTo && data.assignedTo === user?.id)
   const busy = setStatus.isPending || setAssignment.isPending || setSeverity.isPending
   const reasonNeeded = REASON_REQUIRED.has(statusDraft) && !reason.trim()
   const duplicateNeeded = statusDraft === 'duplicate' && !duplicateOfIssueId.trim()
@@ -638,8 +639,16 @@ export default function IssueDetailPage() {
                   value={statusDraft}
                   onChange={(e) => setStatusDraft(e.target.value)}
                   options={statusOptions}
+                  disabled={!isAssignedToMe}
+                  className={!isAssignedToMe ? 'opacity-60 cursor-not-allowed' : ''}
                 />
-                {statusDraft === 'duplicate' && (
+                {!isAssignedToMe && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-2xs text-amber-700 dark:text-amber-300 font-medium bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                    <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                    <span>Status update locked. Please click &ldquo;Assign to me&rdquo; below to take ownership.</span>
+                  </p>
+                )}
+                {isAssignedToMe && statusDraft === 'duplicate' && (
                   <input
                     type="text"
                     required
@@ -649,7 +658,7 @@ export default function IssueDetailPage() {
                     className="mt-2 block w-full rounded-panel border border-line px-3 py-2 text-xs focus:border-primary"
                   />
                 )}
-                {REASON_REQUIRED.has(statusDraft) && (
+                {isAssignedToMe && REASON_REQUIRED.has(statusDraft) && (
                   <textarea
                     rows={2}
                     required
@@ -735,7 +744,13 @@ export default function IssueDetailPage() {
               <Button
                 className="w-full bg-[#0e7490] hover:bg-[#085f76] text-white font-semibold py-2.5"
                 loading={busy}
-                disabled={reasonNeeded || duplicateNeeded || severityNeedsReason || (statusDraft === data.status && !severityChanged)}
+                disabled={
+                  reasonNeeded ||
+                  duplicateNeeded ||
+                  severityNeedsReason ||
+                  (!isAssignedToMe && statusDraft !== data.status) ||
+                  (statusDraft === data.status && !severityChanged)
+                }
                 onClick={applyChanges}
               >
                 Apply Updates
@@ -900,7 +915,7 @@ export default function IssueDetailPage() {
             </CardBody>
           </Card>
 
-          {/* Resolution Deadline & SLA Compliance Card */}
+          {/* Resolution Deadline Card */}
           {sla && (
             <Card className="overflow-hidden">
               <CardHeader
@@ -908,7 +923,7 @@ export default function IssueDetailPage() {
                   <div className="flex items-center justify-between w-full">
                     <span className="flex items-center gap-2 font-bold text-ink">
                       <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
-                      Resolution Deadline (SLA)
+                      Resolution Deadline
                     </span>
                     <SlaBadge issue={data} />
                   </div>
@@ -918,9 +933,9 @@ export default function IssueDetailPage() {
                 {/* Visual Progress Bar */}
                 <div>
                   <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="font-semibold text-ink-muted">Elapsed SLA Window</span>
+                    <span className="font-semibold text-ink-muted">Deadline Progress</span>
                     <span className={`font-bold ${sla.isOverdue ? 'text-status-critical' : 'text-primary'}`}>
-                      {sla.percentElapsed}% ({Math.round(sla.ageHours)}h / {sla.slaHours}h)
+                      {sla.percentElapsed ?? 0}% ({Math.round(sla.ageHours || 0)}h / {sla.slaHours || 72}h)
                     </span>
                   </div>
                   <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -934,20 +949,22 @@ export default function IssueDetailPage() {
                           ? 'bg-amber-500'
                           : 'bg-primary'
                       }`}
-                      style={{ width: `${sla.percentElapsed}%` }}
+                      style={{ width: `${sla.percentElapsed ?? 0}%` }}
                     />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-ink-muted">Standard SLA Window</p>
-                    <p className="mt-0.5 font-bold text-ink">{sla.slaHours} Hours ({data.severity?.current || 'medium'})</p>
+                    <p className="text-[10px] uppercase font-bold text-ink-muted">Standard Window</p>
+                    <p className="mt-0.5 font-bold text-ink">
+                      {sla.slaHours || 72} Hours ({data.severity?.current || 'medium'})
+                    </p>
                   </div>
                   <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-ink-muted">Deadline Target</p>
                     <p className="mt-0.5 font-bold text-ink">
-                      {sla.deadline ? sla.deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                      {sla.deadlineFormatted || (sla.deadlineDate ? formatDateTime(sla.deadlineDate) : '—')}
                     </p>
                   </div>
                 </div>
@@ -959,7 +976,7 @@ export default function IssueDetailPage() {
                       ? 'Issue successfully closed within municipal compliance window.'
                       : sla.isOverdue
                       ? 'Action overdue! Municipal escalation protocol is active for municipal dispatch.'
-                      : `Priority standard: ${data.severity?.current || 'medium'} severity reports must be resolved within ${sla.slaHours} hours of intake.`}
+                      : `Priority standard: ${data.severity?.current || 'medium'} severity reports must be resolved within ${sla.slaHours || 72} hours of intake.`}
                   </span>
                 </div>
               </CardBody>

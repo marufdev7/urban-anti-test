@@ -481,7 +481,7 @@ export default function QueuePage() {
                 { value: 'due_soon', label: 'Due in <24h (শীঘ্রই শেষ)' },
                 { value: 'on_track', label: 'On Track (সময়মতো)' },
               ]}
-              placeholder="Deadline / SLA"
+              placeholder="Deadline"
             />
           </div>
 
@@ -679,7 +679,7 @@ export default function QueuePage() {
                   <th scope="col" className="px-4 py-3.5">Severity</th>
                   <th scope="col" className="px-4 py-3.5">Issue Title &amp; ID</th>
                   <th scope="col" className="px-4 py-3.5">Location</th>
-                  <th scope="col" className="px-4 py-3.5">Deadline / SLA</th>
+                  <th scope="col" className="px-4 py-3.5">Deadline</th>
                   <th scope="col" className="px-4 py-3.5">Status</th>
                   <th scope="col" className="px-4 py-3.5">Assigned To</th>
                   <th scope="col" className="px-4 py-3.5 text-right">

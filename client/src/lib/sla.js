@@ -105,9 +105,14 @@ export function getSlaInfo(issue) {
     dotClass = 'bg-amber-600'
   }
 
+  const slaHours = Math.round(allowedDurationMs / (60 * 60 * 1000))
+  const ageHours = Math.max(0, Math.round(elapsedMs / (60 * 60 * 1000)))
+  const percentElapsed = Math.min(100, Math.max(0, Math.round((elapsedMs / allowedDurationMs) * 100)))
+
   return {
     openedDate,
     deadlineDate,
+    deadline: deadlineDate,
     deadlineFormatted: deadlineDate.toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -116,9 +121,12 @@ export function getSlaInfo(issue) {
     }),
     allowedDurationMs,
     allowedDurationLabel: SLA_LABELS[severity] || '7 Days',
+    slaHours,
+    ageHours,
+    percentElapsed,
     remainingMs,
     elapsedMs,
-    progressPercent,
+    progressPercent: percentElapsed,
     isOverdue,
     isDueSoon,
     isResolved,

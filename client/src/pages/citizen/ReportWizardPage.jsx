@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
 import { api, apiUpload, ApiError } from '../../lib/api'
-import { mediaErrorMessage, useCategories, useCityBoundary } from '../../hooks/data'
+import { categoryLabel, mediaErrorMessage, useCategories, useCityBoundary } from '../../hooks/data'
 import { forwardGeocode, isPointInBoundary, reverseGeocode } from '../../lib/geo'
 import { BANGLADESH_CITIES, isPointInPolygon } from '../../lib/zones'
 import {
@@ -45,6 +45,11 @@ const STEPS = ['Category', 'Details', 'Review']
 const CATEGORY_MAP = {
   infrastructure: 'roads',
   environmental: 'water_drainage',
+}
+
+function getCategoryName(categories, slug) {
+  if (!slug) return 'Public Safety Incident'
+  return categoryLabel(categories, slug) || slug
 }
 
 function formatFileSize(bytes) {
@@ -155,7 +160,7 @@ function CameraCaptureModal({ isOpen, onClose, onCapture }) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-3 sm:p-4 backdrop-blur-sm animate-fade-in">
       <div className="relative w-full max-w-lg rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-4 py-3 bg-surface-sunken">
@@ -247,7 +252,7 @@ function PhotoLightboxModal({ photo, onClose, onRemove }) {
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/85 p-3 sm:p-6 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 p-3 sm:p-6 backdrop-blur-md animate-fade-in"
       onClick={onClose}
     >
       <div
@@ -316,14 +321,18 @@ function PhotoLightboxModal({ photo, onClose, onRemove }) {
 }
 
 function haversineMeters(a, b) {
-  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return 999999
+  const lat1 = Number(a?.lat ?? a?.latitude)
+  const lng1 = Number(a?.lng ?? a?.longitude)
+  const lat2 = Number(b?.lat ?? b?.latitude)
+  const lng2 = Number(b?.lng ?? b?.longitude)
+  if (isNaN(lat1) || isNaN(lng1) || isNaN(lat2) || isNaN(lng2)) return 999999
   const toRad = (deg) => (deg * Math.PI) / 180
   const R = 6371000 // meters
-  const dLat = toRad(b.lat - a.lat)
-  const dLng = toRad(b.lng - a.lng)
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
   const sinLat = Math.sin(dLat / 2)
   const sinLng = Math.sin(dLng / 2)
-  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
+  const h = sinLat * sinLat + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * sinLng * sinLng
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
@@ -339,7 +348,7 @@ function DuplicatePromptModal({
   if (!isOpen || !detectedIssue) return null
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs animate-fade-in">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs animate-fade-in">
       <div className="relative w-full max-w-lg rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-line px-5 py-4 bg-amber-50/70 dark:bg-amber-950/30">
@@ -376,7 +385,7 @@ function DuplicatePromptModal({
           <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-2 text-xs">
             <div className="flex items-center justify-between gap-2">
               <span className="font-bold text-ink text-sm">
-                {categoryLabel(categories, detectedIssue.primaryCategory)}
+                {getCategoryName(categories, detectedIssue.primaryCategory)}
               </span>
               <span className="rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[10px] font-bold text-amber-900">
                 #UM-{shortId(detectedIssue.id)}
@@ -993,30 +1002,39 @@ export default function ReportWizardPage() {
 
   const categoryMeta = categories?.find((c) => c.key === category)
 
-  // AI Automatic Duplicate Detection (within 100 meters and same category)
+  // AI Automatic Duplicate Detection (within 100 meters and same category or category group)
   const nearbyDuplicateIssue = useMemo(() => {
     if (!activeMarker || !category) return null
     const allIssues = nearbyIssuesData?.data ?? []
     const candidates = allIssues
       .filter((iss) => {
-        if (['resolved', 'closed', 'rejected'].includes(iss.status)) return false
+        if (['resolved', 'closed', 'rejected', 'hidden', 'removed'].includes(iss.status)) return false
+
+        const cat1 = category
+        const cat2 = iss.primaryCategory || iss.category
+        const group1 = categoryGroup || CATEGORY_GROUP_MAPPING[cat1]
+        const group2 = CATEGORY_GROUP_MAPPING[cat2]
+
         const matchesCategory =
-          iss.primaryCategory === category ||
-          iss.category === category ||
-          (categoryMeta?.group && iss.primaryCategory === categoryMeta.group)
+          cat1 === cat2 ||
+          (group1 && group2 && group1 === group2)
         if (!matchesCategory) return false
 
-        const dist = haversineMeters(activeMarker, iss.representativeLocation)
+        const loc = iss.representativeLocation || iss.representative_location || iss.location
+        const dist = haversineMeters(activeMarker, loc)
         return dist <= 100 // within 100 meters
       })
-      .map((iss) => ({
-        ...iss,
-        distanceMeters: Math.round(haversineMeters(activeMarker, iss.representativeLocation)),
-      }))
+      .map((iss) => {
+        const loc = iss.representativeLocation || iss.representative_location || iss.location
+        return {
+          ...iss,
+          distanceMeters: Math.round(haversineMeters(activeMarker, loc)),
+        }
+      })
       .sort((a, b) => a.distanceMeters - b.distanceMeters)
 
     return candidates.length > 0 ? candidates[0] : null
-  }, [activeMarker, category, nearbyIssuesData, categoryMeta])
+  }, [activeMarker, category, categoryGroup, nearbyIssuesData])
 
   const submit = useMutation({
     mutationFn: () =>
@@ -1043,6 +1061,23 @@ export default function ReportWizardPage() {
 
   const handleInitiateSubmit = () => {
     setSubmitError(null)
+    if (!canSubmit) {
+      if (!hasValidContent) {
+        setSubmitError(
+          'Please enter a description of at least 15 characters or attach at least one photo (Rule BR-3).'
+        )
+      } else if (!isInsideBoundary) {
+        setSubmitError(
+          `The selected pin is outside ${currentCity.nameEn} boundary. Please adjust your map pin inside the city.`
+        )
+      } else if (!category) {
+        setSubmitError('Please select a category for this issue.')
+      } else {
+        setSubmitError('Please complete all required fields before submitting.')
+      }
+      return
+    }
+
     // If an existing issue within 100m is detected and citizen hasn't already chosen to force new
     if (nearbyDuplicateIssue && !forceNewIssue) {
       setDuplicateModalOpen(true)
@@ -1102,7 +1137,7 @@ export default function ReportWizardPage() {
           </p>
           <div className="mt-4 rounded-xl border border-line bg-surface-sunken/40 p-4 text-left text-xs space-y-1.5">
             <p className="font-semibold text-ink">
-              Category: {categoryLabel(categories, confirmedSameIssue.primaryCategory)}
+              Category: {getCategoryName(categories, confirmedSameIssue.primaryCategory)}
             </p>
             <p className="text-ink-muted">
               Location: {confirmedSameIssue.address || (confirmedSameIssue.representativeLocation ? `${confirmedSameIssue.representativeLocation.lat.toFixed(4)}, ${confirmedSameIssue.representativeLocation.lng.toFixed(4)}` : 'Location nearby')}
@@ -1762,6 +1797,18 @@ export default function ReportWizardPage() {
                 </div>
               )}
 
+              {!hasValidContent && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
+                  <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">Content Requirement (Rule BR-3)</p>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      Please provide at least 15 characters in the description (currently {description.trim().length} chars) or attach at least 1 photo before submitting.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {!isInsideBoundary && (
                 <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-800 font-medium flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
@@ -1770,21 +1817,22 @@ export default function ReportWizardPage() {
               )}
 
               {submitError && (
-                <p className="rounded-xl border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical" role="alert">
-                  {submitError}
-                </p>
+                <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-xs text-rose-800 font-medium flex items-center gap-2" role="alert">
+                  <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span>{submitError}</span>
+                </div>
               )}
 
               {/* Duplicate Notice Banner if within 100m */}
               {nearbyDuplicateIssue && !forceNewIssue && (
-                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2.5">
-                  <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5 shadow-2xs">
+                  <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
                   <div>
-                    <p className="font-bold">
-                      AI Duplicate Notice: Active issue detected {nearbyDuplicateIssue.distanceMeters}m away
+                    <p className="font-bold text-amber-950">
+                      AI Duplicate Alert: Similar active issue detected {nearbyDuplicateIssue.distanceMeters}m away
                     </p>
                     <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
-                      Issue #UM-{shortId(nearbyDuplicateIssue.id)} ({categoryLabel(categories, nearbyDuplicateIssue.primaryCategory)}) is already open nearby. Submitting will prompt you to add your voice (+1 impact) or submit as a separate ticket.
+                      Issue <strong className="text-amber-950">#UM-{shortId(nearbyDuplicateIssue.id)}</strong> ({getCategoryName(categories, nearbyDuplicateIssue.primaryCategory)}) is already open nearby. Submitting will prompt you to add your voice (+1 affect count) or submit as a separate ticket.
                     </p>
                   </div>
                 </div>
@@ -1801,10 +1849,10 @@ export default function ReportWizardPage() {
                 </Button>
                 <Button
                   type="button"
-                  disabled={!canSubmit || uploading}
+                  disabled={uploading}
                   loading={submit.isPending}
                   onClick={handleInitiateSubmit}
-                  className="bg-[#005a4c] hover:bg-[#004a3e] text-white px-6 py-2 text-xs font-semibold rounded-lg shadow-xs disabled:opacity-50"
+                  className="bg-[#005a4c] hover:bg-[#004a3e] text-white px-6 py-2 text-xs font-semibold rounded-lg shadow-xs cursor-pointer"
                 >
                   Submit Report
                 </Button>
