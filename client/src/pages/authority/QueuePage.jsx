@@ -1,18 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
+  CheckSquare,
   ChevronDown,
   ClipboardList,
+  Clock,
   Filter,
   Info,
+  Layers,
   MapPin,
   Plus,
   Search,
+  ShieldAlert,
   UserCheck,
+  X,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { useAuth } from '../../auth/AuthContext'
@@ -27,9 +32,13 @@ import {
 } from '../../hooks/issues'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { formatAge, shortId } from '../../lib/format'
+import { getSlaInfo } from '../../lib/sla'
+import SlaBadge from '../../components/ui/SlaBadge'
+import { getAuthorityRestriction, trackBulkAction } from '../../lib/unnaturalActivity'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
+import RestrictionBadge from '../../components/ui/RestrictionBadge'
 import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 import ManualEntryModal from '../../components/authority/ManualEntryModal'
@@ -144,6 +153,15 @@ export default function QueuePage() {
     }
   }
 
+  const handleTabSwitch = (tab) => {
+    if (tab === 'my') {
+      navigate('/authority/my-issues')
+    } else {
+      navigate('/authority/queue')
+      setFilter('assignedTo', '')
+    }
+  }
+
   const filters = {
     category: searchParams.get('category') ?? '',
     severity: searchParams.get('severity') ?? '',
@@ -176,12 +194,38 @@ export default function QueuePage() {
   const nextCursor = data?.page?.nextCursor
   const prevCursor = data?.page?.prevCursor
 
-  const allSelected = issues.length > 0 && issues.every((iss) => selectedIds.has(iss.id))
+  const [deadlineFilter, setDeadlineFilter] = useState('')
+  const [restriction, setRestriction] = useState(() => getAuthorityRestriction(user?.id))
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false)
+  const [bulkNotification, setBulkNotification] = useState(null)
+
+  useEffect(() => {
+    const handleSecAlert = () => {
+      setRestriction(getAuthorityRestriction(user?.id))
+    }
+    window.addEventListener('urbanmend_security_alert', handleSecAlert)
+    return () => window.removeEventListener('urbanmend_security_alert', handleSecAlert)
+  }, [user?.id])
+
+  // Filter issues by SLA / Deadline if selected
+  const filteredIssues = useMemo(() => {
+    if (!deadlineFilter) return issues
+    return issues.filter((iss) => {
+      const sla = getSlaInfo(iss)
+      if (!sla) return true
+      if (deadlineFilter === 'overdue') return sla.isOverdue
+      if (deadlineFilter === 'due_soon') return sla.isDueSoon
+      if (deadlineFilter === 'on_track') return !sla.isOverdue && !sla.isDueSoon && !sla.isResolved
+      return true
+    })
+  }, [issues, deadlineFilter])
+
+  const allSelected = filteredIssues.length > 0 && filteredIssues.every((iss) => selectedIds.has(iss.id))
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(issues.map((i) => i.id)))
+      setSelectedIds(new Set(filteredIssues.map((i) => i.id)))
     }
   }
 
@@ -191,6 +235,98 @@ export default function QueuePage() {
     if (next.has(id)) next.delete(id)
     else next.add(id)
     setSelectedIds(next)
+  }
+
+  const handleBulkAction = async (actionType) => {
+    if (selectedIds.size === 0) return
+
+    // 1. Guard check if authority account is restricted
+    const curRestriction = getAuthorityRestriction(user?.id)
+    if (curRestriction) {
+      if (curRestriction.level === 'permanent') {
+        alert('🛑 Action Blocked: Your account is fully restricted due to repeated unnatural bulk actions. Please contact the System Administrator to reactivate your account.')
+        return
+      }
+      if (curRestriction.level === 'temporary') {
+        const remMinutes = Math.max(1, Math.ceil((curRestriction.restrictedUntil - Date.now()) / (60 * 1000)))
+        alert(`⚠️ Action Blocked: Your account is in a temporary cooldown (${remMinutes} minutes remaining). Bulk mutations are paused to protect system integrity.`)
+        return
+      }
+    }
+
+    const ids = Array.from(selectedIds)
+    const count = ids.length
+
+    const actionLabels = {
+      assign_me: 'assign to yourself',
+      acknowledge: 'acknowledge / triage',
+      in_progress: 'mark in progress',
+      resolve: 'resolve',
+      reject: 'reject',
+    }
+
+    if (!window.confirm(`Are you sure you want to ${actionLabels[actionType] || actionType} ${count} selected issue${count > 1 ? 's' : ''}?`)) {
+      return
+    }
+
+    setIsBulkProcessing(true)
+    try {
+      for (const id of ids) {
+        if (actionType === 'assign_me') {
+          await api(`/issues/${id}/assignment`, {
+            method: 'PATCH',
+            body: { assigneeId: user?.id },
+          }).catch(() => {})
+        } else if (actionType === 'acknowledge') {
+          await api(`/issues/${id}/status`, {
+            method: 'POST',
+            body: { status: 'acknowledged' },
+          }).catch(() => {})
+        } else if (actionType === 'in_progress') {
+          await api(`/issues/${id}/status`, {
+            method: 'POST',
+            body: { status: 'in_progress' },
+          }).catch(() => {})
+        } else if (actionType === 'resolve') {
+          await api(`/issues/${id}/status`, {
+            method: 'POST',
+            body: { status: 'resolved' },
+          }).catch(() => {})
+        } else if (actionType === 'reject') {
+          await api(`/issues/${id}/status`, {
+            method: 'POST',
+            body: { status: 'rejected', reason: 'Bulk rejected during municipal review' },
+          }).catch(() => {})
+        }
+      }
+
+      // Check if this counts as an unnatural bulk action (>= 5 items)
+      const secResult = trackBulkAction({
+        user,
+        count,
+        actionType,
+        targetIds: ids,
+      })
+
+      if (secResult.triggered) {
+        setRestriction(secResult.restrictionData)
+        if (secResult.level === 'permanent') {
+          alert(`🛑 Account Suspended: Unnatural bulk activity detected (${count} items modified). Your operational privileges are now frozen until an Administrator reviews and reactivates your account.`)
+        } else {
+          alert(`⚠️ Alert: Unnatural bulk action flagged (${count} items processed). A 15-minute cooldown restriction has been applied to your account.`)
+        }
+      } else {
+        setBulkNotification(`Successfully updated ${count} issue${count > 1 ? 's' : ''}.`)
+        setTimeout(() => setBulkNotification(null), 5000)
+      }
+
+      setSelectedIds(new Set())
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+    } catch (err) {
+      alert(`Bulk action failed: ${err.message}`)
+    } finally {
+      setIsBulkProcessing(false)
+    }
   }
 
   return (
@@ -246,6 +382,56 @@ export default function QueuePage() {
         />
       )}
 
+      {/* Restriction Alert Banner (Unnatural Activity) */}
+      {restriction && (
+        <div
+          role="alert"
+          className={`mb-4 flex items-start gap-3 rounded-xl border p-4 shadow-sm ${
+            restriction.level === 'permanent'
+              ? 'border-rose-400 bg-rose-50 text-rose-950 dark:bg-rose-950/40 dark:text-rose-200'
+              : 'border-amber-400 bg-amber-50 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200'
+          }`}
+        >
+          <ShieldAlert className="h-5 w-5 shrink-0 text-status-critical mt-0.5" />
+          <div className="flex-1 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-bold text-sm">
+                {restriction.level === 'permanent'
+                  ? 'Account Operations Suspended (অ্যাকাউন্ট স্থগিত)'
+                  : 'Temporary Operations Cooldown (সাময়িক স্থগিতাদেশ)'}
+              </p>
+              <RestrictionBadge
+                restriction={restriction}
+                onExpire={() => setRestriction(getAuthorityRestriction(user?.id))}
+              />
+            </div>
+            <p className="mt-1 leading-relaxed">
+              {restriction.reason}.
+              {restriction.level === 'permanent'
+                ? ' Multiple unnatural bulk activities were detected. Operations are frozen until an Administrator reviews and unlocks your account.'
+                : ` Cooldown is active. Your operational mutation capabilities will automatically restore when the countdown reaches zero.`}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Success Notification Banner */}
+      {bulkNotification && (
+        <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-800">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <span>{bulkNotification}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBulkNotification(null)}
+            className="text-emerald-700 hover:text-emerald-900"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Filters Bar matching authority-queue.png */}
       <Card className="mb-4 p-3 md:sticky md:top-0 md:z-20">
         <div className="flex flex-wrap items-center gap-3">
@@ -286,6 +472,21 @@ export default function QueuePage() {
 
           <div className="w-44">
             <Select
+              aria-label="Filter by deadline"
+              value={deadlineFilter}
+              onChange={(e) => setDeadlineFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All Deadlines' },
+                { value: 'overdue', label: 'Overdue (বিপদগ্রস্ত)' },
+                { value: 'due_soon', label: 'Due in <24h (শীঘ্রই শেষ)' },
+                { value: 'on_track', label: 'On Track (সময়মতো)' },
+              ]}
+              placeholder="Deadline / SLA"
+            />
+          </div>
+
+          <div className="w-44">
+            <Select
               aria-label="Filter by assignment"
               value={isMyIssues ? 'me' : ''}
               onChange={(e) => {
@@ -303,10 +504,13 @@ export default function QueuePage() {
             />
           </div>
 
-          {hasFilters && (
+          {(hasFilters || deadlineFilter) && (
             <button
               type="button"
-              onClick={clearAll}
+              onClick={() => {
+                clearAll()
+                setDeadlineFilter('')
+              }}
               className="ml-auto text-xs font-medium text-ink-muted hover:text-ink hover:underline"
             >
               Clear All
@@ -328,12 +532,13 @@ export default function QueuePage() {
                   <th className="px-4 py-3">Severity</th>
                   <th className="px-4 py-3">Issue Title &amp; ID</th>
                   <th className="px-4 py-3">Location</th>
+                  <th className="px-4 py-3">Deadline / SLA</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Assigned To</th>
                   <th className="px-4 py-3 text-right">Time Elapsed</th>
                 </tr>
               </thead>
-              <SkeletonRows cols={7} rows={10} />
+              <SkeletonRows cols={8} rows={10} />
             </table>
           </Card>
         </>
@@ -343,20 +548,20 @@ export default function QueuePage() {
             Could not load the queue: {error.message}
           </p>
         </Card>
-      ) : issues.length === 0 ? (
+      ) : filteredIssues.length === 0 ? (
         <Card>
           <EmptyState
             title={
               isMyIssues
                 ? 'No issues assigned to you yet'
-                : hasFilters
+                : hasFilters || deadlineFilter
                 ? 'No issues match these filters'
                 : 'Queue is empty'
             }
             message={
               isMyIssues
                 ? 'You currently have no tasks assigned to you. Browse the Work Queue to claim unassigned issues or wait for dispatch.'
-                : hasFilters
+                : hasFilters || deadlineFilter
                 ? 'Try widening the filters or clearing them.'
                 : 'New reports will appear here as reports are reviewed.'
             }
@@ -365,8 +570,8 @@ export default function QueuePage() {
                 <Button variant="primary" onClick={() => handleTabSwitch('all')}>
                   Browse Work Queue
                 </Button>
-              ) : hasFilters ? (
-                <Button variant="secondary" onClick={clearAll}>
+              ) : hasFilters || deadlineFilter ? (
+                <Button variant="secondary" onClick={() => { clearAll(); setDeadlineFilter(''); }}>
                   Clear all filters
                 </Button>
               ) : undefined
@@ -377,7 +582,7 @@ export default function QueuePage() {
         <Card className="overflow-hidden">
           {/* Mobile: stacked report cards */}
           <div className="space-y-3 p-4 md:hidden">
-            {issues.map((issue) => {
+            {filteredIssues.map((issue) => {
               const sev = issue.severity?.current || 'medium'
               const sevCfg = SEV_CONFIG[sev] || SEV_CONFIG.medium
               const SevIcon = sevCfg.Icon
@@ -409,6 +614,12 @@ export default function QueuePage() {
                     {categoryLabel(categories, issue.primaryCategory)}
                   </p>
                   <p className="text-xs text-ink-muted">#UM-{shortId(issue.id)}</p>
+                  
+                  {/* SLA Badge in mobile */}
+                  <div className="mt-2">
+                    <SlaBadge issue={issue} />
+                  </div>
+
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-xs text-ink-muted">
                     <div className="flex items-center gap-2">
                       <span>
@@ -468,6 +679,7 @@ export default function QueuePage() {
                   <th scope="col" className="px-4 py-3.5">Severity</th>
                   <th scope="col" className="px-4 py-3.5">Issue Title &amp; ID</th>
                   <th scope="col" className="px-4 py-3.5">Location</th>
+                  <th scope="col" className="px-4 py-3.5">Deadline / SLA</th>
                   <th scope="col" className="px-4 py-3.5">Status</th>
                   <th scope="col" className="px-4 py-3.5">Assigned To</th>
                   <th scope="col" className="px-4 py-3.5 text-right">
@@ -478,7 +690,7 @@ export default function QueuePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {issues.map((issue) => {
+                {filteredIssues.map((issue) => {
                   const sev = issue.severity?.current || 'medium'
                   const isCritical = sev === 'critical'
                   const isChecked = selectedIds.has(issue.id)
@@ -533,6 +745,11 @@ export default function QueuePage() {
                                 : 'Location unavailable'}
                           </span>
                         </div>
+                      </td>
+
+                      {/* SLA / Deadline Countdown */}
+                      <td className="px-4 py-3.5">
+                        <SlaBadge issue={issue} />
                       </td>
 
                       {/* Status with dot */}
@@ -605,7 +822,7 @@ export default function QueuePage() {
           {/* Pagination Footer (10 items per page with Prev/Next navigation) */}
           <div className="flex flex-wrap items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted bg-surface-sunken/30">
             <div>
-              Viewing <strong className="font-semibold text-ink">{issues.length}</strong>
+              Viewing <strong className="font-semibold text-ink">{filteredIssues.length}</strong>
               {totalCount !== undefined ? (
                 <> of <strong className="font-semibold text-ink">{totalCount}</strong></>
               ) : ''} active issues
@@ -649,6 +866,70 @@ export default function QueuePage() {
             </div>
           </div>
         </Card>
+      )}
+
+      {/* Floating Bulk Actions Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2 flex items-center gap-3 rounded-2xl border border-line bg-surface-elevated/95 px-5 py-3 shadow-2xl backdrop-blur-md">
+          <div className="flex items-center gap-2 pr-3 border-r border-line text-xs font-bold text-ink">
+            <CheckSquare className="h-4 w-4 text-primary" />
+            <span>{selectedIds.size} selected</span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkProcessing}
+              onClick={() => handleBulkAction('assign_me')}
+              className="text-xs"
+            >
+              Assign to Me
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkProcessing}
+              onClick={() => handleBulkAction('acknowledge')}
+              className="text-xs"
+            >
+              Acknowledge
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkProcessing}
+              onClick={() => handleBulkAction('in_progress')}
+              className="text-xs"
+            >
+              In Progress
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkProcessing}
+              onClick={() => handleBulkAction('resolve')}
+              className="text-xs text-status-resolved hover:bg-emerald-50"
+            >
+              Resolve
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={isBulkProcessing}
+              onClick={() => handleBulkAction('reject')}
+              className="text-xs text-status-critical hover:bg-rose-50"
+            >
+              Reject
+            </Button>
+            <button
+              type="button"
+              onClick={() => setSelectedIds(new Set())}
+              className="ml-2 text-xs text-ink-muted hover:text-ink underline"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -31,6 +31,7 @@
    - [5. System Settings, Reference Taxonomies & Platform Health](#5-system-settings-reference-taxonomies--platform-health)
    - [6. Civic Content Moderation & Security Queue](#6-civic-content-moderation--security-queue)
    - [7. Universal Full-Viewport Modals & UI Polish](#7-universal-full-viewport-modals--ui-polish)
+   - [8. Security & Operational Audit Log](#8-security--operational-audit-log)
 5. [Technical Stack & Real-Time Sync Engine](#technical-stack--real-time-sync-engine)
 6. [Future Expansion Roadmap](#future-expansion-roadmap)
 
@@ -38,13 +39,14 @@
 
 ## 👥 Platform Architecture & User Roles
 
-UrbanMend is divided into three distinct, role-gated portals:
+UrbanMend is divided into distinct, role-gated portals with safe-mode guest exploration:
 
 | Role | Access Level | Primary Objectives |
 | :--- | :--- | :--- |
 | **Citizen (নাগরিক)** | Public / Verified Citizen | Report civic hazards, corroborate ("Me Too") neighborhood issues, track resolution live on timeline & map. |
-| **Authority (কর্তৃপক্ষ)** | Municipal Workers & Engineers | Inspect assigned department issues, adjust severity/status, dispatch crews, add internal notes, and mark resolved. |
-| **Admin (প্রশাসক)** | City Super-Administrators | System-wide analytics, provision authority accounts, moderate reports, review audit logs, and configure AI clustering. |
+| **Guest Citizen (অতিথি নাগরিক)** | Public / Read-Only | Explore nearby civic activity, browse community issues feed, and view GIS map without registration or account creation. |
+| **Authority (কর্তৃপক্ষ)** | Municipal Workers & Engineers | Inspect assigned department issues, track SLA deadlines, dispatch crews, add internal notes, and mark resolved. |
+| **Admin (প্রশাসক)** | City Super-Administrators | System-wide analytics, provision authority accounts, monitor unnatural bulk actions, review security audit logs, and configure AI clustering. |
 
 ---
 
@@ -75,6 +77,10 @@ flowchart TD
 * **Firebase & Google OAuth Integration:**
   * One-click login with Google account (`GoogleAuthProvider`).
   * Email and Password login/registration fallback.
+* **Guest Citizen Exploration ("Login as a Guest / অতিথি প্রবেশ"):**
+  * One-click frictionless access for citizens to browse the platform without registering or providing credentials.
+  * Allows full exploration of the **Citizen Dashboard**, **GPS Nearby Activity**, **Community Issues Feed**, and **Interactive GIS Map**.
+  * **Safe-Mode Read-Only Protection:** Disables destructive and write operations (submitting reports, editing tickets, corroborating issues) with an intuitive modal invitation to log in or register when write actions are initiated.
 * **Live Profile Synchronization:**
   * Citizen's real Google display name and high-resolution profile photo are extracted and persisted in `localStorage` and `AuthContext`.
 * **Animated Profile Dropdown Menu (`UserMenu.jsx`):**
@@ -130,6 +136,13 @@ flowchart TD
   * Assigns category, severity signal, and confidence score.
   * Generates an engineering rationale explaining why the issue is critical or moderate.
   * Built-in keyword fallback classifier in case of network disruptions.
+* **AI Proximity Duplicate Detection Engine (Within 100 Meters):**
+  * Real-time spatial scanning powered by the **Haversine Distance Formula** checking for active civic issues within a **100-meter radius** matching the selected category.
+  * Triggers an interactive **Duplicate Notice Modal (`DuplicatePromptModal`)** before final submission:
+    * Informs citizen: *"This type of issue was already submitted nearby. Is your report for this same existing issue, or a new issue?"*
+    * Shows nearby incident thumbnail photo, category, title, exact distance (e.g. `42m away`), and current affected citizen count.
+    * **Same Issue Confirmation:** If the citizen clicks *"Yes, Same Issue (+1 Affected)"*, the platform invokes `POST /issues/{id}/confirmations` to increment the **affected citizen count (+1)** on the existing ticket without creating ticket clutter, immediately showing a successful confirmation screen.
+    * **New Issue Confirmation:** If the citizen clicks *"No, Submit as New Issue"*, the system proceeds with creating a distinct, new municipal ticket.
 * **Instant Redirection:** Automatically navigates to the tracking page upon submission.
 
 ---
@@ -265,13 +278,26 @@ flowchart LR
 * **Unified Municipal Incident Stream:**
   * Displays incoming citizen reports, AI-grouped incident clusters, and pending dispatches.
 * **Multi-Dimensional Filtering & Faceting:**
-  * Filter by category (Roads, Water & Drainage, Waste, Electricity, etc.), severity rating (Critical, High, Medium, Low), and operational status.
+  * Filter by category (Roads, Water & Drainage, Waste, Electricity, etc.), severity rating (Critical, High, Medium, Low), operational status, and SLA deadlines.
 * **Dynamic Proximity & Hotspot Sorting:**
   * Sort by nearest to officer's current GPS location, highest citizen corroboration count, or oldest pending.
 * **Assignment & Dispatch Engine:**
   * Assign issues to specific field officers, maintenance contractors, or self-assign with a single click.
-* **Batch Operations:**
-  * Bulk action toolbar for rapidly acknowledging or dispatching multiple related issues in the same ward.
+* **Municipal Resolution Deadline & SLA Tracking Engine:**
+  * Strict tracking against official municipal resolution service level agreements:
+    * **Critical Priority:** 24-Hour resolution deadline.
+    * **High Priority:** 72-Hour (3-Day) resolution deadline.
+    * **Medium Priority:** 7-Day resolution deadline.
+    * **Low Priority:** 14-Day resolution deadline.
+  * **Real-Time Dynamic SLA Badges (`SlaBadge.jsx`):** Live countdown indicators (`2d left`, `5h remaining`) and overdue alerts (`🔴 Overdue by 4h`).
+  * **SLA Queue Filtering:** Dropdown filter presets for `All Deadlines`, `🔴 Overdue Issues`, `⚠️ Due in <24h`, and `🟢 On Track`.
+* **Batch Operations & Unnatural Activity Protection Engine:**
+  * Multi-select floating bulk action toolbar for assigning, acknowledging, progressing, resolving, or rejecting multiple issues simultaneously.
+  * **Automated Anomaly Detection (`unnaturalActivity.js`):** Flags mass mutations (≥ 5 reports modified concurrently) as unnatural bulk activities.
+  * **Progressive Account Restrictions:**
+    * **1st Violation:** Triggers a **15-minute temporary cooldown**, disabling dispatch mutations and rendering a live ticking countdown badge (`RestrictionBadge.jsx`).
+    * **Repeated Violations:** Enforces a **permanent account suspension** until an Administrator investigates and manually reactivates the account.
+    * **Dynamic Auto-Restoration:** The 15-minute cooldown timer ticks down live (`14m 58s` ➔ `0s`) and automatically clears without requiring a page refresh.
 
 ### 3. "My Issues" Assigned Task Queue (`/authority/my-issues`)
 * **Personalized Officer Work Order Stream:**
@@ -284,6 +310,11 @@ flowchart LR
 ### 4. Comprehensive Issue Detail & Lifecycle Management (`/authority/issues/:issueId`)
 * **Standard Municipal Lifecycle Transitions:**
   * Official state machine progressing issues through `Acknowledged` ➔ `In Progress` ➔ `Resolved` ➔ `Closed` ➔ `Rejected`.
+* **Resolution Deadline & SLA Progress Card:**
+  * Prominent card displaying remaining time countdown, visual progress bar, priority benchmark, and target completion timestamp.
+* **AI Duplicate & Clustered Reports Inspector:**
+  * Automatically scans for active civic issues within 100 meters matching the same category.
+  * Displays spatial distance in meters (e.g. `42m away`), corroboration tally, and direct View/Merge action controls.
 * **Authoritative Severity Override Engine:**
   * Allows municipal engineers to override AI-assigned severity levels (e.g. escalating Medium to Critical) with mandatory audit reasoning stored in the immutable system ledger.
 * **Report Clustering & Duplicate Management:**
@@ -367,14 +398,18 @@ flowchart TD
   * Real-time search across names, emails, departments, and assigned wards.
   * Department filter tabs (All, Roads, Waste, Water & Drainage, Electricity, etc.).
   * Dynamic status indicator pills (`Active` / `Suspended`).
+* **Dynamic Restriction Indicators & Real-Time Countdown:**
+  * Table status column dynamically renders `🔴 Suspended` or `🟠 Cooldown (14m 32s)` with animated pulsing indicators (`RestrictionBadge.jsx`).
+  * One-click **"Reactivate"** button in table action column allowing administrators to lift operational cooldowns and suspensions instantly.
 * **Authority Provisioning Modal (`AddAuthorityModal.jsx`):**
   * One-click staff onboarding modal rendered via React Portals (`document.body`).
   * Automatic strong password generation with copy-to-clipboard functionality.
   * Department category assignment, jurisdiction ward selection, and operational permission role configuration.
 
 ### 3. Individual Officer Profile, Audit Ledger & PDF Export (`/admin/authorities/:authorityId`)
-* **Executive Officer Profile Header:**
-  * Displays officer insignia avatar, full name, official department, contact details, assigned ward territory, and dynamic status badge (`Active` / `Suspended`).
+* **Executive Officer Profile Header & Security Alerts:**
+  * Displays officer insignia avatar, full name, official department, contact details, assigned ward territory, and dynamic status badge (`Active` / `Suspended` / `Cooldown`).
+  * **Security Engine Restriction Banner:** Prominently alerts administrators when an officer is in temporary cooldown or permanently suspended due to unnatural bulk actions, with violation counts, reasons, and a prominent **"Reactivate & Unlock Account"** action button.
   * Performance summary counters: Total Assigned, Total Resolved, In Progress, and Resolution Success Rate.
 * **3-Tab Navigation with 0.5s Smooth Loading Transition:**
   * Powered by `TabLoadingSkeleton.jsx` (500ms delay with `min-h-[460px]` container) ensuring buttery-smooth tab transitions without layout shifts:
@@ -441,6 +476,15 @@ flowchart TD
   * All application modals are portaled directly to `document.body` with `z-[9999]`, guaranteeing 100% viewport coverage across all resolutions without being clipped by parent overflow containers.
 * **Refined Backdrop & Shadows:**
   * Balanced, lightweight backdrop blur and shadow styling providing clean modal elevation without darkening the background too harshly.
+
+### 8. Security & Operational Audit Log (`/admin/audit`)
+* **Cryptographically Recorded Operational Ledger:**
+  * Comprehensive chronological activity trail recording administrative, dispatch, moderation, and lifecycle decisions.
+* **Unnatural Bulk Operations & Anomaly Detection:**
+  * **"Unnatural Bulk" KPI Metric Card:** Real-time counter of flagged mass mutation anomalies across all authorities.
+  * **"Unnatural Activities (অস্বাভাবিক কার্যকলাপ)" Filter Tab:** Dedicated audit log filter isolating security anomalies and bulk action violations.
+  * **Prominent Security Alert Banner:** Alerts city administrators to suspicious or excessive bulk operations.
+  * **Inline Account Reactivation:** Directly unlock and restore restricted municipal officers from the audit log entry with one click.
 
 ---
 

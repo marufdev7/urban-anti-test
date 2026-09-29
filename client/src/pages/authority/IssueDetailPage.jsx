@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
@@ -7,12 +7,14 @@ import {
   ArrowLeft,
   Check,
   Clock,
+  Info,
   Lock,
   MapPin,
   MessageSquare,
   RotateCw,
   Send,
   ShieldCheck,
+  Sparkles,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -24,6 +26,7 @@ import {
   SEVERITIES,
   useAddComment,
   useIssue,
+  useIssues,
   useIssueReports,
   useMergeIssue,
   useSetAssignment,
@@ -36,6 +39,8 @@ import { useModerate } from '../../hooks/admin'
 import { ApiError, normalizeMediaUrl } from '../../lib/api'
 import { categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
 import { formatDateTime, shortId, timeAgo } from '../../lib/format'
+import { getSlaInfo } from '../../lib/sla'
+import SlaBadge from '../../components/ui/SlaBadge'
 import Button from '../../components/ui/Button'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
 import Dialog from '../../components/ui/Dialog'
@@ -45,6 +50,18 @@ import { SkeletonDetail } from '../../components/ui/Skeleton'
 import Spinner from '../../components/ui/Spinner'
 import StatusBadge from '../../components/ui/StatusBadge'
 import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModal'
+
+function haversineMeters(a, b) {
+  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return 999999
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const R = 6371000
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
 
 const SEV_TONES = { critical: 'critical', high: 'high', medium: 'medium', low: 'low' }
 const REASON_REQUIRED = new Set(['rejected', 'duplicate', 'insufficient_info', 'reopen'])
@@ -156,6 +173,29 @@ export default function IssueDetailPage() {
   const [moderateReason, setModerateReason] = useState('')
 
   const [duplicateOfIssueId, setDuplicateOfIssueId] = useState('')
+
+  const { data: nearbyIssuesData } = useIssues({ limit: '100' })
+  const otherIssues = nearbyIssuesData?.data ?? []
+
+  // Clustered duplicate detection (within 100 meters of current incident)
+  const nearbyClusteredIssues = useMemo(() => {
+    if (!data?.representativeLocation) return []
+    const curLoc = data.representativeLocation
+    return otherIssues
+      .filter((iss) => {
+        if (iss.id === data.id) return false
+        if (iss.primaryCategory !== data.primaryCategory) return false
+        const dist = haversineMeters(curLoc, iss.representativeLocation)
+        return dist <= 100
+      })
+      .map((iss) => ({
+        ...iss,
+        distanceMeters: Math.round(haversineMeters(curLoc, iss.representativeLocation)),
+      }))
+      .sort((a, b) => a.distanceMeters - b.distanceMeters)
+  }, [data, otherIssues])
+
+  const sla = useMemo(() => (data ? getSlaInfo(data) : null), [data])
 
   useEffect(() => {
     if (data) {
@@ -857,6 +897,154 @@ export default function IssueDetailPage() {
                   </div>
                 </form>
               </Dialog>
+            </CardBody>
+          </Card>
+
+          {/* Resolution Deadline & SLA Compliance Card */}
+          {sla && (
+            <Card className="overflow-hidden">
+              <CardHeader
+                title={
+                  <div className="flex items-center justify-between w-full">
+                    <span className="flex items-center gap-2 font-bold text-ink">
+                      <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
+                      Resolution Deadline (SLA)
+                    </span>
+                    <SlaBadge issue={data} />
+                  </div>
+                }
+              />
+              <CardBody className="space-y-3.5">
+                {/* Visual Progress Bar */}
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-semibold text-ink-muted">Elapsed SLA Window</span>
+                    <span className={`font-bold ${sla.isOverdue ? 'text-status-critical' : 'text-primary'}`}>
+                      {sla.percentElapsed}% ({Math.round(sla.ageHours)}h / {sla.slaHours}h)
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        sla.isResolved
+                          ? 'bg-emerald-500'
+                          : sla.isOverdue
+                          ? 'bg-rose-500'
+                          : sla.isDueSoon
+                          ? 'bg-amber-500'
+                          : 'bg-primary'
+                      }`}
+                      style={{ width: `${sla.percentElapsed}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
+                    <p className="text-[10px] uppercase font-bold text-ink-muted">Standard SLA Window</p>
+                    <p className="mt-0.5 font-bold text-ink">{sla.slaHours} Hours ({data.severity?.current || 'medium'})</p>
+                  </div>
+                  <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
+                    <p className="text-[10px] uppercase font-bold text-ink-muted">Deadline Target</p>
+                    <p className="mt-0.5 font-bold text-ink">
+                      {sla.deadline ? sla.deadline.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-line/70 bg-slate-50/50 p-2.5 text-[11px] text-ink-muted flex items-start gap-2">
+                  <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                  <span>
+                    {sla.isResolved
+                      ? 'Issue successfully closed within municipal compliance window.'
+                      : sla.isOverdue
+                      ? 'Action overdue! Municipal escalation protocol is active for municipal dispatch.'
+                      : `Priority standard: ${data.severity?.current || 'medium'} severity reports must be resolved within ${sla.slaHours} hours of intake.`}
+                  </span>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* AI Duplicate & Clustered Reports Card (Within 100m) */}
+          <Card className="overflow-hidden">
+            <CardHeader
+              title={
+                <div className="flex items-center justify-between w-full">
+                  <span className="flex items-center gap-2 font-bold text-ink">
+                    <Sparkles className="h-4 w-4 text-amber-500" aria-hidden="true" />
+                    AI Duplicate &amp; Cluster Detection
+                  </span>
+                  {nearbyClusteredIssues.length > 0 && (
+                    <span className="rounded-full bg-amber-100 border border-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-900">
+                      {nearbyClusteredIssues.length} within 100m
+                    </span>
+                  )}
+                </div>
+              }
+            />
+            <CardBody className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-ink-muted">Citizen Impact Count:</span>
+                <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                  {(data.corroborationCount || 0) + (data.reportCount || 1)} Affected Citizen Voices
+                </span>
+              </div>
+
+              {nearbyClusteredIssues.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-amber-800 font-medium">
+                    ⚠️ {nearbyClusteredIssues.length} duplicate or co-located report{nearbyClusteredIssues.length > 1 ? 's' : ''} detected within 100 meters:
+                  </p>
+                  {nearbyClusteredIssues.map((cand) => (
+                    <div
+                      key={cand.id}
+                      className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 text-xs flex items-center justify-between gap-3 hover:bg-amber-50 transition"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-ink">#UM-{shortId(cand.id)}</span>
+                          <span className="rounded-full bg-amber-200/60 text-amber-900 px-1.5 py-0.2 text-[9px] font-bold">
+                            {cand.distanceMeters}m away
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-ink-muted truncate">
+                          {cand.address || 'Address nearby'}
+                        </p>
+                        <p className="text-[10px] text-ink-faint">
+                          {cand.corroborationCount || 1} confirmation{cand.corroborationCount === 1 ? '' : 's'} · Status: {cand.status}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Link
+                          to={`/authority/queue/${cand.id}`}
+                          className="rounded border border-line bg-surface-panel px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-surface-sunken"
+                        >
+                          View
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMergeWithId(cand.id)
+                            setMergeOpen(true)
+                          }}
+                          className="rounded border border-amber-300 bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-900 hover:bg-amber-200 cursor-pointer"
+                        >
+                          Merge
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-line bg-surface-sunken/30 p-3.5 text-center text-xs text-ink-muted">
+                  <p className="font-semibold text-ink">No Duplicate Clusters Detected</p>
+                  <p className="text-[11px] mt-0.5">
+                    No active reports of the same category exist within 100 meters.
+                  </p>
+                </div>
+              )}
             </CardBody>
           </Card>
 

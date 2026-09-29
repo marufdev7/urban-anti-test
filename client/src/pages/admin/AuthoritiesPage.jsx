@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -18,20 +18,24 @@ import {
   Phone,
   Search,
   Shield,
+  ShieldAlert,
   ShieldCheck,
   UserCheck,
   UserPlus,
 } from 'lucide-react'
+import { useAuth } from '../../auth/AuthContext'
 import { useAuthorities, useAdminUpdateUser } from '../../hooks/admin'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { exportAuthoritiesPdf } from '../../lib/pdfExport'
 import { JURISDICTION_AREAS, getJurisdictionLabel } from '../../lib/zones'
 import { shortId } from '../../lib/format'
+import { getAuthorityRestriction, reactivateAuthorityAccount } from '../../lib/unnaturalActivity'
 import Button from '../../components/ui/Button'
 import Card, { CardBody } from '../../components/ui/Card'
 import Dialog from '../../components/ui/Dialog'
 import EmptyState from '../../components/ui/EmptyState'
 import Input from '../../components/ui/Input'
+import RestrictionBadge from '../../components/ui/RestrictionBadge'
 import Select from '../../components/ui/Select'
 import Skeleton from '../../components/ui/Skeleton'
 
@@ -661,14 +665,34 @@ function EditAuthorityModal({ authority, onClose, categories }) {
  * Authority provisioning table and stats with 100% actual database data.
  */
 export default function AuthoritiesPage() {
+  const { user } = useAuth()
   const { data: categories } = useCategories()
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState('')
   const [editingAuthority, setEditingAuthority] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const { data, isLoading, isError, error } = useAuthorities({
+  useEffect(() => {
+    const handleSecAlert = () => setRefreshKey((k) => k + 1)
+    window.addEventListener('urbanmend_security_alert', handleSecAlert)
+    return () => window.removeEventListener('urbanmend_security_alert', handleSecAlert)
+  }, [])
+
+  const { data, isLoading, isError, error, refetch } = useAuthorities({
     cursor: cursor || undefined,
   })
+
+  const handleReactivate = (officerId, officerName) => {
+    if (!window.confirm(`Are you sure you want to lift operational restrictions and reactivate ${officerName || officerId}?`)) {
+      return
+    }
+    const success = reactivateAuthorityAccount(officerId, user)
+    if (success) {
+      setRefreshKey((k) => k + 1)
+      refetch()
+      alert(`Account for ${officerName || officerId} has been successfully reactivated and restrictions lifted.`)
+    }
+  }
 
   const authorities = data?.data ?? []
   const nextCursor = data?.page?.nextCursor
@@ -825,11 +849,16 @@ export default function AuthoritiesPage() {
                   <tbody className="divide-y divide-line">
                     {filteredAuthorities.map((item) => {
                       const isRevoked = item.status === 'revoked'
+                      const restriction = getAuthorityRestriction(item.fullId)
                       return (
                         <tr
                           key={item.fullId}
                           className={`transition hover:bg-slate-50/80 ${
-                            isRevoked ? 'bg-slate-100/50 text-ink-muted' : ''
+                            isRevoked
+                              ? 'bg-slate-100/50 text-ink-muted'
+                              : restriction?.level === 'permanent'
+                              ? 'bg-rose-50/30'
+                              : ''
                           }`}
                         >
                           {/* Name & Credential */}
@@ -892,28 +921,46 @@ export default function AuthoritiesPage() {
 
                           {/* Status */}
                           <td className="px-4 py-3.5">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold">
-                              <span
-                                className={`h-2 w-2 rounded-full ${
-                                  isRevoked ? 'bg-slate-400' : 'bg-status-resolved'
-                                }`}
-                                aria-hidden="true"
+                            {restriction ? (
+                              <RestrictionBadge
+                                restriction={restriction}
+                                onExpire={() => setRefreshKey((k) => k + 1)}
                               />
-                              <span
-                                className={
-                                  isRevoked
-                                    ? 'text-slate-500 capitalize'
-                                    : 'text-status-resolved capitalize'
-                                }
-                              >
-                                {item.status}
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-bold">
+                                <span
+                                  className={`h-2 w-2 rounded-full ${
+                                    isRevoked ? 'bg-slate-400' : 'bg-status-resolved'
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                                <span
+                                  className={
+                                    isRevoked
+                                      ? 'text-slate-500 capitalize'
+                                      : 'text-status-resolved capitalize'
+                                  }
+                                >
+                                  {item.status}
+                                </span>
                               </span>
-                            </span>
+                            )}
                           </td>
 
                           {/* Actions */}
                           <td className="px-4 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-1.5">
+                              {restriction && (
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  onClick={() => handleReactivate(item.fullId, item.name)}
+                                  className="inline-flex items-center gap-1 py-1 px-2.5 text-xs font-bold text-emerald-800 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 shadow-2xs"
+                                  title="Lift operational restrictions and reactivate authority account"
+                                >
+                                  Reactivate
+                                </Button>
+                              )}
                               <Button
                                 variant="secondary"
                                 size="sm"

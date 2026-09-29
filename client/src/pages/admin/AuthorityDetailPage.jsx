@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  ShieldAlert,
   ShieldCheck,
   TrendingUp,
   User,
@@ -39,11 +40,13 @@ import {
   getActorDisplayName,
 } from '../../lib/pdfExport'
 import { JURISDICTION_AREAS, getJurisdictionLabel } from '../../lib/zones'
+import { getAuthorityRestriction, reactivateAuthorityAccount } from '../../lib/unnaturalActivity'
 import Button from '../../components/ui/Button'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
 import Dialog from '../../components/ui/Dialog'
 import EmptyState from '../../components/ui/EmptyState'
 import Input from '../../components/ui/Input'
+import RestrictionBadge from '../../components/ui/RestrictionBadge'
 import Select from '../../components/ui/Select'
 import Spinner from '../../components/ui/Spinner'
 import StatusBadge from '../../components/ui/StatusBadge'
@@ -470,6 +473,21 @@ export default function AuthorityDetailPage() {
 
   const update = useUpdateUser(authorityId)
 
+  const [restrictionTick, setRestrictionTick] = useState(0)
+  const restriction = useMemo(() => getAuthorityRestriction(authority?.id), [authority?.id, restrictionTick])
+
+  useEffect(() => {
+    const onAlert = () => setRestrictionTick((t) => t + 1)
+    window.addEventListener('urbanmend_security_alert', onAlert)
+    return () => window.removeEventListener('urbanmend_security_alert', onAlert)
+  }, [])
+
+  const handleReactivate = () => {
+    if (!authority) return
+    reactivateAuthorityAccount(authority.id, user)
+    setRestrictionTick((t) => t + 1)
+  }
+
   const [activeTab, setActiveTab] = useState('issues') // 'issues' | 'activity' | 'settings'
   const [isTabLoading, setIsTabLoading] = useState(false)
   const tabTimerRef = useRef(null)
@@ -692,10 +710,17 @@ export default function AuthorityDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold tracking-tight text-ink">{authority.email}</h1>
-                <StatusBadge
-                  tone={STATUS_TONES[authority.status] ?? 'neutral'}
-                  label={STATUS_LABELS[authority.status] ?? authority.status}
-                />
+                {restriction ? (
+                  <RestrictionBadge
+                    restriction={restriction}
+                    onExpire={() => setRestrictionTick((t) => t + 1)}
+                  />
+                ) : (
+                  <StatusBadge
+                    tone={STATUS_TONES[authority.status] ?? 'neutral'}
+                    label={STATUS_LABELS[authority.status] ?? authority.status}
+                  />
+                )}
               </div>
               <p className="text-xs text-ink-muted flex items-center gap-2 mt-0.5">
                 <span>Jurisdiction: <strong className="text-ink">{getJurisdictionLabel(authority.assignedArea)}</strong></span>
@@ -735,6 +760,68 @@ export default function AuthorityDetailPage() {
           </Link>
         </div>
       </div>
+
+      {/* Security Engine Restriction Alert Banner */}
+      {restriction && (
+        <div
+          className={`rounded-2xl border p-4.5 shadow-sm transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
+            restriction.level === 'permanent'
+              ? 'border-rose-300 bg-rose-50/90 text-rose-950'
+              : 'border-amber-300 bg-amber-50/90 text-amber-950'
+          }`}
+          role="alert"
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold shadow-xs ${
+                restriction.level === 'permanent'
+                  ? 'bg-rose-600 text-white'
+                  : 'bg-amber-600 text-white'
+              }`}
+            >
+              <ShieldAlert className="h-5 w-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-2xs font-extrabold uppercase tracking-wide ${
+                    restriction.level === 'permanent'
+                      ? 'bg-rose-200 text-rose-900 border border-rose-300'
+                      : 'bg-amber-200 text-amber-950 border border-amber-300'
+                  }`}
+                >
+                  {restriction.level === 'permanent' ? '🔴 Suspended by Security Engine' : '🟠 Cooldown Active'}
+                </span>
+                <span className="text-2xs font-medium opacity-80">
+                  Violations: {restriction.violationCount || 1}
+                </span>
+              </div>
+              <p className="text-sm font-bold">
+                {restriction.level === 'permanent'
+                  ? 'Account Locked Due to Repeated Unnatural Bulk Operations'
+                  : 'Operational Cooldown Active (Temporary Rate Restriction)'}
+              </p>
+              <p className="text-xs opacity-90 leading-relaxed">
+                {restriction.reason || 'Unnatural bulk operations detected. Actions are temporarily locked.'}
+                {restriction.level === 'temporary' && restriction.restrictedUntil && (
+                  <span className="block mt-1 font-semibold text-amber-950 dark:text-amber-200">
+                    Auto-restores at {new Date(restriction.restrictedUntil).toLocaleTimeString()} (or when countdown reaches zero)
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            onClick={handleReactivate}
+            className="shrink-0 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2 px-4 shadow-sm inline-flex items-center gap-2"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            <span>Reactivate &amp; Unlock Account</span>
+          </Button>
+        </div>
+      )}
 
       {/* KPI Performance Summary Banner */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

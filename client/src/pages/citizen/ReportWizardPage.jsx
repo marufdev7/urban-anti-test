@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
   AlertTriangle,
@@ -309,6 +309,126 @@ function PhotoLightboxModal({ photo, onClose, onRemove }) {
             alt={photo.name || 'Evidence preview'}
             className="max-h-[70vh] max-w-full rounded-lg object-contain shadow-lg"
           />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function haversineMeters(a, b) {
+  if (!a?.lat || !a?.lng || !b?.lat || !b?.lng) return 999999
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const R = 6371000 // meters
+  const dLat = toRad(b.lat - a.lat)
+  const dLng = toRad(b.lng - a.lng)
+  const sinLat = Math.sin(dLat / 2)
+  const sinLng = Math.sin(dLng / 2)
+  const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+function DuplicatePromptModal({
+  isOpen,
+  detectedIssue,
+  categories,
+  onConfirmSameIssue,
+  onProceedAsNew,
+  isConfirming,
+  onClose,
+}) {
+  if (!isOpen || !detectedIssue) return null
+
+  return (
+    <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-2xl border border-line bg-surface-panel shadow-2xl overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-line px-5 py-4 bg-amber-50/70 dark:bg-amber-950/30">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500 text-white shadow-xs">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-ink leading-tight">
+                AI Duplicate Detection (সম্ভাব্য একই সমস্যা শনাক্ত)
+              </h3>
+              <p className="text-xs text-amber-800 dark:text-amber-300 font-medium">
+                Active issue found within {detectedIssue.distanceMeters}m of your pin
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-ink-muted hover:bg-surface-panel hover:text-ink transition cursor-pointer"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-ink-muted leading-relaxed">
+            Our spatial AI detected that a municipal issue of this same category is already reported within{' '}
+            <strong className="text-ink">{detectedIssue.distanceMeters} meters</strong> of your pinpoint:
+          </p>
+
+          {/* Detected issue summary card */}
+          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 space-y-2 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-bold text-ink text-sm">
+                {categoryLabel(categories, detectedIssue.primaryCategory)}
+              </span>
+              <span className="rounded-full bg-amber-100 border border-amber-300 px-2.5 py-0.5 text-[10px] font-bold text-amber-900">
+                #UM-{shortId(detectedIssue.id)}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-ink-muted">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+              <span className="truncate">{detectedIssue.address || 'Reported nearby'}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-amber-200/60 text-[11px]">
+              <span className="text-ink-muted font-medium">
+                Current Status: <strong className="text-ink capitalize">{detectedIssue.status?.replace('_', ' ')}</strong>
+              </span>
+              <span className="font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                {detectedIssue.corroborationCount || 1} citizens affected
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 text-xs text-sky-900">
+            <p className="font-bold">
+              Is your report for this same existing issue, or is this a completely new issue?
+            </p>
+            <p className="text-[11px] text-sky-700 mt-0.5">
+              (আপনার রিপোর্টটি কি এই সমস্যারই অংশ, নাকি এটি একটি নতুন ভিন্ন সমস্যা?)
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-2.5 pt-2">
+            <Button
+              type="button"
+              loading={isConfirming}
+              onClick={onConfirmSameIssue}
+              className="w-full bg-[#005a4c] hover:bg-[#00483c] text-white py-2.5 text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+            >
+              <Check className="h-4 w-4" />
+              <span>Yes, Same Issue — Add My Voice (+1 Affect Count)</span>
+            </Button>
+            <p className="text-[10px] text-center text-ink-faint">
+              Increases the community impact count (+1) for authorities without creating clutter.
+            </p>
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={onProceedAsNew}
+              className="w-full border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 py-2.5 text-xs font-semibold rounded-xl cursor-pointer"
+            >
+              No, this is a New / Different Issue (নতুন সমস্যা হিসেবে জমা দিন)
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -860,6 +980,44 @@ export default function ReportWizardPage() {
     }
   }
 
+  const { data: nearbyIssuesData } = useQuery({
+    queryKey: ['issues', 'duplicate-check'],
+    queryFn: () => api('/issues?limit=100'),
+    staleTime: 30_000,
+  })
+
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false)
+  const [confirmedSameIssue, setConfirmedSameIssue] = useState(null)
+  const [isConfirmingSame, setIsConfirmingSame] = useState(false)
+  const [forceNewIssue, setForceNewIssue] = useState(false)
+
+  const categoryMeta = categories?.find((c) => c.key === category)
+
+  // AI Automatic Duplicate Detection (within 100 meters and same category)
+  const nearbyDuplicateIssue = useMemo(() => {
+    if (!activeMarker || !category) return null
+    const allIssues = nearbyIssuesData?.data ?? []
+    const candidates = allIssues
+      .filter((iss) => {
+        if (['resolved', 'closed', 'rejected'].includes(iss.status)) return false
+        const matchesCategory =
+          iss.primaryCategory === category ||
+          iss.category === category ||
+          (categoryMeta?.group && iss.primaryCategory === categoryMeta.group)
+        if (!matchesCategory) return false
+
+        const dist = haversineMeters(activeMarker, iss.representativeLocation)
+        return dist <= 100 // within 100 meters
+      })
+      .map((iss) => ({
+        ...iss,
+        distanceMeters: Math.round(haversineMeters(activeMarker, iss.representativeLocation)),
+      }))
+      .sort((a, b) => a.distanceMeters - b.distanceMeters)
+
+    return candidates.length > 0 ? candidates[0] : null
+  }, [activeMarker, category, nearbyIssuesData, categoryMeta])
+
   const submit = useMutation({
     mutationFn: () =>
       api('/reports', {
@@ -883,9 +1041,95 @@ export default function ReportWizardPage() {
     onError: (err) => setSubmitError(submitErrorMessage(err)),
   })
 
-  const categoryMeta = categories?.find((c) => c.key === category)
+  const handleInitiateSubmit = () => {
+    setSubmitError(null)
+    // If an existing issue within 100m is detected and citizen hasn't already chosen to force new
+    if (nearbyDuplicateIssue && !forceNewIssue) {
+      setDuplicateModalOpen(true)
+      return
+    }
+    submit.mutate()
+  }
+
+  const handleConfirmSameIssue = async () => {
+    if (!nearbyDuplicateIssue) return
+    setIsConfirmingSame(true)
+    try {
+      await api(`/issues/${nearbyDuplicateIssue.id}/confirmations`, {
+        method: 'POST',
+      })
+      setConfirmedSameIssue(nearbyDuplicateIssue)
+      setDuplicateModalOpen(false)
+      try {
+        localStorage.removeItem('urbanmend_report_draft')
+      } catch {}
+    } catch (err) {
+      setConfirmedSameIssue({
+        ...nearbyDuplicateIssue,
+        note: err.message?.includes('already') ? 'You have already corroborated this issue.' : null,
+      })
+      setDuplicateModalOpen(false)
+    } finally {
+      setIsConfirmingSame(false)
+    }
+  }
+
+  const handleProceedAsNew = () => {
+    setForceNewIssue(true)
+    setDuplicateModalOpen(false)
+    submit.mutate()
+  }
+
   const readyPhotos = photos.filter((p) => p.state === 'ready')
   const uploading = photos.some((p) => p.state === 'uploading')
+
+  // ---- Corroboration confirmation state (Same Issue selected, +1 affect count) ----
+  if (confirmedSameIssue) {
+    return (
+      <div className="mx-auto max-w-xl py-10">
+        <Card className="p-8 text-center rounded-2xl shadow-sm border border-line">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <CheckCircle2 className="h-9 w-9 text-emerald-600" aria-hidden="true" />
+          </div>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-3 py-1 text-xs font-bold text-emerald-800 mb-3">
+            Affect Count +1 (জনমত যুক্ত হয়েছে)
+          </span>
+          <h1 className="text-2xl font-bold text-ink">Impact Corroborated!</h1>
+          <p className="mt-2 text-sm text-ink-muted leading-relaxed">
+            Your verification has been recorded for active incident{' '}
+            <strong className="font-mono text-ink">#UM-{shortId(confirmedSameIssue.id)}</strong>.
+            The affected citizen count has been incremented by <strong>+1</strong> ({confirmedSameIssue.distanceMeters}m from your pin).
+          </p>
+          <div className="mt-4 rounded-xl border border-line bg-surface-sunken/40 p-4 text-left text-xs space-y-1.5">
+            <p className="font-semibold text-ink">
+              Category: {categoryLabel(categories, confirmedSameIssue.primaryCategory)}
+            </p>
+            <p className="text-ink-muted">
+              Location: {confirmedSameIssue.address || (confirmedSameIssue.representativeLocation ? `${confirmedSameIssue.representativeLocation.lat.toFixed(4)}, ${confirmedSameIssue.representativeLocation.lng.toFixed(4)}` : 'Location nearby')}
+            </p>
+            <p className="text-emerald-700 font-semibold">
+              ✓ Prevents duplicate tickets while escalating urgency for municipal authorities.
+            </p>
+          </div>
+          <div className="mt-6 flex justify-center gap-3">
+            <Button
+              variant="secondary"
+              onClick={() => navigate('/citizen/dashboard')}
+              className="border border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Back to Dashboard
+            </Button>
+            <Button
+              onClick={() => navigate('/citizen/dashboard')}
+              className="bg-[#005a4c] text-white hover:bg-[#004a3e]"
+            >
+              Done
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   // ---- Confirmation state (after 202) --------------------------------------
   if (submitted) {
@@ -1531,6 +1775,21 @@ export default function ReportWizardPage() {
                 </p>
               )}
 
+              {/* Duplicate Notice Banner if within 100m */}
+              {nearbyDuplicateIssue && !forceNewIssue && (
+                <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 flex items-start gap-2.5">
+                  <Sparkles className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">
+                      AI Duplicate Notice: Active issue detected {nearbyDuplicateIssue.distanceMeters}m away
+                    </p>
+                    <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                      Issue #UM-{shortId(nearbyDuplicateIssue.id)} ({categoryLabel(categories, nearbyDuplicateIssue.primaryCategory)}) is already open nearby. Submitting will prompt you to add your voice (+1 impact) or submit as a separate ticket.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                 <Button
                   type="button"
@@ -1544,10 +1803,7 @@ export default function ReportWizardPage() {
                   type="button"
                   disabled={!canSubmit || uploading}
                   loading={submit.isPending}
-                  onClick={() => {
-                    setSubmitError(null)
-                    submit.mutate()
-                  }}
+                  onClick={handleInitiateSubmit}
                   className="bg-[#005a4c] hover:bg-[#004a3e] text-white px-6 py-2 text-xs font-semibold rounded-lg shadow-xs disabled:opacity-50"
                 >
                   Submit Report
@@ -1660,6 +1916,17 @@ export default function ReportWizardPage() {
         photo={activeLightboxPhoto}
         onClose={() => setActiveLightboxPhoto(null)}
         onRemove={removePhoto}
+      />
+
+      {/* AI Duplicate Detection Modal */}
+      <DuplicatePromptModal
+        isOpen={duplicateModalOpen}
+        detectedIssue={nearbyDuplicateIssue}
+        categories={categories}
+        onConfirmSameIssue={handleConfirmSameIssue}
+        onProceedAsNew={handleProceedAsNew}
+        isConfirming={isConfirmingSame}
+        onClose={() => setDuplicateModalOpen(false)}
       />
     </div>
   )

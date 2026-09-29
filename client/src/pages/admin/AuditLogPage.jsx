@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Activity,
@@ -35,6 +35,7 @@ import {
   formatActionTitle,
   formatAuditChangeDetails,
 } from '../../lib/pdfExport'
+import { getAuthorityRestriction, reactivateAuthorityAccount } from '../../lib/unnaturalActivity'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Dialog from '../../components/ui/Dialog'
@@ -166,6 +167,35 @@ function getActionMeta(action, before, after, metadata) {
         Icon: Layers,
         narrative: 'Merged duplicate municipal reports into primary surviving incident',
         hasDiff: false,
+      }
+    }
+    case 'security.unnatural_bulk_action': {
+      const count = metadata?.count || 5
+      const level = metadata?.level || 'temporary'
+      const isSuspended = level === 'permanent'
+      return {
+        label: isSuspended ? 'Account Suspended (অস্বাভাবিক কার্যকলাপ)' : 'Unnatural Bulk Action Alert',
+        badgeColor: isSuspended
+          ? 'border-rose-400 bg-rose-100 text-rose-900 font-bold'
+          : 'border-amber-400 bg-amber-100 text-amber-900 font-bold',
+        Icon: ShieldAlert,
+        narrative: `Unnatural bulk operation: ${count} items mutated simultaneously. Account restricted (${
+          isSuspended ? 'Suspended indefinitely until Admin Unlock' : '15-min Cooldown applied'
+        }).`,
+        hasDiff: true,
+        diffBefore: 'Active Account',
+        diffAfter: isSuspended ? 'Suspended Account' : '15m Cooldown',
+      }
+    }
+    case 'security.admin_reactivated_authority': {
+      return {
+        label: 'Account Reactivated by Admin',
+        badgeColor: 'border-emerald-300 bg-emerald-50 text-emerald-800 font-bold',
+        Icon: ShieldCheck,
+        narrative: 'Administrator restored authority account operational status and cleared unnatural activity restrictions.',
+        hasDiff: true,
+        diffBefore: 'Restricted / Suspended',
+        diffAfter: 'Active',
       }
     }
     default: {
@@ -632,13 +662,38 @@ export default function AuditLogPage() {
   const [inspectEvent, setInspectEvent] = useState(null)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [exportFeedback, setExportFeedback] = useState(null)
+  const [localEventsTrigger, setLocalEventsTrigger] = useState(0)
+
+  // Listen for real-time security alerts triggered from client bulk action limits
+  useEffect(() => {
+    const handleSecAlert = () => setLocalEventsTrigger((prev) => prev + 1)
+    window.addEventListener('urbanmend_security_alert', handleSecAlert)
+    return () => window.removeEventListener('urbanmend_security_alert', handleSecAlert)
+  }, [])
 
   // Fetch up to 100 recent audit events
   const { data, isLoading, isError, error, refetch, isFetching } = useAuditEvents({
     limit: '100',
   })
 
-  const rawEvents = useMemo(() => data?.data ?? [], [data])
+  // Merge remote immutable server logs with local high-priority security anomaly events
+  const rawEvents = useMemo(() => {
+    const remote = data?.data ?? []
+    try {
+      const local = JSON.parse(localStorage.getItem('urbanmend_local_audit_events') || '[]')
+      const seen = new Set()
+      const merged = []
+      for (const e of [...local, ...remote]) {
+        if (!seen.has(e.id)) {
+          seen.add(e.id)
+          merged.push(e)
+        }
+      }
+      return merged.sort((a, b) => new Date(b.at || b.created_at) - new Date(a.at || a.created_at))
+    } catch {
+      return remote
+    }
+  }, [data, localEventsTrigger])
 
   // Total Activity Log Statistics
   const stats = useMemo(() => {
@@ -649,9 +704,24 @@ export default function AuditLogPage() {
     const assignment = rawEvents.filter((e) => e.action.startsWith('issue.assignment')).length
     const moderation = rawEvents.filter((e) => e.action.startsWith('moderation')).length
     const identity = rawEvents.filter((e) => e.action.startsWith('identity')).length
+    const unnatural = rawEvents.filter(
+      (e) => e.action.startsWith('security.unnatural') || e.action.includes('unnatural'),
+    ).length
 
-    return { total, workflow, assignment, moderation, identity }
+    return { total, workflow, assignment, moderation, identity, unnatural }
   }, [rawEvents])
+
+  const handleReactivateOfficer = (officerId, officerName) => {
+    if (!window.confirm(`Are you sure you want to lift restrictions and reactivate officer ${officerName || officerId}?`)) {
+      return
+    }
+    const success = reactivateAuthorityAccount(officerId, user)
+    if (success) {
+      setLocalEventsTrigger((prev) => prev + 1)
+      refetch()
+      alert(`Account for ${officerName || officerId} has been successfully reactivated and restrictions lifted.`)
+    }
+  }
 
   // Filtered Events based on search, category tab, role, target, and date
   const filteredEvents = useMemo(() => {
@@ -666,6 +736,8 @@ export default function AuditLogPage() {
         if (!e.action.startsWith('moderation')) return false
       } else if (categoryTab === 'identity') {
         if (!e.action.startsWith('identity')) return false
+      } else if (categoryTab === 'security') {
+        if (!e.action.startsWith('security') && !e.action.includes('unnatural')) return false
       }
 
       // Role filter
@@ -792,7 +864,7 @@ export default function AuditLogPage() {
       )}
 
       {/* KPI Cards: Total Activity Log Overview */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-panel border border-line bg-surface-panel p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-ink-muted">Total Events</span>
@@ -823,7 +895,7 @@ export default function AuditLogPage() {
         <div className="rounded-panel border border-line bg-surface-panel p-3.5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-ink-muted">Moderation</span>
-            <ShieldAlert className="h-4 w-4 text-amber-600" />
+            <Shield className="h-4 w-4 text-amber-600" />
           </div>
           <p className="mt-2 text-2xl font-bold text-amber-700">{stats.moderation}</p>
           <p className="mt-0.5 text-[11px] text-ink-muted">Policy enforcement</p>
@@ -837,7 +909,51 @@ export default function AuditLogPage() {
           <p className="mt-2 text-2xl font-bold text-purple-700">{stats.identity}</p>
           <p className="mt-0.5 text-[11px] text-ink-muted">Provisioning &amp; scopes</p>
         </div>
+
+        <div
+          onClick={() => setCategoryTab('security')}
+          className={`cursor-pointer rounded-panel border p-3.5 shadow-xs transition ${
+            stats.unnatural > 0
+              ? 'border-rose-300 bg-rose-50/70 hover:bg-rose-100/70'
+              : 'border-line bg-surface-panel'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-rose-900 dark:text-rose-300">Unnatural Bulk</span>
+            <ShieldAlert className="h-4 w-4 text-rose-600" />
+          </div>
+          <p className={`mt-2 text-2xl font-bold ${stats.unnatural > 0 ? 'text-rose-700' : 'text-ink'}`}>
+            {stats.unnatural}
+          </p>
+          <p className="mt-0.5 text-[11px] text-rose-800/80">Security anomalies</p>
+        </div>
       </div>
+
+      {/* Security Alert Banner for Unnatural Activities */}
+      {stats.unnatural > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-300 bg-rose-50 p-4 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-rose-600 text-white">
+              <ShieldAlert className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-rose-950">
+                Unnatural Bulk Operations Detected ({stats.unnatural} Flagged Security Event{stats.unnatural > 1 ? 's' : ''})
+              </p>
+              <p className="mt-0.5 text-[11px] text-rose-800 leading-relaxed max-w-3xl">
+                One or more municipal officers executed concurrent bulk actions (≥ 5 reports/issues modified simultaneously). Progressive account restrictions (15-min cooldown or full suspension) have been enacted to preserve municipal integrity.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setCategoryTab('security')}
+            className="text-xs bg-rose-700 hover:bg-rose-800 text-white font-semibold shrink-0"
+          >
+            Review Anomalies
+          </Button>
+        </div>
+      )}
 
       {/* Filter Tabs matching user request: Total Activity Log Categories */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-3">
@@ -896,6 +1012,18 @@ export default function AuditLogPage() {
             }`}
           >
             Personnel &amp; Access ({stats.identity})
+          </button>
+          <button
+            type="button"
+            onClick={() => setCategoryTab('security')}
+            className={`rounded-full px-3.5 py-1 text-xs font-semibold transition flex items-center gap-1.5 ${
+              categoryTab === 'security'
+                ? 'bg-rose-700 text-white shadow-xs'
+                : 'bg-surface-panel border border-rose-300 text-rose-700 hover:bg-rose-50'
+            }`}
+          >
+            <ShieldAlert className="h-3 w-3" />
+            <span>Unnatural Activities ({stats.unnatural})</span>
           </button>
         </div>
 
@@ -1172,17 +1300,29 @@ export default function AuditLogPage() {
                         </p>
                       </td>
 
-                      {/* 6. Inspect Button */}
+                      {/* 6. Inspect & Actions */}
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setInspectEvent(event)}
-                          className="text-xs text-primary hover:bg-primary-soft p-1.5"
-                          title="Inspect audit record in readable format"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          {event.action === 'security.unnatural_bulk_action' && getAuthorityRestriction(event.actorId) && (
+                            <button
+                              type="button"
+                              onClick={() => handleReactivateOfficer(event.actorId, event.actorName)}
+                              className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-800 hover:bg-emerald-100 transition shadow-2xs cursor-pointer"
+                              title="Lift restrictions and reactivate authority account"
+                            >
+                              Reactivate Account
+                            </button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setInspectEvent(event)}
+                            className="text-xs text-primary hover:bg-primary-soft p-1.5"
+                            title="Inspect audit record in readable format"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   )
