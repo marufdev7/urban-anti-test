@@ -35,9 +35,12 @@ function haversineKm(a, b) {
 /** Citizen dashboard with real live database data. */
 export default function DashboardPage() {
   const { user } = useAuth()
+  const isGuest = Boolean(user?.isGuest)
+
   const { data: reportsData, isLoading: isReportsLoading, isError, error } = useQuery({
     queryKey: ['reports', 'mine', 'dashboard'],
     queryFn: () => api('/reports?limit=100'),
+    enabled: !isGuest,
     staleTime: 30_000,
     placeholderData: (prev) => prev,
     refetchInterval: 10_000,
@@ -80,30 +83,37 @@ export default function DashboardPage() {
     return !isReportResolved(r)
   }
 
-  // Exact real counts from database
-  const processingCount = reports.filter(isReportActive).length
-  const highPriorityCount = reports.filter(isReportHighPriority).length
-  const resolvedCount = reports.filter(isReportResolved).length
+  // Exact real counts from database (fall back to citywide community issues for guests)
+  const citywideActiveCount = issues.filter((i) => !['resolved', 'closed'].includes(i.status)).length
+  const citywideHighPriorityCount = issues.filter((i) => {
+    const sev = (i.severity?.current || i.computedSeverity)?.toLowerCase()
+    return ['critical', 'high'].includes(sev)
+  }).length
+  const citywideResolvedCount = issues.filter((i) => ['resolved', 'closed'].includes(i.status)).length
+
+  const processingCount = isGuest ? citywideActiveCount : reports.filter(isReportActive).length
+  const highPriorityCount = isGuest ? citywideHighPriorityCount : reports.filter(isReportHighPriority).length
+  const resolvedCount = isGuest ? citywideResolvedCount : reports.filter(isReportResolved).length
 
   const kpis = [
     {
-      label: 'PROCESSING',
+      label: isGuest ? 'ACTIVE ISSUES' : 'PROCESSING',
       value: processingCount,
-      sub: 'Active cases',
+      sub: isGuest ? 'District active' : 'Active cases',
       icon: Hourglass,
       tone: 'neutral',
     },
     {
       label: 'HIGH PRIORITY',
       value: highPriorityCount,
-      sub: 'Require action',
+      sub: isGuest ? 'Need urgent fix' : 'Require action',
       icon: AlertTriangle,
       tone: 'critical',
     },
     {
       label: 'RESOLVED',
       value: resolvedCount,
-      sub: 'This month',
+      sub: isGuest ? 'Citywide solved' : 'This month',
       icon: CheckCircle2,
       tone: 'resolved',
     },
@@ -176,8 +186,8 @@ export default function DashboardPage() {
   return (
     <div>
       <PageHeader
-        title={user?.fullName ? `Welcome back, ${user.fullName}!` : 'Overview'}
-        subtitle="Monitor public safety reports and track community resilience efforts."
+        title={isGuest ? 'Welcome, Guest Explorer!' : (user?.fullName ? `Welcome back, ${user.fullName}!` : 'Overview')}
+        subtitle={isGuest ? 'Exploring community infrastructure reports and district safety in read-only mode.' : 'Monitor public safety reports and track community resilience efforts.'}
       />
 
       {isError && (

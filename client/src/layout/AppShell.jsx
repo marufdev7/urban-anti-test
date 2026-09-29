@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
+import { ArrowRight, Eye } from 'lucide-react'
+import { useAuth } from '../auth/AuthContext'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 
@@ -12,6 +14,7 @@ import Topbar from './Topbar'
  * - Keyboard: skip-to-content link, Escape closes the drawer.
  */
 export default function AppShell() {
+  const { user, logout } = useAuth()
   const [navOpen, setNavOpen] = useState(false)
 
   useEffect(() => {
@@ -52,6 +55,27 @@ export default function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onMenuClick={() => setNavOpen((v) => !v)} />
+        {user?.isGuest && (
+          <aside
+            aria-label="Guest Mode notice"
+            className="flex flex-wrap items-center justify-between gap-2.5 border-b border-amber-500/25 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-xs sm:text-sm text-amber-900 dark:text-amber-200"
+          >
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+              <span>
+                <strong>Browsing as Guest (অতিথি মোড):</strong> You are exploring public reports and community data in read-only mode.
+              </span>
+            </div>
+            <Link
+              to="/auth/login"
+              onClick={() => logout.mutate?.()}
+              className="inline-flex items-center gap-1.5 font-semibold text-primary hover:underline hover:text-primary-hover transition-colors whitespace-nowrap"
+            >
+              <span>Sign In for Full Access</span>
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </aside>
+        )}
         <main id="main-content" className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
           <Outlet />
         </main>

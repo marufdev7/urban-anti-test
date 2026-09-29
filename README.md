@@ -15,14 +15,22 @@
    - [6. Citizen Interactive Map](#6-citizen-interactive-map)
    - [7. My Reports Portal](#7-my-reports-portal)
    - [8. Citizen Settings & Profile Management](#8-citizen-settings--profile-management)
-3. [Authority Portal — Features & Workflow](#authority-portal--features--workflow)
+3. [Authority Portal — Features & Operations Workflow](#authority-portal--features--operations-workflow)
    - [1. Executive Operations Dashboard](#1-executive-operations-dashboard)
-   - [2. Department Work Queue](#2-department-work-queue)
+   - [2. Department Work Queue & Triage Engine](#2-department-work-queue--triage-engine)
    - [3. "My Issues" Assigned Task Queue](#3-my-issues-assigned-task-queue)
    - [4. Comprehensive Issue Detail & Lifecycle Management](#4-comprehensive-issue-detail--lifecycle-management)
-   - [5. Authority Operations Map](#5-authority-operations-map)
-   - [6. Authority Profile & Operations Settings](#6-authority-profile--operations-settings)
-4. [Admin Portal — Blueprint & Features](#admin-portal--blueprint--features)
+   - [5. Printable Municipal Work Orders (PDF Export)](#5-printable-municipal-work-orders-pdf-export)
+   - [6. Zonal GIS Operations Map](#6-zonal-gis-operations-map)
+   - [7. Authority Profile & Operations Settings](#7-authority-profile--operations-settings)
+4. [Admin Portal — Enterprise Governance & GIS Engine](#admin-portal--enterprise-governance--gis-engine)
+   - [1. Executive City Governance Dashboard](#1-executive-city-governance-dashboard)
+   - [2. Authority Account Provisioning & Management](#2-authority-account-provisioning--management)
+   - [3. Individual Officer Profile, Audit Ledger & PDF Export](#3-individual-officer-profile-audit-ledger--pdf-export)
+   - [4. Interactive GIS Map, Autocomplete & Custom Area Drawing Engine](#4-interactive-gis-map-autocomplete--custom-area-drawing-engine)
+   - [5. System Settings, Reference Taxonomies & Platform Health](#5-system-settings-reference-taxonomies--platform-health)
+   - [6. Civic Content Moderation & Security Queue](#6-civic-content-moderation--security-queue)
+   - [7. Universal Full-Viewport Modals & UI Polish](#7-universal-full-viewport-modals--ui-polish)
 5. [Technical Stack & Real-Time Sync Engine](#technical-stack--real-time-sync-engine)
 6. [Future Expansion Roadmap](#future-expansion-roadmap)
 
@@ -221,106 +229,218 @@ flowchart TD
 
 ---
 
-## 🛠️ Authority Portal — Features & Workflow
+## 🛠️ Authority Portal — Features & Operations Workflow
 
 The **Authority Portal** is an enterprise-grade operational command center designed for municipal field engineers, zonal inspectors, and department dispatchers across Dhaka city divisions.
 
 ```mermaid
 flowchart LR
-    A["Authority Login"] --> B["Authority Dashboard"]
+    A["Authority Officer Login"] --> B["Authority Operations Dashboard"]
     B --> C["Work Queue (/authority/queue)"]
     B --> D["My Assigned Issues (/authority/my-issues)"]
     B --> E["Jurisdiction Map (/authority/map)"]
-    B --> F["Executive Settings (/authority/settings)"]
+    B --> F["Settings & Operations (/authority/settings)"]
     
-    C --> G["Assign / Review Issue"]
+    C --> G["Assign / Triage Incident"]
     G --> H["Issue Detail & Lifecycle (/authority/issues/:id)"]
     D --> H
-    H --> I["Update Status (In Progress / Solved)"]
-    H --> J["Override Severity (with Audit Reason)"]
-    H --> K["Print Work Order / PDF Export"]
-    H --> L["Add Internal Notes & Citizen Updates"]
+    H --> I["Lifecycle Updates (In Progress / Solved)"]
+    H --> J["Severity Override (with Audit Reason)"]
+    H --> K["Print Work Order / PDF Generation"]
+    H --> L["Internal Crew Notes & Public Updates"]
 ```
 
 ### 1. Executive Operations Dashboard (`/authority/dashboard`)
 * **Department-Scoped Real-time KPIs:**
   * **Active Work Queue:** Total unresolved cases within the authority's assigned department and jurisdiction.
-  * **High & Critical Alerts:** Urgent public safety hazards requiring immediate response.
-  * **In Progress Work Orders:** Field crews currently deployed on-site.
-  * **Monthly Resolved:** Volume of verified repairs completed in the current billing cycle.
+  * **High & Critical Alerts:** Urgent public safety hazards requiring immediate response and crew dispatch.
+  * **In Progress Work Orders:** Field crews currently deployed and actively working on-site.
+  * **Monthly Resolved:** Cumulative volume of verified repairs completed in the current cycle with resolution percentage.
 * **Urgent SLA Attention Feed:**
-  * Prioritized listing of overdue or high-impact incidents with direct "Review & Dispatch" links.
+  * Prioritized listing of overdue, aging, or high-impact incidents with direct "Review & Dispatch" actions.
 * **Manual Walk-In Entry Modal (`ManualEntryModal.jsx`):**
-  * Allows operators to log civic complaints received via walk-in counter, telephone hotline, or field inspection.
+  * Allows dispatchers to log civic complaints received via walk-in citizen counters, municipal telephone hotlines, or field inspection dispatches directly into the digital triage engine.
 
-### 2. Department Work Queue (`/authority/queue`)
-* **Review, Assign & Resolve Workflow:**
-  * Streamlined municipal triage for incoming citizen reports and clustered issues.
-* **Smart Filtering & Faceting:**
-  * Filter by category, severity level, status, and proximity.
-* **Assignment Engine:**
-  * Assign issues to specific field officers, maintenance teams, or assign directly to oneself.
+### 2. Department Work Queue & Triage Engine (`/authority/queue`)
+* **Unified Municipal Incident Stream:**
+  * Displays incoming citizen reports, AI-grouped incident clusters, and pending dispatches.
+* **Multi-Dimensional Filtering & Faceting:**
+  * Filter by category (Roads, Water & Drainage, Waste, Electricity, etc.), severity rating (Critical, High, Medium, Low), and operational status.
+* **Dynamic Proximity & Hotspot Sorting:**
+  * Sort by nearest to officer's current GPS location, highest citizen corroboration count, or oldest pending.
+* **Assignment & Dispatch Engine:**
+  * Assign issues to specific field officers, maintenance contractors, or self-assign with a single click.
 * **Batch Operations:**
-  * Fast multi-select for bulk status updates and crew dispatches.
+  * Bulk action toolbar for rapidly acknowledging or dispatching multiple related issues in the same ward.
 
 ### 3. "My Issues" Assigned Task Queue (`/authority/my-issues`)
-* **Dedicated Personal Workspace:**
-  * Filtered view exclusively showing issues assigned to the logged-in authority officer.
+* **Personalized Officer Work Order Stream:**
+  * Dedicated workspace filtering exclusively to issues assigned to the authenticated officer.
 * **Live Sidebar Notification Badge:**
-  * Real-time numeric badge (`badgeKey: 'myIssues'`) notifying the officer of pending assigned workloads.
+  * Real-time numeric badge (`badgeKey: 'myIssues'`) in the navigation sidebar displaying unaddressed assignments.
+* **Quick Status Transitioning:**
+  * Direct action buttons to advance tasks from Acknowledged to In Progress or Mark as Solved.
 
 ### 4. Comprehensive Issue Detail & Lifecycle Management (`/authority/issues/:issueId`)
 * **Standard Municipal Lifecycle Transitions:**
-  * Move cases through `Acknowledged` ➔ `In Progress` ➔ `Resolved` ➔ `Closed` ➔ `Rejected`.
-* **Official Severity Override Engine:**
-  * Authoritative override of AI-calculated severity (e.g. escalating Medium to Critical) with mandatory audit reason logging.
+  * Official state machine progressing issues through `Acknowledged` ➔ `In Progress` ➔ `Resolved` ➔ `Closed` ➔ `Rejected`.
+* **Authoritative Severity Override Engine:**
+  * Allows municipal engineers to override AI-assigned severity levels (e.g. escalating Medium to Critical) with mandatory audit reasoning stored in the immutable system ledger.
 * **Report Clustering & Duplicate Management:**
-  * Inspect all citizen reports merged into the parent issue.
-  * Detach or re-cluster misclassified submissions.
+  * View all corroborating citizen reports merged into the parent incident cluster, with individual photo evidence, citizen descriptions, and timestamps.
+  * Ability to detach or re-cluster misclassified submissions.
 * **Dual-Channel Incident Communication:**
-  * **Internal Notes:** Confidential communication between municipal staff and field supervisors.
-  * **Public Progress Updates:** Citizen-facing announcements visible on the public tracking timeline.
-* **Official Work Order PDF Generation:**
-  * One-click generation of formatted Municipal Work Order PDFs via `jspdf` and `jspdf-autotable`.
-  * Includes department header, incident coordinates, QR code, assigned crew details, and signature blocks.
+  * **Internal Notes:** Confidential operational logs and communication between municipal staff and field crews.
+  * **Public Citizen Updates:** Official progress announcements visible to citizens on their live tracking timeline.
 
-### 5. Authority Operations Map (`/authority/map`)
-* **Zonal GIS Command Center:**
-  * High-density incident clustering with severity heatmaps.
-  * Filter by municipal ward boundaries and active crew locations.
+### 5. Printable Municipal Work Orders (PDF Export)
+* **Official Vector PDF Generator:**
+  * Built using `jspdf` and `jspdf-autotable` for pixel-perfect client-side PDF document generation.
+  * Includes official municipal header, incident ID, high-precision GPS coordinates, street address, and priority badge.
+  * Embedded QR code for field crew instant verification on mobile devices.
+  * Structured work order item checklist, assigned crew roster, and official authorization signature blocks.
 
-### 6. Authority Profile & Operations Settings (`/authority/settings`)
-* **Executive 2-Column Workspace:**
-  * Full-width modern interface with high-contrast layout.
-* **Official Avatar & Department Banner:**
-  * Department identity card with official Municipal Shield badge.
-  * Circular avatar with client-side canvas-compressed photo upload.
-* **Jurisdiction & Contact Details:**
-  * Official municipal ID, assigned department (e.g. Roads & Transport, Water & Drainage), contact email, and operational sector.
-* **Operational Preferences:**
-  * Dispatch notifications, emergency SMS alerts, and automated triage thresholds.
+### 6. Zonal GIS Operations Map (`/authority/map`)
+* **Interactive Field Command Map:**
+  * Built on Leaflet with OpenStreetMap layers, displaying active incidents across Dhaka city.
+  * Severity-coded visual markers and dynamic clusters with real-time popup cards.
+* **Ward Boundary & Category Filtering:**
+  * Filter visible map incidents by assigned department category, severity, and status.
+  * High-density incident clustering with spatial heat indicators.
+
+### 7. Authority Profile & Operations Settings (`/authority/settings`)
+* **Executive Two-Column Layout:**
+  * High-contrast workspace with persistent left navigation rail and right settings panel.
+* **Official Avatar & Department Clearance:**
+  * Department identity card featuring the official Municipal Shield insignia and dynamic account status badge (`Active Account` / `Suspended`).
+  * Circular avatar with client-side canvas compression (max 800x800, JPEG 85%) for photo uploads.
+* **4-Tab Navigation with 0.5s Smooth Loading Transition:**
+  * Backed by `TabLoadingSkeleton.jsx` with a stable `min-h-[460px]` container to eliminate layout shift and scroll jump when switching tabs:
+    1. **Profile & Contact Details:** Officer full name, official contact email, telephone/hotline, and preferred UI language.
+    2. **Jurisdiction & Mandate Scope:** Assigned city division, category zones (Roads, Drainage, Waste, etc.), and operational clearance parameters.
+    3. **Security & 2FA:** Two-Factor Authentication setup, active session monitoring, and password updates.
+    4. **Notification Settings:** Live alert toggles, daily incident briefings, and emergency SMS escalation channels.
 
 ---
 
-## 🛡️ Admin Portal — Blueprint & Features
+## 🛡️ Admin Portal — Enterprise Governance & GIS Engine
 
-*(Designed for city commissioners, department heads, and platform super-administrators)*
+The **Admin Portal** is designed for City Commissioners, Municipal Chief Executives, and Platform Super-Administrators. It provides city-wide operational intelligence, authority personnel provisioning, immutable audit ledgers, content moderation, and custom GIS boundary drawing.
 
-* **Admin Dashboard (`/admin/dashboard`):**
-  * City-wide high-level operational intelligence and performance analytics.
-  * Resolution time averages per department, citizen satisfaction trends.
-* **Authority Account Provisioning (`/admin/authorities/provision`):**
-  * Create, invite, and provision municipal authority officers.
-  * Assign jurisdiction wards, department types, and permission roles.
-* **Authority Directory (`/admin/authorities` & `/admin/authorities/:authorityId`):**
-  * Manage active municipal worker accounts, monitor case completion rates.
-* **Moderation Queue (`/admin/moderation`):**
-  * Review flagged, inappropriate, or spam citizen submissions.
-  * Soft-delete, hide, or ban malicious accounts.
-* **System Audit Logs (`/admin/audit-logs`):**
-  * Immutable event stream tracking every status change, severity override, merge, and login event.
-* **Admin Map & City Boundary Configuration (`/admin/map`):**
-  * Upload and modify GeoJSON boundary polygons for city zones.
+```mermaid
+flowchart TD
+    A["System Administrator Login"] --> B["Executive Admin Dashboard"]
+    B --> C["Authority Directory & Provisioning (/admin/authorities)"]
+    B --> D["Interactive GIS Map & Area Drawing (/admin/map)"]
+    B --> E["System Settings & Reference Taxonomies (/admin/settings)"]
+    B --> F["Content Moderation Queue (/admin/moderation)"]
+    
+    C --> G["Officer Detail & Audit Trail (/admin/authorities/:id)"]
+    G --> H["Export Audit Ledger as PDF & CSV"]
+    G --> I["Human-Readable Inspect Diff Modal"]
+    G --> J["Account Status (Active / Suspended)"]
+    
+    D --> K["Interactive Autocomplete Location Search"]
+    D --> L["Custom Polygon Drawing Tool & Area Manager"]
+    
+    E --> M["5-Tab Settings with 0.5s Loading Skeleton"]
+    M --> N["Categories, Keywords & AI Clustering Rules"]
+```
+
+### 1. Executive City Governance Dashboard (`/admin/dashboard`)
+* **City-Wide High-Level Operational Intelligence:**
+  * **Active Civic Incidents:** Total open issues across all municipal zones.
+  * **SLA Breaches & Critical Alerts:** Urgent cases exceeding mandated response windows.
+  * **Departmental Resolution Rate:** City-wide resolution percentage and average repair duration.
+  * **Personnel & Community Metrics:** Total active authority officers and registered citizens.
+* **Resolution Performance Analytics & Trend Charts:**
+  * Interactive charts visualizing incident resolution velocity, weekly intake vs. closed cases, and departmental performance comparisons.
+* **Municipal Governance & Audit Log Stream:**
+  * Live feed of system events with human-readable action summaries (e.g. *User Account Updated*, *Severity Overridden*, *Issue Clustered*).
+  * Role-colored actor badges (`Admin`, `Authority`, `System`), direct links to target entities, and relative timestamps.
+* **Quick Dispatch & Shortcuts:**
+  * One-click shortcuts to provision authority officers, jump to flagged submissions, or inspect infrastructure health.
+
+### 2. Authority Account Provisioning & Management (`/admin/authorities`)
+* **Municipal Authority Directory:**
+  * Central personnel registry listing all municipal engineers, inspectors, and departmental staff.
+  * Real-time search across names, emails, departments, and assigned wards.
+  * Department filter tabs (All, Roads, Waste, Water & Drainage, Electricity, etc.).
+  * Dynamic status indicator pills (`Active` / `Suspended`).
+* **Authority Provisioning Modal (`AddAuthorityModal.jsx`):**
+  * One-click staff onboarding modal rendered via React Portals (`document.body`).
+  * Automatic strong password generation with copy-to-clipboard functionality.
+  * Department category assignment, jurisdiction ward selection, and operational permission role configuration.
+
+### 3. Individual Officer Profile, Audit Ledger & PDF Export (`/admin/authorities/:authorityId`)
+* **Executive Officer Profile Header:**
+  * Displays officer insignia avatar, full name, official department, contact details, assigned ward territory, and dynamic status badge (`Active` / `Suspended`).
+  * Performance summary counters: Total Assigned, Total Resolved, In Progress, and Resolution Success Rate.
+* **3-Tab Navigation with 0.5s Smooth Loading Transition:**
+  * Powered by `TabLoadingSkeleton.jsx` (500ms delay with `min-h-[460px]` container) ensuring buttery-smooth tab transitions without layout shifts:
+  * **Tab 1: Assigned Reports & Issues:**
+    * Filter tabs: `All Assigned`, `In Progress`, `Acknowledged`, `Resolved / Solved`.
+    * Instant search across report titles, incident codes, and addresses.
+    * Comprehensive data table displaying issue preview, category badge, severity level, status, submission date, and direct detail links.
+  * **Tab 2: Activity Log & Audit Trail:**
+    * Chronological immutable ledger of all actions performed by or targeting the officer account.
+    * Real-time search across action types, actors, and metadata.
+    * **Official Audit Report PDF Export (`exportOfficerAuditPdf`):** Generates a formatted, publication-ready municipal audit report with executive headers, officer metadata, time range, tabular event ledger, actor roles, and cryptographic ledger hash.
+    * **Audit CSV Export:** Download raw event streams for compliance auditing and external analysis.
+    * **Inspect Diff Modal (`OfficerInspectModalContent`):** User-friendly visual diff viewer converting raw technical JSON records into clean, human-readable field comparisons (e.g. *Status changed from Active to Suspended*, *Scope updated*) with status badges and clean typography.
+  * **Tab 3: Account Settings & Scope:**
+    * **Account Status Modification:** Toggle between `Active` and `Suspended` with an explicit confirmation dialog explaining operational access implications.
+    * **Password Reset Tool:** Securely reset officer passwords directly from the admin console with instant confirmation feedback.
+    * **Jurisdiction & Scope Editor:** Reassign geographic wards and toggle category authority checkboxes in real-time.
+
+### 4. Interactive GIS Map, Autocomplete & Custom Area Drawing Engine (`/admin/map`)
+* **High-Performance Spatial Command Canvas:**
+  * Powered by Leaflet / MapLibre with smooth pan, zoom, and Dhaka administrative zone boundaries.
+  * Severity-coded marker clusters with instant inspection popups and direct navigation.
+* **Interactive Location Search with Autocomplete & Geo-Focus:**
+  * Live search input querying Dhaka roads, prominent landmarks, neighborhoods, and administrative wards.
+  * Autocomplete suggestion dropdown with category badges and coordinates.
+  * Instant map camera fly-to animation centering directly on the selected location with an animated focus marker.
+* **Manual Area Marking & Custom Polygon Drawing Tool:**
+  * **Point-by-Point Boundary Drawing:** Click on the map to define custom municipal operational zones, emergency containment perimeters, or infrastructure project boundaries.
+  * **Live Perimeter Measurement:** Real-time perimeter calculation (meters/kilometers) and point count tracker.
+  * **Dedicated Right-Side Drawer Panel:** Keeps all drawing tools, active coordinates, and area controls neatly organized in a collapsible side drawer without obstructing the map viewport.
+  * **Persistent Custom Polygon Storage:** Save drawn zones with custom names, color coding (Primary Teal, Crimson Red, Amber Yellow, Indigo Blue), and operational descriptions into storage.
+  * **Area Manager & Deletion:** View all saved custom zones, inspect perimeter metrics, toggle zone visibility on/off, and delete/remove saved custom areas with one click.
+  * **Default Layer Optimization:** Municipal ward polygons are hidden by default to provide a clean, distraction-free view, with a floating layer toggle switch to reveal them whenever needed.
+
+### 5. System Settings, Reference Taxonomies & Platform Health (`/admin/settings`)
+* **Executive Administrative Hero Profile:**
+  * Displays executive seal insignia, full administrator name, fixed system email, national jurisdiction badge, and dynamic status indicator (`Active Account` / `Suspended`).
+  * Photo update modal with client-side canvas compression and official seal presets.
+* **5-Tab Navigation with 0.5s Smooth Loading Transition:**
+  * Integrated with `TabLoadingSkeleton.jsx` (500ms delay, `min-h-[460px]`, `animate-fade-in`):
+  * **Tab 1: Profile & Credentials:** Edit administrator display name, contact phone, UI language, and view immutable security email.
+  * **Tab 2: Reference Data & Taxonomies:**
+    * Manage civic issue categories with bilingual support (English and Bengali labels).
+    * Toggle category active/inactive statuses in real-time.
+    * Severity keyword dictionary management: add/remove weighted keywords (Critical, High, Medium, Low) for automated NLP triage.
+    * AI Clustering Rule configuration: customize spatial clustering radius (meters) and time window thresholds (hours) per category.
+  * **Tab 3: Security & 2FA:**
+    * Two-Factor Authentication (TOTP) setup modal with QR code scanner and 6-digit verification code.
+    * Active session audit and cryptographic credential enforcement.
+  * **Tab 4: Infrastructure & Health Telemetry:**
+    * Live health telemetry tracking PostgreSQL database latency, Redis cache connectivity, Celery worker status, and API response times.
+    * Server uptime and memory allocation monitors.
+  * **Tab 5: Notification Channels:**
+    * Global administrative alert toggles, daily moderation digest emails, and critical infrastructure escalation channels.
+
+### 6. Civic Content Moderation & Security Queue (`/admin/moderation`)
+* **Civic Submission Safety Inspection:**
+  * Review citizen reports flagged by AI content filters or community members for inappropriate text, spam, or invalid imagery.
+* **Moderation Actions:**
+  * Dismiss false flags, soft-delete abusive submissions, or ban/suspend repeat offender accounts with full audit trail logging.
+
+### 7. Universal Full-Viewport Modals & UI Polish
+* **React Portal Integration (`Dialog.jsx`):**
+  * All application modals are portaled directly to `document.body` with `z-[9999]`, guaranteeing 100% viewport coverage across all resolutions without being clipped by parent overflow containers.
+* **Refined Backdrop & Shadows:**
+  * Balanced, lightweight backdrop blur and shadow styling providing clean modal elevation without darkening the background too harshly.
 
 ---
 

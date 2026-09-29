@@ -13,7 +13,25 @@ export const ROLE_HOME = {
   admin: '/admin/dashboard',
 }
 
+export const GUEST_USER = {
+  id: 'guest',
+  email: 'guest@urbanmend.local',
+  fullName: 'Guest Citizen',
+  role: 'citizen',
+  isGuest: true,
+  status: 'active',
+  preferredLanguage: 'en',
+}
+
 export function AuthProvider({ children }) {
+  const [isGuest, setIsGuest] = useState(() => {
+    try {
+      return localStorage.getItem('urbanmend_guest_mode') === 'true'
+    } catch {
+      return false
+    }
+  })
+
   const [googleProfile, setGoogleProfile] = useState(() => {
     try {
       const stored = localStorage.getItem('urbanmend_google_profile')
@@ -63,6 +81,9 @@ export function AuthProvider({ children }) {
     queryKey: ['session'],
     queryFn: async () => {
       try {
+        if (localStorage.getItem('urbanmend_guest_mode') === 'true') {
+          return GUEST_USER
+        }
         return await api('/users/me')
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
@@ -80,6 +101,16 @@ export function AuthProvider({ children }) {
     staleTime: 5 * 60_000,
   })
 
+  const loginAsGuest = () => {
+    try {
+      localStorage.setItem('urbanmend_guest_mode', 'true')
+    } catch {
+      // ignore
+    }
+    setIsGuest(true)
+    queryClient.setQueryData(['session'], GUEST_USER)
+  }
+
   const login = useMutation({
     mutationFn: (credentials) =>
       api('/auth/login', { method: 'POST', body: credentials }),
@@ -96,6 +127,13 @@ export function AuthProvider({ children }) {
   })
 
   const completeLogin = async (user, extraProfile = null) => {
+    try {
+      localStorage.removeItem('urbanmend_guest_mode')
+    } catch {
+      // ignore
+    }
+    setIsGuest(false)
+
     if (extraProfile) {
       setGoogleProfile(extraProfile)
       try {
@@ -126,20 +164,25 @@ export function AuthProvider({ children }) {
     mutationFn: async () => {
       try {
         localStorage.removeItem('urbanmend_google_profile')
+        localStorage.removeItem('urbanmend_guest_mode')
       } catch {
         // ignore
       }
       setGoogleProfile(null)
+      setIsGuest(false)
       await firebaseSignOut()
+      if (isGuest) return null
       return await api('/auth/logout', { method: 'POST' })
     },
     onSettled: () => {
       try {
         localStorage.removeItem('urbanmend_google_profile')
+        localStorage.removeItem('urbanmend_guest_mode')
       } catch {
         // ignore
       }
       setGoogleProfile(null)
+      setIsGuest(false)
       queryClient.setQueryData(['session'], null)
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
     },
@@ -148,10 +191,10 @@ export function AuthProvider({ children }) {
   // State tick to immediately re-render components when avatar or display name changes
   const [profileTick, setProfileTick] = useState(0)
 
-  const rawUser = session.data ?? null
+  const rawUser = isGuest ? GUEST_USER : session.data ?? null
 
   const updateAvatar = (newAvatarUrl) => {
-    if (!rawUser) return
+    if (!rawUser || isGuest) return
     const idKey = rawUser.id ? String(rawUser.id) : ''
     const emailKey = rawUser.email ? rawUser.email.toLowerCase() : ''
     try {
@@ -176,7 +219,7 @@ export function AuthProvider({ children }) {
   }
 
   const updateDisplayName = (newName) => {
-    if (!rawUser) return
+    if (!rawUser || isGuest) return
     const idKey = rawUser.id ? String(rawUser.id) : ''
     const emailKey = rawUser.email ? rawUser.email.toLowerCase() : ''
     try {
@@ -201,6 +244,7 @@ export function AuthProvider({ children }) {
   }
 
   const user = useMemo(() => {
+    if (isGuest) return GUEST_USER
     if (!rawUser) return null
 
     const idKey = rawUser.id ? String(rawUser.id) : ''
@@ -277,13 +321,15 @@ export function AuthProvider({ children }) {
       email: rawUser.email || (isGoogleAuthUser ? googleProfile?.email : '') || '',
       isGoogleAuth: isGoogleAuthUser,
     }
-  }, [rawUser, googleProfile, profileTick])
+  }, [rawUser, isGuest, googleProfile, profileTick])
 
   const value = {
     user,
     googleProfile,
-    isLoading: session.isLoading,
-    isAuthenticated: !!user,
+    isLoading: session.isLoading && !isGuest,
+    isAuthenticated: Boolean(user),
+    isGuest,
+    loginAsGuest,
     login,
     firebaseLogin,
     verifyTwoFactor,

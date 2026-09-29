@@ -109,6 +109,13 @@ export default function Sidebar({ onNavigate }) {
         </button>
       </div>
 
+      {user?.isGuest && (
+        <div className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-800 dark:text-amber-300">
+          <span>Guest Explorer</span>
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+        </div>
+      )}
+
       {/* Primary nav */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-3" aria-label="Primary">
         {items.map(({ to, label, icon: Icon, badgeKey }) => (

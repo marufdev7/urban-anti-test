@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { ShieldCheck } from 'lucide-react'
+import { Compass, ShieldCheck } from 'lucide-react'
 import { useAuth, ROLE_HOME } from '../../auth/AuthContext'
 import { ApiError } from '../../lib/api'
 import { signInWithGoogle } from '../../lib/firebase'
@@ -29,7 +29,16 @@ function loginErrorMessage(error) {
 }
 
 export default function LoginPage() {
-  const { isAuthenticated, isLoading, user, login, firebaseLogin, verifyTwoFactor, completeLogin } = useAuth()
+  const {
+    isAuthenticated,
+    isLoading,
+    user,
+    login,
+    firebaseLogin,
+    verifyTwoFactor,
+    completeLogin,
+    loginAsGuest,
+  } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -40,8 +49,8 @@ export default function LoginPage() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Already signed in → straight to the role workspace.
-  if (!isLoading && isAuthenticated) {
+  // Already signed in with a real account → straight to the role workspace.
+  if (!isLoading && isAuthenticated && !user?.isGuest) {
     return <Navigate to={ROLE_HOME[user.role] ?? '/403'} replace />
   }
 
@@ -104,6 +113,11 @@ export default function LoginPage() {
     } catch (err) {
       setError(loginErrorMessage(err))
     }
+  }
+
+  const onGuestSubmit = () => {
+    loginAsGuest()
+    navigate('/citizen/dashboard', { replace: true })
   }
 
   const onTwoFactorSubmit = async (event) => {
@@ -215,6 +229,26 @@ export default function LoginPage() {
                   </Link>
                 </p>
               </form>
+
+              <div className="relative my-4 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-line" />
+                </div>
+                <div className="relative bg-surface-panel px-2 text-xs uppercase text-ink-muted font-medium">
+                  Or explore first
+                </div>
+              </div>
+
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onGuestSubmit}
+                disabled={isGoogleLoading || login.isPending}
+                className="w-full justify-center gap-2 border-line bg-surface hover:bg-surface-sunken text-ink font-medium shadow-xs"
+              >
+                <Compass className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
+                <span>Continue as Guest (অতিথি হিসেবে দেখুন)</span>
+              </Button>
             </div>
           ) : (
             <form onSubmit={onTwoFactorSubmit}>

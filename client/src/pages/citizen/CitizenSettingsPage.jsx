@@ -41,6 +41,41 @@ export default function CitizenSettingsPage() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef(null)
 
+  if (user?.isGuest) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Account Settings & Preferences"
+          subtitle="Manage your profile identity, alert preferences, and security settings."
+        />
+        <Card className="p-8 text-center max-w-xl mx-auto border border-line shadow-panel">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 mb-4">
+            <Lock className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-semibold text-ink">Settings Disabled in Guest Mode</h3>
+          <p className="mt-2 text-sm text-ink-muted">
+            You are exploring UrbanMend as a <strong>Guest (অতিথি)</strong>. Profile customization, notification settings, and security credentials require an active registered account.
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button
+              className="w-full sm:w-auto justify-center"
+              onClick={() => navigate('/auth/login')}
+            >
+              Sign In / Register
+            </Button>
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto justify-center"
+              onClick={() => navigate('/citizen/dashboard')}
+            >
+              Back to Dashboard
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
+
   // Active Tab
   const [activeTab, setActiveTab] = useState('profile') // 'profile' | 'notifications' | 'privacy'
   const [isTabLoading, setIsTabLoading] = useState(false)

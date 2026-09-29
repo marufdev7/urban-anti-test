@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { isReportSolved } from '../../hooks/data'
+import { useAuth } from '../../auth/AuthContext'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
@@ -37,6 +38,8 @@ const STATUS_OPTIONS = [
  * Distinct from the community-wide Community Issues (/citizen/queue).
  */
 export default function MyReportsPage() {
+  const { user } = useAuth()
+  const isGuest = Boolean(user?.isGuest)
   const [searchParams, setSearchParams] = useSearchParams()
   const urlQuery = searchParams.get('q') || searchParams.get('search') || ''
 
@@ -63,9 +66,40 @@ export default function MyReportsPage() {
   const { data, isLoading, isFetching, isError, error } = useQuery({
     queryKey: ['reports', 'mine', { search, cursor }],
     queryFn: () => api(`/reports?${params}`),
+    enabled: !isGuest,
     placeholderData: (prev) => prev,
     staleTime: 15_000,
   })
+
+  if (isGuest) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="My Submissions (আমার রিপোর্টসমূহ)"
+          subtitle="View and monitor the progress of reports filed under your account."
+        />
+        <Card className="p-8 text-center max-w-xl mx-auto border border-line shadow-panel">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary mb-4">
+            <FileText className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-semibold text-ink">Personal Submissions Archive</h3>
+          <p className="mt-2 text-sm text-ink-muted">
+            You are browsing as a <strong>Guest (অতিথি)</strong>. Guest sessions do not have personal submitted reports. To submit reports and track their resolution, please log in with your citizen account.
+          </p>
+          <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link to="/auth/login" className="w-full sm:w-auto">
+              <Button className="w-full justify-center">Sign In to UrbanMend</Button>
+            </Link>
+            <Link to="/citizen/queue" className="w-full sm:w-auto">
+              <Button variant="secondary" className="w-full justify-center">
+                Explore Community Issues
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   const rawList = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : [])
   const allRawReports = cursor ? [...stale, ...rawList] : rawList

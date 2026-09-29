@@ -9,9 +9,11 @@ export default function UserMenu() {
   const [open, setOpen] = useState(false)
   const containerRef = useRef(null)
 
-  const photo = user?.photoUrl || user?.avatarUrl
-  const displayName =
-    user?.fullName || (user?.role === 'citizen' ? 'Citizen' : ROLE_LABELS[user?.role] ?? 'Account')
+  const isGuest = Boolean(user?.isGuest)
+  const photo = isGuest ? null : (user?.photoUrl || user?.avatarUrl)
+  const displayName = isGuest
+    ? 'Guest Explorer'
+    : (user?.fullName || (user?.role === 'citizen' ? 'Citizen' : ROLE_LABELS[user?.role] ?? 'Account'))
 
   useEffect(() => {
     if (!open) return undefined
@@ -85,32 +87,48 @@ export default function UserMenu() {
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold text-ink leading-tight">{displayName}</p>
-            <p className="truncate text-xs text-ink-muted leading-tight mt-0.5">{user?.email || '—'}</p>
-            <span className="mt-1 inline-block rounded-full bg-surface-sunken px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-faint">
-              {ROLE_LABELS[user?.role] ?? user?.role}
+            <p className="truncate text-xs text-ink-muted leading-tight mt-0.5">
+              {isGuest ? 'Exploring Public Data' : (user?.email || '—')}
+            </p>
+            <span
+              className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                isGuest
+                  ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                  : 'bg-surface-sunken text-ink-faint'
+              }`}
+            >
+              {isGuest ? 'Guest (Read-Only)' : (ROLE_LABELS[user?.role] ?? user?.role)}
             </span>
           </div>
         </div>
-        <Link
-          to={`/${user?.role}/settings?tab=profile`}
-          role="menuitem"
-          tabIndex={open ? 0 : -1}
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors"
-        >
-          <UserRound className="h-4 w-4 text-ink-muted" aria-hidden="true" />
-          Profile
-        </Link>
-        <Link
-          to={`/${user?.role}/settings`}
-          role="menuitem"
-          tabIndex={open ? 0 : -1}
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors border-t border-line/40"
-        >
-          <Settings className="h-4 w-4 text-ink-muted" aria-hidden="true" />
-          Settings
-        </Link>
+        {isGuest ? (
+          <div className="p-3 bg-surface-sunken/40 text-xs text-ink-muted leading-relaxed">
+            You are browsing community issues in read-only mode. Sign in to submit reports and manage your profile.
+          </div>
+        ) : (
+          <>
+            <Link
+              to={`/${user?.role}/settings?tab=profile`}
+              role="menuitem"
+              tabIndex={open ? 0 : -1}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors"
+            >
+              <UserRound className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+              Profile
+            </Link>
+            <Link
+              to={`/${user?.role}/settings`}
+              role="menuitem"
+              tabIndex={open ? 0 : -1}
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm text-ink hover:bg-surface-sunken transition-colors border-t border-line/40"
+            >
+              <Settings className="h-4 w-4 text-ink-muted" aria-hidden="true" />
+              Settings
+            </Link>
+          </>
+        )}
         <button
           type="button"
           role="menuitem"
@@ -120,7 +138,7 @@ export default function UserMenu() {
           className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-status-critical hover:bg-status-critical-soft transition-colors disabled:opacity-50 border-t border-line/40"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
-          {logout.isPending ? 'Signing out…' : 'Sign out'}
+          {logout.isPending ? 'Signing out…' : isGuest ? 'Exit Guest / Sign in' : 'Sign out'}
         </button>
       </div>
     </div>

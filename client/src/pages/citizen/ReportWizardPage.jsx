@@ -13,6 +13,7 @@ import {
   FolderOpen,
   Leaf,
   Loader2,
+  Lock,
   MapPin,
   Shield,
   ShieldCheck,
@@ -22,6 +23,7 @@ import {
   X,
   ZoomIn,
 } from 'lucide-react'
+import { useAuth } from '../../auth/AuthContext'
 import { api, apiUpload, ApiError } from '../../lib/api'
 import { mediaErrorMessage, useCategories, useCityBoundary } from '../../hooks/data'
 import { forwardGeocode, isPointInBoundary, reverseGeocode } from '../../lib/geo'
@@ -324,9 +326,45 @@ function PhotoLightboxModal({ photo, onClose, onRemove }) {
  * - Multi-modal photo upload: drag & drop, live camera capture, clipboard paste (Ctrl+V), and lightbox inspection.
  */
 export default function ReportWizardPage() {
+  const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const fileInputRef = useRef(null)
+
+  if (user?.isGuest) {
+    return (
+      <div className="mx-auto max-w-xl py-12 px-4">
+        <Card className="border border-line shadow-panel overflow-hidden">
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-6 py-8 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 mb-4">
+              <Lock className="h-7 w-7" />
+            </div>
+            <h2 className="text-xl font-bold text-ink">Sign In Required to Report Issues</h2>
+            <p className="mt-2 text-sm text-ink-muted leading-relaxed max-w-md mx-auto">
+              You are exploring UrbanMend in <strong>Guest Mode (অতিথি মোড)</strong>. To report civic problems, submit photos, and track repair status, please sign in with a citizen account.
+            </p>
+          </div>
+          <div className="p-6 flex flex-col gap-3">
+            <Button
+              type="button"
+              className="w-full justify-center"
+              onClick={() => navigate('/auth/login')}
+            >
+              Sign In or Create Account
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full justify-center"
+              onClick={() => navigate('/citizen/dashboard')}
+            >
+              Back to Dashboard (Explore Nearby)
+            </Button>
+          </div>
+        </Card>
+      </div>
+    )
+  }
 
   const step = location.pathname.endsWith('/details')
     ? 1

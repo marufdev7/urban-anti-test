@@ -11,17 +11,19 @@ export default function NotificationBell() {
   const [toastNotification, setToastNotification] = useState(null)
   const menuRef = useRef(null)
   const { user } = useAuth()
+  const isGuest = Boolean(user?.isGuest)
   const queryClient = useQueryClient()
 
   // Fetch recent notifications
   const { data } = useQuery({
     queryKey: ['notifications'],
     queryFn: () => api('/notifications?limit=15'),
+    enabled: !isGuest,
     refetchInterval: 10_000,
   })
 
   const notifications = data?.data ?? []
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = isGuest ? 0 : notifications.filter((n) => !n.read).length
 
   // Track seen notifications across SSE reconnects to prevent duplicate alerts/refetches
   const seenNotificationIds = useRef(new Set())
@@ -34,7 +36,7 @@ export default function NotificationBell() {
 
   // Real-time notifications SSE stream (API §6.10, FRONT-PLAN.md §8)
   useEffect(() => {
-    if (!user) return undefined
+    if (!user || isGuest) return undefined
 
     const es = new EventSource('/api/v1/notifications/stream', { withCredentials: true })
 
@@ -161,7 +163,18 @@ export default function NotificationBell() {
           </div>
 
           <div className="max-h-80 overflow-y-auto divide-y divide-line">
-            {notifications.length === 0 ? (
+            {isGuest ? (
+              <div className="p-6 text-center text-xs text-ink-muted">
+                <p>Notifications are disabled in Guest Mode.</p>
+                <Link
+                  to="/auth/login"
+                  onClick={() => setOpen(false)}
+                  className="mt-2 inline-block font-semibold text-primary hover:underline"
+                >
+                  Sign In for alerts &rarr;
+                </Link>
+              </div>
+            ) : notifications.length === 0 ? (
               <div className="p-6 text-center text-xs text-ink-muted">
                 No notifications yet.
               </div>
