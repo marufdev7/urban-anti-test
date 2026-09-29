@@ -42,8 +42,43 @@ export function formatDurationCompact(ms) {
   return `${Math.max(1, totalMinutes)}m`
 }
 
+export function saveCustomDeadline(issueId, days) {
+  if (typeof window === 'undefined' || !issueId) return
+  const numDays = Number(days)
+  if (isNaN(numDays) || numDays <= 0) return
+  const payload = {
+    days: numDays,
+    updatedAt: new Date().toISOString(),
+  }
+  try {
+    localStorage.setItem(`urbanmend_custom_deadline_${issueId}`, JSON.stringify(payload))
+  } catch {
+    // ignore storage error
+  }
+}
+
+export function clearCustomDeadline(issueId) {
+  if (typeof window === 'undefined' || !issueId) return
+  try {
+    localStorage.removeItem(`urbanmend_custom_deadline_${issueId}`)
+  } catch {
+    // ignore storage error
+  }
+}
+
+export function getCustomDeadline(issueId) {
+  if (typeof window === 'undefined' || !issueId) return null
+  try {
+    const raw = localStorage.getItem(`urbanmend_custom_deadline_${issueId}`)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Computes complete SLA compliance, target deadline, and remaining time for an issue or report.
+ * Supports authority-fixed resolution deadlines.
  *
  * @param {Object} issue
  * @param {string|Date} issue.openedAt
@@ -55,7 +90,8 @@ export function getSlaInfo(issue) {
   if (!issue) return null
 
   const openedAtTime = issue.openedAt || issue.createdAt
-  const openedDate = openedAtTime ? new Date(openedAtTime) : new Date()
+  const parsedDate = openedAtTime ? new Date(openedAtTime) : new Date()
+  const openedDate = !isNaN(parsedDate.getTime()) ? parsedDate : new Date()
 
   // Resolve severity key
   const rawSev =
@@ -66,8 +102,50 @@ export function getSlaInfo(issue) {
     'medium'
   const severity = String(rawSev).toLowerCase()
 
-  const allowedDurationMs = SLA_DURATIONS_MS[severity] ?? SLA_DURATIONS_MS.medium
-  const deadlineDate = new Date(openedDate.getTime() + allowedDurationMs)
+  // Check custom authority-assigned deadline
+  let customDeadline = issue.customDeadline || issue.customDeadlineDate
+  let customDays = issue.customDeadlineDays || null
+
+  if (!customDeadline && typeof window !== 'undefined' && issue.id) {
+    try {
+      const stored = localStorage.getItem(`urbanmend_custom_deadline_${issue.id}`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed.deadlineDate) {
+          customDeadline = parsed.deadlineDate
+          customDays = parsed.days || null
+        } else if (parsed.days) {
+          customDays = parsed.days
+          customDeadline = new Date(openedDate.getTime() + parsed.days * 24 * 60 * 60 * 1000).toISOString()
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  let allowedDurationMs
+  let isCustom = false
+
+  if (customDeadline) {
+    const customDate = new Date(customDeadline)
+    if (!isNaN(customDate.getTime())) {
+      isCustom = true
+      allowedDurationMs = Math.max(60 * 60 * 1000, customDate.getTime() - openedDate.getTime())
+      if (!customDays) {
+        customDays = Math.max(1, Math.round(allowedDurationMs / (24 * 60 * 60 * 1000)))
+      }
+    }
+  }
+
+  if (!allowedDurationMs) {
+    allowedDurationMs = SLA_DURATIONS_MS[severity] ?? SLA_DURATIONS_MS.medium
+  }
+
+  const deadlineDate = customDeadline && !isNaN(new Date(customDeadline).getTime())
+    ? new Date(customDeadline)
+    : new Date(openedDate.getTime() + allowedDurationMs)
+
   const now = Date.now()
 
   const isResolved =
@@ -78,36 +156,39 @@ export function getSlaInfo(issue) {
 
   const remainingMs = deadlineDate.getTime() - now
   const elapsedMs = Math.max(0, now - openedDate.getTime())
-  const progressPercent = Math.min(100, Math.round((elapsedMs / allowedDurationMs) * 100))
+
+  const rawPercent = Math.round((elapsedMs / (allowedDurationMs || 1)) * 100)
+  const percentElapsed = isNaN(rawPercent) ? 0 : Math.min(100, Math.max(0, rawPercent))
 
   const isOverdue = !isResolved && remainingMs < 0
   const isDueSoon = !isResolved && remainingMs >= 0 && remainingMs <= 24 * 60 * 60 * 1000 // <= 24 hours
 
   let tone = 'on_track'
-  let label = `Due in ${formatDurationCompact(remainingMs)}`
+  let label = isResolved
+    ? 'Resolved'
+    : isOverdue
+    ? `Overdue by ${formatDurationCompact(remainingMs)}`
+    : `Due in ${formatDurationCompact(remainingMs)}`
+
   let badgeClass = 'border-teal-300 bg-teal-50 text-teal-800'
   let dotClass = 'bg-teal-600'
 
   if (isResolved) {
     tone = 'resolved'
-    label = 'Resolved'
     badgeClass = 'border-emerald-300 bg-emerald-50 text-emerald-800'
     dotClass = 'bg-emerald-600'
   } else if (isOverdue) {
     tone = 'overdue'
-    label = `Overdue by ${formatDurationCompact(remainingMs)}`
     badgeClass = 'border-rose-400 bg-rose-100 text-rose-900 font-bold'
     dotClass = 'bg-rose-600'
   } else if (isDueSoon) {
     tone = 'due_soon'
-    label = `Due in ${formatDurationCompact(remainingMs)}`
     badgeClass = 'border-amber-400 bg-amber-100 text-amber-950 font-semibold'
     dotClass = 'bg-amber-600'
   }
 
-  const slaHours = Math.round(allowedDurationMs / (60 * 60 * 1000))
-  const ageHours = Math.max(0, Math.round(elapsedMs / (60 * 60 * 1000)))
-  const percentElapsed = Math.min(100, Math.max(0, Math.round((elapsedMs / allowedDurationMs) * 100)))
+  const slaHours = Math.max(1, Math.round(allowedDurationMs / (60 * 60 * 1000))) || 72
+  const ageHours = Math.max(0, Math.round(elapsedMs / (60 * 60 * 1000))) || 0
 
   return {
     openedDate,
@@ -120,7 +201,11 @@ export function getSlaInfo(issue) {
       minute: '2-digit',
     }),
     allowedDurationMs,
-    allowedDurationLabel: SLA_LABELS[severity] || '7 Days',
+    allowedDurationLabel: isCustom
+      ? `${customDays} Day${customDays === 1 ? '' : 's'} (Authority Fixed)`
+      : (SLA_LABELS[severity] || '7 Days'),
+    isCustom,
+    customDays,
     slaHours,
     ageHours,
     percentElapsed,

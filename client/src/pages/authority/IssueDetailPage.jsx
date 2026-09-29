@@ -38,8 +38,13 @@ import {
 import { useModerate } from '../../hooks/admin'
 import { ApiError, normalizeMediaUrl } from '../../lib/api'
 import { categoryLabel, useCategories, useCityBoundary } from '../../hooks/data'
-import { formatDateTime, shortId, timeAgo } from '../../lib/format'
-import { getSlaInfo } from '../../lib/sla'
+import {
+  clearCustomDeadline,
+  getCustomDeadline,
+  getSlaInfo,
+  saveCustomDeadline,
+  SLA_DURATIONS_MS,
+} from '../../lib/sla'
 import SlaBadge from '../../components/ui/SlaBadge'
 import Button from '../../components/ui/Button'
 import Card, { CardBody, CardHeader } from '../../components/ui/Card'
@@ -61,6 +66,21 @@ function haversineMeters(a, b) {
   const sinLng = Math.sin(dLng / 2)
   const h = sinLat * sinLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinLng * sinLng
   return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+function sevTone(sev) {
+  switch (sev?.toLowerCase()) {
+    case 'critical':
+      return 'border-rose-300 bg-rose-50 text-rose-700'
+    case 'high':
+      return 'border-orange-300 bg-orange-50 text-orange-800'
+    case 'medium':
+      return 'border-amber-300 bg-amber-50 text-amber-800'
+    case 'low':
+      return 'border-emerald-300 bg-emerald-50 text-emerald-700'
+    default:
+      return 'border-slate-200 bg-slate-50 text-slate-700'
+  }
 }
 
 const SEV_TONES = { critical: 'critical', high: 'high', medium: 'medium', low: 'low' }
@@ -195,7 +215,56 @@ export default function IssueDetailPage() {
       .sort((a, b) => a.distanceMeters - b.distanceMeters)
   }, [data, otherIssues])
 
-  const sla = useMemo(() => (data ? getSlaInfo(data) : null), [data])
+  const [deadlineRevision, setDeadlineRevision] = useState(0)
+  const [customDaysInput, setCustomDaysInput] = useState('')
+  const [deadlineSavedMsg, setDeadlineSavedMsg] = useState('')
+
+  useEffect(() => {
+    if (issueId) {
+      const existing = getCustomDeadline(issueId)
+      if (existing?.days) {
+        setCustomDaysInput(String(existing.days))
+      }
+    }
+  }, [issueId])
+
+  const sla = useMemo(() => (data ? getSlaInfo(data) : null), [data, deadlineRevision])
+
+  const handleSetCustomDeadline = async (days) => {
+    const numDays = Number(days)
+    if (isNaN(numDays) || numDays <= 0) return
+    saveCustomDeadline(issueId, numDays)
+    setDeadlineRevision((c) => c + 1)
+    setCustomDaysInput(String(numDays))
+    setDeadlineSavedMsg(`Target deadline set to ${numDays} day${numDays === 1 ? '' : 's'}.`)
+    setTimeout(() => setDeadlineSavedMsg(''), 4000)
+
+    try {
+      await addComment.mutateAsync({
+        body: `[Operational Update] Resolution deadline adjusted by assigned authority officer to ${numDays} day${numDays === 1 ? '' : 's'}.`,
+        visibility: 'internal',
+      })
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleResetDeadline = async () => {
+    clearCustomDeadline(issueId)
+    setDeadlineRevision((c) => c + 1)
+    setCustomDaysInput('')
+    setDeadlineSavedMsg('Reset to standard municipal window.')
+    setTimeout(() => setDeadlineSavedMsg(''), 4000)
+
+    try {
+      await addComment.mutateAsync({
+        body: `[Operational Update] Resolution deadline reset to standard SLA window by authority officer.`,
+        visibility: 'internal',
+      })
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     if (data) {
@@ -450,7 +519,11 @@ export default function IssueDetailPage() {
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <span className="font-medium text-ink-muted">{formatDateTime(report.createdAt)}</span>
                             {sev && (
-                              <span className="rounded border border-rose-300 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase text-rose-600">
+                              <span
+                                className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase ${sevTone(
+                                  sev,
+                                )}`}
+                              >
                                 {sev}
                               </span>
                             )}
@@ -822,7 +895,7 @@ export default function IssueDetailPage() {
                       <Clock className="h-4 w-4 text-primary" aria-hidden="true" />
                       Resolution Deadline
                     </span>
-                    <SlaBadge issue={data} />
+                    <SlaBadge issue={{ ...data, customDeadline: sla.deadlineDate }} />
                   </div>
                 }
               />
@@ -855,16 +928,122 @@ export default function IssueDetailPage() {
                   <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-ink-muted">Standard Window</p>
                     <p className="mt-0.5 font-bold text-ink">
-                      {sla.slaHours || 72} Hours ({data.severity?.current || 'medium'})
+                      {Math.round(
+                        (SLA_DURATIONS_MS[data.severity?.current || 'medium'] ||
+                          7 * 24 * 3600 * 1000) /
+                          3600000,
+                      )}
+                      h ({data.severity?.current || 'medium'})
                     </p>
                   </div>
                   <div className="rounded-lg border border-line bg-surface-sunken/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-ink-muted">Deadline Target</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] uppercase font-bold text-ink-muted">Deadline Target</p>
+                      {sla.isCustom && (
+                        <span className="text-[9px] font-extrabold uppercase text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-1.5 py-0.2 rounded border border-teal-200 dark:border-teal-800">
+                          Officer Set
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-0.5 font-bold text-ink">
                       {sla.deadlineFormatted || (sla.deadlineDate ? formatDateTime(sla.deadlineDate) : '—')}
                     </p>
                   </div>
                 </div>
+
+                {/* Authority-controlled Resolution Duration Setter */}
+                {user?.role === 'authority' && (
+                  <div className="rounded-xl border border-line bg-surface-panel p-3.5 space-y-2.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-ink flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-primary" />
+                        Resolution Duration
+                      </span>
+                      {sla.isCustom ? (
+                        <span className="rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-700 text-[10px] font-bold px-2 py-0.5">
+                          {sla.customDays} Day{sla.customDays === 1 ? '' : 's'} Fixed
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-medium px-2 py-0.5">
+                          Standard Window
+                        </span>
+                      )}
+                    </div>
+
+                    {!isAssignedToMe ? (
+                      <p className="flex items-center gap-1.5 text-2xs text-amber-700 dark:text-amber-300 font-medium bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                        <Lock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                        <span>Deadline modification locked. Please click &ldquo;Assign to me&rdquo; above to take ownership.</span>
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5 pt-0.5">
+                        <p className="text-[11px] text-ink-muted leading-tight">
+                          Select or enter the estimated days required to complete field repairs:
+                        </p>
+
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {[1, 2, 3, 5, 7, 14].map((d) => {
+                            const isSelected = sla.isCustom && sla.customDays === d
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() => handleSetCustomDeadline(d)}
+                                className={`px-2.5 py-1 rounded text-xs font-semibold transition cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-[#0e7490] text-white shadow-xs'
+                                    : 'bg-surface-sunken hover:bg-surface-muted text-ink border border-line'
+                                }`}
+                              >
+                                {d} {d === 1 ? 'Day' : 'Days'}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Custom Days Input */}
+                        <div className="flex items-center gap-2 pt-1 border-t border-line/60">
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            placeholder="Days"
+                            value={customDaysInput}
+                            onChange={(e) => setCustomDaysInput(e.target.value)}
+                            className="w-20 rounded-panel border border-line bg-surface-panel px-2.5 py-1.5 text-xs text-ink focus:border-primary focus:outline-hidden"
+                          />
+                          <span className="text-xs text-ink-muted">days</span>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => handleSetCustomDeadline(Number(customDaysInput))}
+                            disabled={!customDaysInput || Number(customDaysInput) <= 0}
+                            className="text-xs font-semibold shrink-0"
+                          >
+                            Set Deadline
+                          </Button>
+                          {sla.isCustom && (
+                            <button
+                              type="button"
+                              onClick={handleResetDeadline}
+                              className="text-[11px] font-semibold text-rose-600 hover:underline ml-auto cursor-pointer"
+                            >
+                              Reset to Default
+                            </button>
+                          )}
+                        </div>
+
+                        {deadlineSavedMsg && (
+                          <p className="flex items-center gap-1.5 text-2xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 p-2 rounded-lg animate-fade-in">
+                            <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            {deadlineSavedMsg}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-line/70 bg-slate-50/50 p-2.5 text-[11px] text-ink-muted flex items-start gap-2">
                   <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
@@ -873,7 +1052,9 @@ export default function IssueDetailPage() {
                       ? 'Issue successfully closed within municipal compliance window.'
                       : sla.isOverdue
                       ? 'Action overdue! Municipal escalation protocol is active for municipal dispatch.'
-                      : `Priority standard: ${data.severity?.current || 'medium'} severity reports must be resolved within ${sla.slaHours || 72} hours of intake.`}
+                      : sla.isCustom
+                      ? `Target deadline adjusted by field authority to ${sla.customDays} day${sla.customDays === 1 ? '' : 's'} (${sla.slaHours} hours total).`
+                      : `Priority standard: ${data.severity?.current || 'medium'} severity reports default to ${sla.slaHours || 72} hours of intake.`}
                   </span>
                 </div>
               </CardBody>
