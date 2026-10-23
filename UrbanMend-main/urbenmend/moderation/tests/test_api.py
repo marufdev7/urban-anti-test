@@ -79,3 +79,28 @@ def test_non_admin_and_invalid_requests_are_rejected_without_mutation() -> None:
     report.refresh_from_db()
     assert report.status == ReportStatus.SUBMITTED
     assert ModerationAction.objects.count() == 0
+
+
+def test_admin_can_reopen_or_restore_removed_report() -> None:
+    admin = AdminFactory()
+    authority = AuthorityFactory()
+    report = ReportFactory(status=ReportStatus.REMOVED)
+    url = reverse("api:reports-moderation", kwargs={"pk": report.pk})
+
+    # Non-admin cannot reopen
+    assert (
+        _client(authority)
+        .post(url, {"action": "reopen", "reason": "Attempt by authority"}, format="json")
+        .status_code
+        == 403
+    )
+
+    # Admin reopens successfully
+    res = _client(admin).post(
+        url, {"action": "reopen", "reason": "Verified authentic upon re-investigation"}, format="json"
+    )
+    assert res.status_code == 200
+    report.refresh_from_db()
+    assert report.status not in (ReportStatus.REMOVED, ReportStatus.HIDDEN)
+    assert ModerationAction.objects.filter(action="reopen").exists()
+    assert AuditEvent.objects.filter(action="moderation.reopen").exists()

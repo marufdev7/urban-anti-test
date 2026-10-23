@@ -2,15 +2,18 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  CheckCircle2,
   Eye,
   FileText,
   FilterX,
   Image,
   MessageSquare,
+  RotateCcw,
   Search,
   ShieldAlert,
   Trash2,
   UserCheck,
+  X,
 } from 'lucide-react'
 import { api, normalizeMediaUrl } from '../../lib/api'
 import { badgeFor, categoryLabel, useCategories } from '../../hooks/data'
@@ -23,6 +26,7 @@ import Select from '../../components/ui/Select'
 import { SkeletonCards, SkeletonRows } from '../../components/ui/Skeleton'
 import StatusBadge from '../../components/ui/StatusBadge'
 import RemoveWithNotesModal from '../../components/authority/RemoveWithNotesModal'
+import ReopenReportModal from '../../components/report/ReopenReportModal'
 import ReportDetailModal from '../../components/report/ReportDetailModal'
 
 const ACTIVE_STATUSES = [
@@ -37,7 +41,9 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
   const { data: categories } = useCategories()
   const [searchParams, setSearchParams] = useSearchParams()
   const [removeTarget, setRemoveTarget] = useState(null)
+  const [reopenTarget, setReopenTarget] = useState(null)
   const [selectedReport, setSelectedReport] = useState(null)
+  const [successNotice, setSuccessNotice] = useState(null)
 
   const currentTab = searchParams.get('tab') || defaultTab
   const isDeletedTab = currentTab === 'deleted'
@@ -133,6 +139,23 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
         }
       />
 
+      {/* Success Notification Banner */}
+      {successNotice && (
+        <div className="mb-4 flex items-center justify-between rounded-panel border border-emerald-300 bg-emerald-50 px-4 py-3 text-xs font-medium text-emerald-900 shadow-2xs animate-fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+            <span>{successNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSuccessNotice(null)}
+            className="rounded p-1 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900 transition cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Primary Tab Navigation */}
       <div className="mb-5 flex border-b border-line">
         <button
@@ -183,7 +206,7 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
             <h4 className="text-sm font-semibold text-rose-950">Deleted & Moderated Raw Reports</h4>
             <p className="mt-0.5 text-rose-800">
               These raw citizen reports were removed from active public and operational views by municipal authorities or admins.
-              Every removal preserves full audit provenance, including the moderator name, role, timestamp, and audit notes.
+              As a System Administrator, you can audit their removal provenance and reopen any report back into active municipal circulation.
             </p>
           </div>
         </div>
@@ -260,7 +283,8 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                     <>
                       <th scope="col" className="px-4 py-3">Removed By</th>
                       <th scope="col" className="px-4 py-3">Removal Reason / Notes</th>
-                      <th scope="col" className="px-4 py-3 text-right">Removed At</th>
+                      <th scope="col" className="px-4 py-3">Removed At</th>
+                      <th scope="col" className="px-4 py-3 text-right">Actions</th>
                     </>
                   ) : (
                     <>
@@ -271,7 +295,7 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                   )}
                 </tr>
               </thead>
-              <SkeletonRows cols={6} rows={6} />
+              <SkeletonRows cols={7} rows={6} />
             </table>
           </Card>
         </>
@@ -367,7 +391,26 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
 
                   <div className="mt-3 flex items-center justify-between border-t border-line pt-2 text-xs text-ink-faint">
                     <span>Submitted: {formatDateTime(r.createdAt)}</span>
-                    {!isDeletedTab && (
+                    {isDeletedTab ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedReport(r)}
+                          className="inline-flex items-center gap-1 rounded border border-line bg-surface px-2 py-0.5 text-xs font-semibold text-ink hover:text-primary transition cursor-pointer"
+                          title="View full report details"
+                        >
+                          <Eye className="h-3 w-3" /> Details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReopenTarget(r)}
+                          className="inline-flex items-center gap-1 rounded border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition cursor-pointer shadow-2xs"
+                          title="Reopen and restore report"
+                        >
+                          <RotateCcw className="h-3 w-3 text-emerald-700" /> Reopen
+                        </button>
+                      </div>
+                    ) : (
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -403,7 +446,8 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                   <>
                     <th scope="col" className="px-4 py-3">Removed By</th>
                     <th scope="col" className="px-4 py-3">Removal Reason / Notes</th>
-                    <th scope="col" className="px-4 py-3 text-right">Removed At</th>
+                    <th scope="col" className="px-4 py-3">Removed At</th>
+                    <th scope="col" className="px-4 py-3 text-right">Actions</th>
                   </>
                 ) : (
                   <>
@@ -514,8 +558,32 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
                         </td>
 
                         {/* Removed At */}
-                        <td className="px-4 py-3 text-right text-xs text-ink-muted whitespace-nowrap">
+                        <td className="px-4 py-3 text-xs text-ink-muted whitespace-nowrap">
                           {mod?.moderatedAt ? formatDateTime(mod.moderatedAt) : '—'}
+                        </td>
+
+                        {/* Actions for Deleted Report */}
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedReport(r)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-ink hover:border-primary hover:text-primary transition cursor-pointer"
+                              title="View complete report details"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>View</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setReopenTarget(r)}
+                              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer shadow-2xs"
+                              title="Reopen and restore report to active records"
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 text-emerald-700" />
+                              <span>Reopen</span>
+                            </button>
+                          </div>
                         </td>
                       </>
                     ) : (
@@ -626,6 +694,24 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
           item={removeTarget}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['admin-reports'] })
+            queryClient.invalidateQueries({ queryKey: ['reports'] })
+            queryClient.invalidateQueries({ queryKey: ['issues'] })
+          }}
+        />
+      )}
+
+      {/* Reopen Report Modal for Admin */}
+      {reopenTarget && (
+        <ReopenReportModal
+          open={Boolean(reopenTarget)}
+          onClose={() => setReopenTarget(null)}
+          report={reopenTarget}
+          onSuccess={(rep) => {
+            queryClient.invalidateQueries({ queryKey: ['admin-reports'] })
+            queryClient.invalidateQueries({ queryKey: ['reports'] })
+            queryClient.invalidateQueries({ queryKey: ['issues'] })
+            setSuccessNotice(`Report #${shortId(rep.id)} has been successfully reopened and restored to active municipal records.`)
+            setTimeout(() => setSuccessNotice(null), 6000)
           }}
         />
       )}
@@ -637,6 +723,7 @@ export default function AdminReportsPage({ defaultTab = 'active' }) {
           onClose={() => setSelectedReport(null)}
           report={selectedReport}
           onRemove={(rep) => setRemoveTarget(rep)}
+          onReopen={(rep) => setReopenTarget(rep)}
         />
       )}
     </div>

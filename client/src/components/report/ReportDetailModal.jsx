@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  RotateCcw,
   User,
   X,
 } from 'lucide-react'
@@ -44,7 +45,7 @@ function sevTone(sev) {
   }
 }
 
-export default function ReportDetailModal({ open, onClose, report, onRemove }) {
+export default function ReportDetailModal({ open, onClose, report, onRemove, onReopen }) {
   const { user } = useAuth()
   const { data: categories } = useCategories()
   const [copied, setCopied] = useState(false)
@@ -329,7 +330,19 @@ export default function ReportDetailModal({ open, onClose, report, onRemove }) {
         {/* Modal Footer */}
         <div className="flex items-center justify-between border-t border-line bg-surface-sunken/60 px-6 py-3.5">
           <div>
-            {onRemove && (
+            {onReopen && (report.status === 'removed' || report.status === 'deleted' || report.status === 'hidden' || report.moderation) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose?.()
+                  onReopen(report)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 hover:border-emerald-400 transition cursor-pointer shadow-2xs"
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-emerald-700" />
+                <span>Reopen / Restore Report</span>
+              </button>
+            ) : onRemove ? (
               <button
                 type="button"
                 onClick={() => {
@@ -341,7 +354,7 @@ export default function ReportDetailModal({ open, onClose, report, onRemove }) {
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>Remove Report with Notes</span>
               </button>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">

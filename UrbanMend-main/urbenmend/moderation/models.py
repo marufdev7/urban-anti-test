@@ -21,6 +21,8 @@ class ModerationAction(models.Model):
     class Action(models.TextChoices):
         HIDE = "hide", "Hide"
         REMOVE = "remove", "Remove"
+        RESTORE = "restore", "Restore"
+        REOPEN = "reopen", "Reopen"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     actor = models.ForeignKey(

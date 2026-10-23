@@ -34,7 +34,10 @@ from urbenmend.moderation.models import ModerationAction
 
 @transaction.atomic
 def moderate(*, actor: User, target: Any, action: str, reason: str) -> ModerationAction:
-    require_role(actor, Role.ADMIN, Role.AUTHORITY)
+    if action in ("hide", "restore", "reopen"):
+        require_role(actor, Role.ADMIN)
+    else:
+        require_role(actor, Role.ADMIN, Role.AUTHORITY)
     if action not in ModerationAction.Action.values:
         raise ValueError("Invalid moderation action.")
     reason = reason.strip()
@@ -45,16 +48,45 @@ def moderate(*, actor: User, target: Any, action: str, reason: str) -> Moderatio
     from urbenmend.reporting.models import Report, ReportStatus
 
     if isinstance(target, Report):
-        target.status = ReportStatus.HIDDEN if action == "hide" else ReportStatus.REMOVED
+        if action in ("restore", "reopen"):
+            if target.issue_id:
+                if target.issue and target.issue.status not in (IssueStatus.REMOVED, IssueStatus.HIDDEN):
+                    target.status = ReportStatus.TRIAGED
+                else:
+                    target.status = ReportStatus.SUBMITTED
+            else:
+                target.status = ReportStatus.TRIAGED if target.is_classified else ReportStatus.SUBMITTED
+            # Also restore any media attached to this report if previously removed/hidden
+            for m in target.media.all():
+                if m.state in (MediaState.REMOVED, MediaState.HIDDEN):
+                    m.state = MediaState.READY
+                    m.save(update_fields=["state"])
+        elif action == "hide":
+            target.status = ReportStatus.HIDDEN
+        else:
+            target.status = ReportStatus.REMOVED
         target.save(update_fields=["status"])
     elif isinstance(target, Issue):
-        target.status = IssueStatus.HIDDEN if action == "hide" else IssueStatus.REMOVED
+        if action in ("restore", "reopen"):
+            target.status = IssueStatus.TRIAGED if target.reports.filter(status=ReportStatus.TRIAGED).exists() else IssueStatus.SUBMITTED
+        elif action == "hide":
+            target.status = IssueStatus.HIDDEN
+        else:
+            target.status = IssueStatus.REMOVED
         target.save(update_fields=["status", "updated_at"])
     elif isinstance(target, Media):
-        target.state = MediaState.HIDDEN if action == "hide" else MediaState.REMOVED
+        if action in ("restore", "reopen"):
+            target.state = MediaState.READY
+        elif action == "hide":
+            target.state = MediaState.HIDDEN
+        else:
+            target.state = MediaState.REMOVED
         target.save(update_fields=["state"])
     elif isinstance(target, Comment):
-        target.removed_at = timezone.now()
+        if action in ("restore", "reopen"):
+            target.removed_at = None
+        else:
+            target.removed_at = timezone.now()
         target.save(update_fields=["removed_at", "updated_at"])
     else:
         raise ValueError("Unsupported moderation target.")
