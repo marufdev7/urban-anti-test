@@ -155,3 +155,23 @@ def test_reopen_is_rejected_from_every_non_terminal_workflow_state(from_status: 
         )
 
     assert getattr(caught.value.detail, "code", None) == "INVALID_TRANSITION"
+
+
+def test_admin_can_resolve_and_reopen_from_moderation() -> None:
+    # Admin can resolve from triaged/open
+    plan_resolve = validate_issue_transition(
+        from_status=IssueStatus.TRIAGED,
+        to_status=IssueStatus.RESOLVED,
+        reason="Resolved by admin",
+        is_admin=True,
+    )
+    assert plan_resolve.to_status == IssueStatus.RESOLVED
+
+    # Admin can reopen a resolved issue to in_progress
+    plan_reopen = validate_issue_transition(
+        from_status=IssueStatus.RESOLVED,
+        to_status=IssueStatus.IN_PROGRESS,
+        reason="Reopened by admin",
+        is_admin=True,
+    )
+    assert plan_reopen.to_status == IssueStatus.IN_PROGRESS

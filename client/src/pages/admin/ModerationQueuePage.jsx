@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertCircle,
   AlertTriangle,
@@ -59,6 +59,7 @@ function getPageNumbers(current, total) {
  * Tabs: All Flags / All Issues, New, In Process, Resolved.
  */
 export default function ModerationQueuePage() {
+  const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const urlQuery = searchParams.get('q') || ''
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'new' | 'in_process' | 'resolved'
@@ -67,6 +68,8 @@ export default function ModerationQueuePage() {
   const [localStatusMap, setLocalStatusMap] = useState({}) // { [issueId]: { status, action } }
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+  const [actionLoadingId, setActionLoadingId] = useState(null)
+  const [actionError, setActionError] = useState(null)
 
   useEffect(() => {
     if (urlQuery !== undefined && urlQuery !== search) {
@@ -112,18 +115,48 @@ export default function ModerationQueuePage() {
     }
   }
 
-  const handleResolveDirectly = (id) => {
-    setLocalStatusMap((prev) => ({
-      ...prev,
-      [id]: { status: 'resolved', action: 'resolved' },
-    }))
+  const handleResolveDirectly = async (id) => {
+    setActionLoadingId(id)
+    setActionError(null)
+    try {
+      await api(`/issues/${id}/status`, {
+        method: 'PATCH',
+        body: { toStatus: 'resolved', reason: 'Resolved directly by administrator from moderation queue' },
+      })
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      await Promise.all([issuesQuery.refetch(), reportsQuery.refetch()])
+      setLocalStatusMap((prev) => ({
+        ...prev,
+        [id]: { status: 'resolved', action: 'resolved' },
+      }))
+    } catch (err) {
+      setActionError(err.message || 'Failed to resolve issue.')
+    } finally {
+      setActionLoadingId(null)
+    }
   }
 
-  const handleReopen = (id) => {
-    setLocalStatusMap((prev) => ({
-      ...prev,
-      [id]: { status: 'in_process' },
-    }))
+  const handleReopen = async (id) => {
+    setActionLoadingId(id)
+    setActionError(null)
+    try {
+      await api(`/issues/${id}/status`, {
+        method: 'PATCH',
+        body: { toStatus: 'in_progress', reason: 'Reopened by administrator from moderation queue' },
+      })
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      await Promise.all([issuesQuery.refetch(), reportsQuery.refetch()])
+      setLocalStatusMap((prev) => ({
+        ...prev,
+        [id]: { status: 'in_process' },
+      }))
+    } catch (err) {
+      setActionError(err.message || 'Failed to reopen issue.')
+    } finally {
+      setActionLoadingId(null)
+    }
   }
 
   const rawIssues = issuesQuery.data?.data ?? []
@@ -552,6 +585,8 @@ export default function ModerationQueuePage() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        loading={actionLoadingId === item.id}
+                        disabled={Boolean(actionLoadingId)}
                         onClick={() => handleReopen(item.id)}
                         className="text-xs flex items-center gap-1"
                         title="Reopen for review"
@@ -565,6 +600,8 @@ export default function ModerationQueuePage() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        loading={actionLoadingId === item.id}
+                        disabled={Boolean(actionLoadingId)}
                         onClick={() => handleResolveDirectly(item.id)}
                         className="text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 flex items-center gap-1"
                       >
@@ -574,6 +611,7 @@ export default function ModerationQueuePage() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        disabled={Boolean(actionLoadingId)}
                         onClick={() => openDialog(item.id, categoryLabel(categories, item.primaryCategory), 'hide')}
                         className="text-xs flex items-center gap-1"
                       >
@@ -583,6 +621,7 @@ export default function ModerationQueuePage() {
                       <Button
                         variant="danger"
                         size="sm"
+                        disabled={Boolean(actionLoadingId)}
                         onClick={() => openDialog(item.id, categoryLabel(categories, item.primaryCategory), 'remove')}
                         className="text-xs flex items-center gap-1"
                       >

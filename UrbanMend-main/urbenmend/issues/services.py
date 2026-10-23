@@ -20,6 +20,7 @@ from urbenmend.identity.models import Role, User
 from urbenmend.identity.services import (
     AuthorizationError,
     has_category_scope,
+    has_role,
     require_category_scope,
     require_role,
 )
@@ -226,6 +227,7 @@ def validate_issue_transition(
     from_status: str,
     to_status: str,
     reason: str | None = None,
+    is_admin: bool = False,
 ) -> IssueTransitionPlan:
     """Validate one Issue lifecycle intent against BR-16/C-7.
 
@@ -242,6 +244,10 @@ def validate_issue_transition(
     is_reopen = to_status == REOPEN_ACTION
     if is_reopen:
         valid = from_status in REOPENABLE_ISSUE_STATUSES
+    elif is_admin and to_status in (IssueStatus.RESOLVED, IssueStatus.CLOSED) and from_status in OPEN_ISSUE_STATUSES:
+        valid = True
+    elif is_admin and to_status in (IssueStatus.IN_PROGRESS, IssueStatus.TRIAGED) and from_status in (IssueStatus.RESOLVED, IssueStatus.CLOSED):
+        valid = True
     else:
         valid = to_status in ISSUE_STATUS_TRANSITIONS.get(from_status, frozenset())
 
@@ -622,6 +628,7 @@ def transition_issue_status(
         from_status=issue.status,
         to_status=to_status,
         reason=reason,
+        is_admin=has_role(actor, Role.ADMIN),
     )
     normalized_public_note = public_note.strip() if public_note is not None else ""
 
