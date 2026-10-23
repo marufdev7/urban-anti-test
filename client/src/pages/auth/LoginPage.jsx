@@ -112,7 +112,9 @@ export default function LoginPage({ initialMode = 'login' }) {
   const [tabFading, setTabFading] = useState(false)
 
   // Register method sub-tab: 'email' | 'phone'
-  const [regMethod, setRegMethod] = useState('email')
+  const [activeRegMethod, setActiveRegMethod] = useState('email')
+  const [visibleRegMethod, setVisibleRegMethod] = useState('email')
+  const [regMethodFading, setRegMethodFading] = useState(false)
 
   // Login form state
   const [identifier, setIdentifier] = useState('')
@@ -172,6 +174,18 @@ export default function LoginPage({ initialMode = 'login' }) {
     setTimeout(() => {
       setVisibleTab(newTab)
       setTabFading(false)
+    }, 150)
+  }
+
+  // Smooth Sub-Tab Switch Handler for Register Verification Method (Email vs Phone)
+  const handleRegMethodChange = (newMethod) => {
+    if (newMethod === activeRegMethod) return
+    setActiveRegMethod(newMethod)
+    setError(null)
+    setRegMethodFading(true)
+    setTimeout(() => {
+      setVisibleRegMethod(newMethod)
+      setRegMethodFading(false)
     }, 150)
   }
 
@@ -654,136 +668,147 @@ export default function LoginPage({ initialMode = 'login' }) {
                     <div className="mb-3.5 grid grid-cols-2 gap-1.5 rounded-md bg-surface-sunken p-1 border border-line">
                       <button
                         type="button"
-                        onClick={() => {
-                          setRegMethod('email')
-                          setError(null)
-                        }}
-                        className={`flex items-center justify-center gap-1.5 rounded py-1 text-xs font-medium transition-colors ${
-                          regMethod === 'email'
-                            ? 'bg-surface text-ink font-semibold shadow-xs'
+                        onClick={() => handleRegMethodChange('email')}
+                        className={`flex items-center justify-center gap-1.5 rounded py-1.5 text-xs font-semibold transition-all duration-200 ${
+                          activeRegMethod === 'email'
+                            ? 'bg-surface text-ink shadow-xs'
                             : 'text-ink-muted hover:text-ink'
                         }`}
                       >
-                        <Mail className="h-3 w-3 text-primary" />
+                        <Mail
+                          className={`h-3.5 w-3.5 transition-colors ${
+                            activeRegMethod === 'email' ? 'text-primary' : 'text-ink-muted'
+                          }`}
+                        />
                         <span>Email Verification</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => {
-                          setRegMethod('phone')
-                          setError(null)
-                        }}
-                        className={`flex items-center justify-center gap-1.5 rounded py-1 text-xs font-medium transition-colors ${
-                          regMethod === 'phone'
-                            ? 'bg-surface text-ink font-semibold shadow-xs'
+                        onClick={() => handleRegMethodChange('phone')}
+                        className={`flex items-center justify-center gap-1.5 rounded py-1.5 text-xs font-semibold transition-all duration-200 ${
+                          activeRegMethod === 'phone'
+                            ? 'bg-surface text-ink shadow-xs'
                             : 'text-ink-muted hover:text-ink'
                         }`}
                       >
-                        <Smartphone className="h-3 w-3 text-primary" />
+                        <Smartphone
+                          className={`h-3.5 w-3.5 transition-colors ${
+                            activeRegMethod === 'phone' ? 'text-primary' : 'text-ink-muted'
+                          }`}
+                        />
                         <span>Phone SMS OTP</span>
                       </button>
                     </div>
 
-                    {regMethod === 'email' ? (
-                      /* Sub-Form: Email Registration with Link Verification */
-                      <form onSubmit={onRegisterEmailSubmit}>
-                        <Input
-                          label="Full Name (optional)"
-                          type="text"
-                          placeholder="e.g. Rahim Ahmed"
-                          value={regFullName}
-                          onChange={(e) => setRegFullName(e.target.value)}
-                          className="mb-2.5"
-                        />
-                        <Input
-                          label="Email Address"
-                          type="email"
-                          placeholder="name@example.com"
-                          required
-                          value={regEmail}
-                          onChange={(e) => setRegEmail(e.target.value)}
-                          className="mb-2.5"
-                        />
-                        <Input
-                          label="Password (min 8 characters)"
-                          type="password"
-                          autoComplete="new-password"
-                          required
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          className="mb-2.5"
-                        />
-                        <Input
-                          label="Confirm Password"
-                          type="password"
-                          autoComplete="new-password"
-                          required
-                          value={regConfirmPassword}
-                          onChange={(e) => setRegConfirmPassword(e.target.value)}
-                          className="mb-3"
-                        />
+                    {/* Sub-Form Container with smooth fade/slide transition */}
+                    <div
+                      className={`transition-all duration-150 ease-out transform ${
+                        regMethodFading
+                          ? 'opacity-0 scale-[0.98] -translate-y-1'
+                          : 'opacity-100 scale-100 translate-y-0'
+                      }`}
+                    >
+                      {visibleRegMethod === 'email' ? (
+                        /* Sub-Form: Email Registration with Link Verification */
+                        <form onSubmit={onRegisterEmailSubmit}>
+                          <Input
+                            label="Full Name (optional)"
+                            type="text"
+                            placeholder="e.g. Rahim Ahmed"
+                            value={regFullName}
+                            onChange={(e) => setRegFullName(e.target.value)}
+                            className="mb-2.5"
+                          />
+                          <Input
+                            label="Email Address"
+                            type="email"
+                            placeholder="name@example.com"
+                            required
+                            value={regEmail}
+                            onChange={(e) => setRegEmail(e.target.value)}
+                            className="mb-2.5"
+                          />
+                          <Input
+                            label="Password (min 8 characters)"
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            value={regPassword}
+                            onChange={(e) => setRegPassword(e.target.value)}
+                            className="mb-2.5"
+                          />
+                          <Input
+                            label="Confirm Password"
+                            type="password"
+                            autoComplete="new-password"
+                            required
+                            value={regConfirmPassword}
+                            onChange={(e) => setRegConfirmPassword(e.target.value)}
+                            className="mb-3"
+                          />
 
-                        {error && (
-                          <p
-                            className="mb-3 rounded-panel border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical"
-                            role="alert"
+                          {error && (
+                            <p
+                              className="mb-3 rounded-panel border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical"
+                              role="alert"
+                            >
+                              {error}
+                            </p>
+                          )}
+
+                          <Button
+                            type="submit"
+                            loading={isSubmitting}
+                            disabled={isGoogleLoading}
+                            className="w-full"
                           >
-                            {error}
+                            Send Verification Link (নিবন্ধন করুন)
+                          </Button>
+                        </form>
+                      ) : (
+                        /* Sub-Form: Phone SMS Registration with OTP Verification */
+                        <form onSubmit={onSendPhoneOtp}>
+                          <Input
+                            label="Full Name (optional)"
+                            type="text"
+                            placeholder="e.g. Rahim Ahmed"
+                            value={regFullName}
+                            onChange={(e) => setRegFullName(e.target.value)}
+                            className="mb-2.5"
+                          />
+                          <Input
+                            label="Mobile Phone Number"
+                            type="tel"
+                            placeholder="017XXXXXXXX or +8801..."
+                            required
+                            value={regPhone}
+                            onChange={(e) => setRegPhone(e.target.value)}
+                            className="mb-3"
+                          />
+                          <p className="mb-3 text-[11px] text-ink-muted">
+                            A 6-digit OTP code will be sent to your mobile phone via SMS.
                           </p>
-                        )}
 
-                        <Button
-                          type="submit"
-                          loading={isSubmitting}
-                          disabled={isGoogleLoading}
-                          className="w-full"
-                        >
-                          Send Verification Link (নিবন্ধন করুন)
-                        </Button>
-                      </form>
-                    ) : (
-                      /* Sub-Form: Phone SMS Registration with OTP Verification */
-                      <form onSubmit={onSendPhoneOtp}>
-                        <Input
-                          label="Full Name (optional)"
-                          type="text"
-                          placeholder="e.g. Rahim Ahmed"
-                          value={regFullName}
-                          onChange={(e) => setRegFullName(e.target.value)}
-                          className="mb-2.5"
-                        />
-                        <Input
-                          label="Mobile Phone Number"
-                          type="tel"
-                          placeholder="017XXXXXXXX or +8801..."
-                          required
-                          value={regPhone}
-                          onChange={(e) => setRegPhone(e.target.value)}
-                          className="mb-3"
-                        />
-                        <p className="mb-3 text-[11px] text-ink-muted">
-                          A 6-digit OTP code will be sent to your mobile phone via SMS.
-                        </p>
+                          {error && (
+                            <p
+                              className="mb-3 rounded-panel border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical"
+                              role="alert"
+                            >
+                              {error}
+                            </p>
+                          )}
 
-                        {error && (
-                          <p
-                            className="mb-3 rounded-panel border border-status-critical/30 bg-status-critical-soft px-3 py-2 text-xs text-status-critical"
-                            role="alert"
+                          <Button
+                            type="submit"
+                            loading={isSubmitting}
+                            disabled={isGoogleLoading}
+                            className="w-full"
                           >
-                            {error}
-                          </p>
-                        )}
-
-                        <Button
-                          type="submit"
-                          loading={isSubmitting}
-                          disabled={isGoogleLoading}
-                          className="w-full"
-                        >
-                          Send SMS OTP Code (ওটিপি পাঠান)
-                        </Button>
-                      </form>
-                    )}
+                            Send SMS OTP Code (ওটিপি পাঠান)
+                          </Button>
+                        </form>
+                      )}
+                    </div>
 
                     <div className="mt-3 text-center text-xs">
                       <span className="text-ink-muted">Already registered? </span>
