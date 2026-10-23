@@ -456,6 +456,7 @@ def _verify_firebase_token_via_rest(id_token: str, api_key: str) -> dict[str, An
     return {
         "email": user_info.get("email"),
         "email_verified": bool(user_info.get("emailVerified", False)),
+        "phone_number": user_info.get("phoneNumber"),
         "sub": user_info.get("localId"),
     }
 
@@ -465,6 +466,7 @@ def authenticate_or_create_firebase_user(*, id_token: str) -> User:
 
     Uses google.oauth2.id_token.verify_firebase_token if installed, with an
     automatic fallback to Google's official Identity Toolkit REST endpoint.
+    Supports Google OAuth, Firebase Email/Password, and Firebase Phone Number authentication.
     """
     from urbenmend.identity.models import Role, User, UserStatus
 
@@ -505,32 +507,56 @@ def authenticate_or_create_firebase_user(*, id_token: str) -> User:
             raise AuthenticationError("Invalid or expired authentication token.") from exc
 
     email = payload.get("email")
-    if not email:
-        raise AuthenticationError("Google account must provide an email address.")
+    phone = payload.get("phone_number")
+    if not email and not phone:
+        raise AuthenticationError("Firebase account must provide an email address or phone number.")
 
-    email = email.strip().lower()
+    if email:
+        email = email.strip().lower()
     email_verified = bool(payload.get("email_verified", False))
+    phone_verified = bool(phone)
 
-    user = User.objects.filter(email=email).first()
+    user = None
+    if email:
+        user = User.objects.filter(email=email).first()
+    if not user and phone:
+        user = User.objects.filter(phone=phone).first()
+
     if user:
         if not user.is_active:
             raise AccountLockedError("This account is not permitted to sign in.")
 
+        updated_fields = []
+        if email and not user.email:
+            user.email = email
+            updated_fields.append("email")
+        if phone and not user.phone:
+            user.phone = phone
+            updated_fields.append("phone")
         if email_verified and not user.email_verified_at:
             user.email_verified_at = timezone.now()
-            if user.status == UserStatus.REGISTERED:
-                user.status = UserStatus.VERIFIED
-            user.save(update_fields=["email_verified_at", "status"])
+            updated_fields.append("email_verified_at")
+        if phone_verified and not user.phone_verified_at:
+            user.phone_verified_at = timezone.now()
+            updated_fields.append("phone_verified_at")
+        if (email_verified or phone_verified) and user.status == UserStatus.REGISTERED:
+            user.status = UserStatus.VERIFIED
+            updated_fields.append("status")
+        if updated_fields:
+            user.save(update_fields=updated_fields)
         return user
 
     # Auto-provision new Citizen account
+    is_verified = email_verified or phone_verified
     user = User.objects.create_user(
         email=email,
+        phone=phone,
         role=Role.CITIZEN,
-        status=UserStatus.VERIFIED if email_verified else UserStatus.REGISTERED,
+        status=UserStatus.VERIFIED if is_verified else UserStatus.REGISTERED,
         email_verified_at=timezone.now() if email_verified else None,
+        phone_verified_at=timezone.now() if phone_verified else None,
     )
-    logger.info("firebase_citizen_provisioned", user_id=str(user.id), email=email)
+    logger.info("firebase_citizen_provisioned", user_id=str(user.id), email=email, phone=phone)
     return user
 
 

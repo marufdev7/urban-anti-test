@@ -1,5 +1,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth'
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  updateProfile,
+} from 'firebase/auth'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBm_HMv_zKDvhgZr5s8f1UdFHnnqzNF7SQ',
@@ -12,6 +23,7 @@ const firebaseConfig = {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp()
 const auth = getAuth(app)
+
 const googleProvider = new GoogleAuthProvider()
 googleProvider.setCustomParameters({ prompt: 'select_account' })
 
@@ -19,6 +31,54 @@ export async function signInWithGoogle() {
   const result = await signInWithPopup(auth, googleProvider)
   const idToken = await result.user.getIdToken()
   return { user: result.user, idToken }
+}
+
+export async function registerWithFirebaseEmail(email, password, displayName = '') {
+  const cred = await createUserWithEmailAndPassword(auth, email, password)
+  if (displayName) {
+    try {
+      await updateProfile(cred.user, { displayName })
+    } catch {}
+  }
+  await sendEmailVerification(cred.user)
+  return cred.user
+}
+
+export async function loginWithFirebaseEmail(email, password) {
+  const cred = await signInWithEmailAndPassword(auth, email, password)
+  return cred.user
+}
+
+export async function resendVerificationEmail() {
+  if (auth.currentUser) {
+    await sendEmailVerification(auth.currentUser)
+  }
+}
+
+export async function reloadFirebaseUser() {
+  if (auth.currentUser) {
+    await auth.currentUser.reload()
+    return auth.currentUser
+  }
+  return null
+}
+
+export function initRecaptcha(containerId = 'recaptcha-container') {
+  if (window.recaptchaVerifier) {
+    try {
+      window.recaptchaVerifier.clear()
+    } catch {}
+    window.recaptchaVerifier = null
+  }
+  window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+    size: 'invisible',
+  })
+  return window.recaptchaVerifier
+}
+
+export async function sendFirebasePhoneOtp(phoneNumber, verifier) {
+  const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier)
+  return confirmationResult
 }
 
 export async function firebaseSignOut() {
