@@ -179,6 +179,30 @@ docker compose up --build
 - [ ] 5.5 Visual diff pass against the 9 reference screenshots.
 - [ ] 5.6 Production Dockerfile verification (`Dockerfile.prod`, `nginx.prod.conf`).
 
+## Phase 6 — Public Guest Mode, Multi-Channel Registration & Reopen Engine
+
+- [x] 6.1 Public Guest Exploration as Default Entry:
+      - Unauthenticated visitors hitting `/` are automatically directed to `/citizen/dashboard` in guest exploration mode.
+      - Non-intrusive community notice banner ("You are exploring public reports and community data in guest mode").
+      - Direct "Report an Issue" CTAs redirect to `/auth/register` with preserved context.
+- [x] 6.2 Multi-Channel Registration & Micro-Interactions:
+      - Dedicated `/auth/register` page and seamless Login / Register tab switching with 150ms slide/fade CSS transitions.
+      - Three verified registration options:
+        1. Google 1-Click Sign-In via Firebase Auth.
+        2. Email verification links with resend cooldown timer (60s).
+        3. Phone SMS OTP with E.164 normalization, invisible reCAPTCHA, and backend verification sync (`phone_verified_at`, `UserStatus.VERIFIED`).
+      - Smooth sub-tab transitions between Email and Phone SMS modes (`animate-fadeIn`).
+- [x] 6.3 Raw Reports Explorer & Deleted Reports Archive:
+      - `/admin/reports` with active vs. deleted archive tabs (`?tab=deleted`).
+      - Audit provenance on deleted cards: displays moderator name, role, timestamp, and removal justification.
+- [x] 6.4 Reopen & Restore Engine for Deleted Reports:
+      - Admin restoration modal (`ReopenReportModal.jsx`) allowing soft-deleted reports to be reinstated into active municipal circulation (`ReportStatus.TRIAGED` / `SUBMITTED`).
+      - Backed by `POST /moderation/reports/{id}/reopen` with an immutable `action: 'reopen'` entry in `moderation_action` and `audit_event`.
+- [x] 6.5 Moderation Queue Lifecycle Execution:
+      - Direct `Resolve` and `Reopen` operations in `/admin/queue` backed by `PATCH /issues/{id}/status`.
+      - Real-time status transitions (`resolved` / `in_progress`), database persistence, and loading spinners.
+- [x] Verified: Django backend pytest suite (100% pass) and `npm run build` client bundle (100% pass).
+
 ## Open questions (raise when we get there)
 
 - Map provider: screenshots show map panels. Backend has geo endpoints; we need

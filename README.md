@@ -7,7 +7,7 @@
 ## 📑 Table of Contents
 1. [Platform Architecture & User Roles](#platform-architecture--user-roles)
 2. [Citizen Portal — Features & Functions Overview](#citizen-portal--features--functions-overview)
-   - [1. Authentication & Profile Management](#1-authentication--profile-management)
+   - [1. Authentication, Multi-Channel Registration & Public Guest Mode](#1-authentication-multi-channel-registration--public-guest-mode)
    - [2. Citizen Dashboard](#2-citizen-dashboard)
    - [3. Problem Reporting Wizard & AI Triage](#3-problem-reporting-wizard--ai-triage)
    - [4. Real-Time Report Tracking & Details](#4-real-time-report-tracking--details)
@@ -25,13 +25,14 @@
    - [7. Authority Profile & Operations Settings](#7-authority-profile--operations-settings)
 4. [Admin Portal — Enterprise Governance & GIS Engine](#admin-portal--enterprise-governance--gis-engine)
    - [1. Executive City Governance Dashboard](#1-executive-city-governance-dashboard)
-   - [2. Authority Account Provisioning & Management](#2-authority-account-provisioning--management)
-   - [3. Individual Officer Profile, Audit Ledger & PDF Export](#3-individual-officer-profile-audit-ledger--pdf-export)
-   - [4. Interactive GIS Map, Autocomplete & Custom Area Drawing Engine](#4-interactive-gis-map-autocomplete--custom-area-drawing-engine)
-   - [5. System Settings, Reference Taxonomies & Platform Health](#5-system-settings-reference-taxonomies--platform-health)
-   - [6. Civic Content Moderation & Security Queue](#6-civic-content-moderation--security-queue)
-   - [7. Universal Full-Viewport Modals & UI Polish](#7-universal-full-viewport-modals--ui-polish)
-   - [8. Security & Operational Audit Log](#8-security--operational-audit-log)
+   - [2. Raw Reports Explorer & Deleted Reports Archive](#2-raw-reports-explorer--deleted-reports-archive)
+   - [3. Authority Account Provisioning & Management](#3-authority-account-provisioning--management)
+   - [4. Individual Officer Profile, Audit Ledger & PDF Export](#4-individual-officer-profile-audit-ledger--pdf-export)
+   - [5. Interactive GIS Map, Autocomplete & Custom Area Drawing Engine](#5-interactive-gis-map-autocomplete--custom-area-drawing-engine)
+   - [6. System Settings, Reference Taxonomies & Platform Health](#6-system-settings-reference-taxonomies--platform-health)
+   - [7. Civic Content Moderation & Queue Lifecycle Operations](#7-civic-content-moderation--queue-lifecycle-operations)
+   - [8. Universal Full-Viewport Modals & UI Polish](#8-universal-full-viewport-modals--ui-polish)
+   - [9. Security & Operational Audit Log](#9-security--operational-audit-log)
 5. [Technical Stack & Real-Time Sync Engine](#technical-stack--real-time-sync-engine)
 6. [Future Expansion Roadmap](#future-expansion-roadmap)
 
@@ -72,15 +73,22 @@ flowchart TD
 
 ---
 
-### 1. Authentication & Profile Management
+### 1. Authentication, Multi-Channel Registration & Public Guest Mode
 
+* **Default Public Exploration Mode (No Blocking Login Wall):**
+  * Visiting the platform (`/`) lands directly on the **Citizen Dashboard** as a public guest explorer (`GUEST_USER`).
+  * Citizens can immediately browse community complaints, recent incidents, nearby issues, and the municipal map without being forced to log in.
+  * **Safe-Mode Read-Only Protection:** Destructive or write operations (submitting reports, editing submissions, corroborating issues) trigger an interactive prompt directing the citizen to register or sign in.
+* **Multi-Channel Citizen Registration (`/auth/register` & Register Tab):**
+  * Registration is required before accessing citizen submission features. Three distinct, secure channels are provided:
+    1. **Google 1-Click Signup:** Instant verified citizen onboarding using Firebase Google Auth.
+    2. **Email Verification Link:** Sends a secure verification link to the citizen's email with an interactive 60-second resend cooldown timer.
+    3. **Phone SMS OTP Verification:** Full mobile phone verification via Firebase Phone Auth (`RecaptchaVerifier`, `signInWithPhoneNumber`), E.164 phone number formatting (supporting local `017...` and international `+8801...`), 6-digit OTP verification code prompt, and automatic backend sync (`phone_verified_at`, `UserStatus.VERIFIED`).
+* **Smooth Micro-Interaction Tab Animations:**
+  * Animated 150ms fade & slide transitions (`opacity-0 scale-[0.98] -translate-y-1` ➔ `opacity-100 scale-100 translate-y-0`) when switching between **Sign In** and **Register** tabs, and between **Email Verification** and **Phone SMS OTP** sub-tabs, eliminating layout jump.
 * **Firebase & Google OAuth Integration:**
   * One-click login with Google account (`GoogleAuthProvider`).
   * Email and Password login/registration fallback.
-* **Guest Citizen Exploration ("Login as a Guest / অতিথি প্রবেশ"):**
-  * One-click frictionless access for citizens to browse the platform without registering or providing credentials.
-  * Allows full exploration of the **Citizen Dashboard**, **GPS Nearby Activity**, **Community Issues Feed**, and **Interactive GIS Map**.
-  * **Safe-Mode Read-Only Protection:** Disables destructive and write operations (submitting reports, editing tickets, corroborating issues) with an intuitive modal invitation to log in or register when write actions are initiated.
 * **Live Profile Synchronization:**
   * Citizen's real Google display name and high-resolution profile photo are extracted and persisted in `localStorage` and `AuthContext`.
 * **Animated Profile Dropdown Menu (`UserMenu.jsx`):**
@@ -392,7 +400,25 @@ flowchart TD
 * **Quick Dispatch & Shortcuts:**
   * One-click shortcuts to provision authority officers, jump to flagged submissions, or inspect infrastructure health.
 
-### 2. Authority Account Provisioning & Management (`/admin/authorities`)
+### 2. Raw Reports Explorer & Deleted Reports Archive (`/admin/reports`)
+* **Global Citizen Reports Explorer:**
+  * Search, filter, and inspect all raw citizen complaints submitted across the metropolitan area before and after clustering.
+  * Search by description, reverse-geocoded address, or short report ID with instant response.
+  * Category filtering and operational status selectors.
+* **Deleted Reports Archive (`/admin/reports?tab=deleted`):**
+  * Dedicated compliance audit archive storing all citizen reports removed or discarded by authorities and admins.
+  * Displays full moderation provenance for every removal:
+    * **Removed By:** Full officer/admin name, role (Admin / Authority), and assigned jurisdiction area.
+    * **Removal Reason / Notes:** Exact audit reason recorded at the time of discard (e.g. *Spam / Inappropriate*, *Invalid / Test submission*, *Private contact information*).
+    * **Removed At:** Timestamp of moderation action.
+* **Reopen & Restore Deleted Reports Engine (`ReopenReportModal.jsx`):**
+  * Allows System Administrators to safely reopen and restore any discarded report back into active municipal records.
+  * Quick reason presets: *Verified authentic after review*, *Citizen provided supplementary evidence*, *Removed in error*, *Privacy concern resolved*.
+  * Restores report status (`ReportStatus.TRIAGED` or `ReportStatus.SUBMITTED`) and associated media (`MediaState.READY`).
+  * Writes an immutable audit trail entry (`ModerationAction` with `action="reopen"` and `AuditEvent` with `action="moderation.reopen"`).
+  * Instant React Query cache invalidation across admin reports, citizen dashboards, and municipal queues.
+
+### 3. Authority Account Provisioning & Management (`/admin/authorities`)
 * **Municipal Authority Directory:**
   * Central personnel registry listing all municipal engineers, inspectors, and departmental staff.
   * Real-time search across names, emails, departments, and assigned wards.
@@ -406,7 +432,7 @@ flowchart TD
   * Automatic strong password generation with copy-to-clipboard functionality.
   * Department category assignment, jurisdiction ward selection, and operational permission role configuration.
 
-### 3. Individual Officer Profile, Audit Ledger & PDF Export (`/admin/authorities/:authorityId`)
+### 4. Individual Officer Profile, Audit Ledger & PDF Export (`/admin/authorities/:authorityId`)
 * **Executive Officer Profile Header & Security Alerts:**
   * Displays officer insignia avatar, full name, official department, contact details, assigned ward territory, and dynamic status badge (`Active` / `Suspended` / `Cooldown`).
   * **Security Engine Restriction Banner:** Prominently alerts administrators when an officer is in temporary cooldown or permanently suspended due to unnatural bulk actions, with violation counts, reasons, and a prominent **"Reactivate & Unlock Account"** action button.
@@ -428,7 +454,7 @@ flowchart TD
     * **Password Reset Tool:** Securely reset officer passwords directly from the admin console with instant confirmation feedback.
     * **Jurisdiction & Scope Editor:** Reassign geographic wards and toggle category authority checkboxes in real-time.
 
-### 4. Interactive GIS Map, Autocomplete & Custom Area Drawing Engine (`/admin/map`)
+### 5. Interactive GIS Map, Autocomplete & Custom Area Drawing Engine (`/admin/map`)
 * **High-Performance Spatial Command Canvas:**
   * Powered by Leaflet / MapLibre with smooth pan, zoom, and Dhaka administrative zone boundaries.
   * Severity-coded marker clusters with instant inspection popups and direct navigation.
@@ -444,7 +470,7 @@ flowchart TD
   * **Area Manager & Deletion:** View all saved custom zones, inspect perimeter metrics, toggle zone visibility on/off, and delete/remove saved custom areas with one click.
   * **Default Layer Optimization:** Municipal ward polygons are hidden by default to provide a clean, distraction-free view, with a floating layer toggle switch to reveal them whenever needed.
 
-### 5. System Settings, Reference Taxonomies & Platform Health (`/admin/settings`)
+### 6. System Settings, Reference Taxonomies & Platform Health (`/admin/settings`)
 * **Executive Administrative Hero Profile:**
   * Displays executive seal insignia, full administrator name, fixed system email, national jurisdiction badge, and dynamic status indicator (`Active Account` / `Suspended`).
   * Photo update modal with client-side canvas compression and official seal presets.
@@ -465,19 +491,30 @@ flowchart TD
   * **Tab 5: Notification Channels:**
     * Global administrative alert toggles, daily moderation digest emails, and critical infrastructure escalation channels.
 
-### 6. Civic Content Moderation & Security Queue (`/admin/moderation`)
-* **Civic Submission Safety Inspection:**
-  * Review citizen reports flagged by AI content filters or community members for inappropriate text, spam, or invalid imagery.
-* **Moderation Actions:**
-  * Dismiss false flags, soft-delete abusive submissions, or ban/suspend repeat offender accounts with full audit trail logging.
+### 7. Civic Content Moderation & Queue Lifecycle Operations (`/admin/moderation` & `/admin/queue`)
+* **Unified Municipal Moderation Command Queue:**
+  * Central triage queue displaying all active municipal issues and citizen reports undergoing investigation.
+  * Dynamic status tabs: `All Issues`, `New`, `In Process`, and `Resolved`.
+  * Severity and keyword filtering, pagination, and instant issue search.
+* **Full Lifecycle Execution & Database Persistence:**
+  * **`Resolve` Button:**
+    * Allows administrators to administratively resolve an incident directly from the queue.
+    * Persists directly to the backend database via `PATCH /issues/{id}/status`, creating a permanent `StatusEvent` and updating citizen-facing tracking timelines.
+  * **`Reopen` Button:**
+    * Allows administrators to reopen resolved cases back to active status (`In Process` or `reopen`) if repairs were incomplete or issues recurred.
+    * Synchronizes in real-time with React Query and Celery background workers.
+  * **`Hide` Button:**
+    * Temporarily suppresses reports containing sensitive personal data (PII) or unverified claims from public maps and feeds via `POST /issues/{id}/moderation`.
+  * **`Remove` Button:**
+    * Safely discards invalid, spam, or out-of-scope reports, moving them directly into the **Deleted Reports Archive** with mandatory audit notes.
 
-### 7. Universal Full-Viewport Modals & UI Polish
+### 8. Universal Full-Viewport Modals & UI Polish
 * **React Portal Integration (`Dialog.jsx`):**
   * All application modals are portaled directly to `document.body` with `z-[9999]`, guaranteeing 100% viewport coverage across all resolutions without being clipped by parent overflow containers.
 * **Refined Backdrop & Shadows:**
   * Balanced, lightweight backdrop blur and shadow styling providing clean modal elevation without darkening the background too harshly.
 
-### 8. Security & Operational Audit Log (`/admin/audit`)
+### 9. Security & Operational Audit Log (`/admin/audit`)
 * **Cryptographically Recorded Operational Ledger:**
   * Comprehensive chronological activity trail recording administrative, dispatch, moderation, and lifecycle decisions.
 * **Unnatural Bulk Operations & Anomaly Detection:**

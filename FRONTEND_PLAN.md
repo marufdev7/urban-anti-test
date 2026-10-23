@@ -33,10 +33,12 @@ The destination and content of each navigation item changes according to the use
 ## 2. Route Map
 
 ```text
-/auth/login
+/                               (Public entry: auto-routes to /citizen/dashboard in guest mode)
+/auth/login                     (Unified credentials / 2FA login page)
+/auth/register                  (Citizen multi-channel registration: Google, Email link, Phone SMS OTP)
 /auth/forgot-password
 
-/citizen/dashboard
+/citizen/dashboard              (Guest viewable: live civic issues, nearby incidents & status tracking)
 /citizen/reports
 /citizen/reports/new
 /citizen/reports/new/details
@@ -53,10 +55,10 @@ The destination and content of each navigation item changes according to the use
 /authority/settings
 
 /admin/dashboard
-/admin/queue
+/admin/queue                    (Moderation queue: Hide, Remove, Resolve & Reopen lifecycle operations)
 /admin/moderation/:flagId
 /admin/map
-/admin/reports
+/admin/reports                  (Raw reports explorer & deleted reports archive with reopen engine)
 /admin/authorities
 /admin/authorities/new
 /admin/authorities/:authorityId
@@ -64,7 +66,7 @@ The destination and content of each navigation item changes according to the use
 /admin/audit-log
 ```
 
-Add route guards for authentication, role permissions, jurisdiction/category scope, and read-only versus write access.
+Add route guards for authentication, role permissions, jurisdiction/category scope, and read-only versus write access. Unauthenticated visitors accessing `/` or `/citizen/dashboard` are granted guest explorer mode with non-intrusive banners, while actions requiring mutation (such as submitting reports) redirect to `/auth/register` or `/auth/login`.
 
 ## 3. Citizen Workspace
 
@@ -257,6 +259,19 @@ Moderation actions:
 - Escalate for manual review.
 - Mark as false positive.
 - Suspend or restrict the submitting account when appropriate.
+- **Hide / Unhide:** Toggle visibility of offending reports or issues with mandatory audit reasons.
+- **Remove:** Soft-delete reports, removing them from active feeds into the deleted archive.
+- **Resolve:** Transition issues directly to `resolved` status with mandatory notes and timestamping.
+- **Reopen:** Transition resolved or closed issues back to `in_progress` status with audit trail entries.
+
+### Admin Reports Explorer & Deleted Reports Archive
+
+Accessible via `/admin/reports`:
+
+- **Active Reports Explorer:** Real-time search and filter across all citizen submissions regardless of jurisdiction.
+- **Deleted Reports Archive (`?tab=deleted`):** Dedicated compliance view showing soft-deleted reports removed by moderation.
+  - Provencance badges: Displays removing moderator, role, timestamp, and removal notes.
+  - **Reopen & Restore Engine (`ReopenReportModal.jsx`):** Enables admins to restore soft-deleted reports back to active municipal circulation (`ReportStatus.TRIAGED` or `SUBMITTED`), appending an immutable `reopen` audit record to `moderation_action` and `audit_event`.
 
 ### Authority Provisioning
 
