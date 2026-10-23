@@ -63,7 +63,7 @@ export default function AppShell() {
             <div className="flex items-center gap-2">
               <Eye className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
               <span>
-                <strong>Browsing as Guest (অতিথি মোড):</strong> You are exploring public reports and community data in read-only mode.
+                <strong>Browsing as Guest (অতিথি মোড):</strong> You are exploring public reports and live community safety updates.
               </span>
             </div>
             <Link

@@ -187,7 +187,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         title={isGuest ? 'Welcome, Guest Explorer!' : (user?.fullName ? `Welcome back, ${user.fullName}!` : 'Overview')}
-        subtitle={isGuest ? 'Exploring community infrastructure reports and district safety in read-only mode.' : 'Monitor public safety reports and track community resilience efforts.'}
+        subtitle={isGuest ? 'Explore live community infrastructure reports and district safety updates.' : 'Monitor public safety reports and track community resilience efforts.'}
       />
 
       {isError && (

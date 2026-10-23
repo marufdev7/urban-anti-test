@@ -96,7 +96,7 @@ export default function UserMenu() {
             </p>
             {isGuest ? (
               <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider bg-amber-500/15 text-amber-700 dark:text-amber-300">
-                Guest (Read-Only)
+                Guest Explorer
               </span>
             ) : isSuperAdmin ? (
               <span className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300/60 dark:bg-amber-950/60 dark:text-amber-300">
@@ -112,7 +112,7 @@ export default function UserMenu() {
         </div>
         {isGuest ? (
           <div className="p-3 bg-surface-sunken/40 text-xs text-ink-muted leading-relaxed">
-            You are browsing community issues in read-only mode. Sign in to submit reports and manage your profile.
+            You are exploring public civic issues. Sign in or register to submit reports and manage your account.
           </div>
         ) : (
           <>
