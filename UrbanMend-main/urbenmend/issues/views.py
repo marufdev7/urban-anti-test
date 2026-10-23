@@ -276,7 +276,10 @@ class IssueDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request: Request, issue_id: str) -> Response:
-        queryset = selectors.list_issues(actor=AnonymousUser()).filter(pk=issue_id)
+        is_admin = isinstance(request.user, User) and request.user.role == Role.ADMIN
+        actor = request.user if is_admin else AnonymousUser()
+        statuses = list(IssueStatus.values) if is_admin else ()
+        queryset = selectors.list_issues(actor=actor, statuses=statuses).filter(pk=issue_id)
         issue = queryset.first()
         if issue is None:
             raise Http404("Issue not found.")

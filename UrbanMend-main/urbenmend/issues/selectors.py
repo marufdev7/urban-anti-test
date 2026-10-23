@@ -338,16 +338,21 @@ def list_issues(
     without contradicting Q7. DRF's `SessionAuthentication` already rejects an inactive user, so in
     practice both layers agree.
 
-    ⚠️ **Moderated Issues are excluded for every role, Admin included, in the selector.** Doing it
-    only through the `?status=` allowlist would leave a non-HTTP caller (a management command, a
-    later worker) rendering hidden rows, and there is no id in a list request to answer `410` about
-    (T2.7 precedent).
+    ⚠️ **Moderated Issues are excluded for non-admin roles and default requests.**
+    System Administrators can view moderated issues when explicitly querying their status.
 
     Returns an **unordered** queryset: `IssueCursorPagination` owns the ordering, because the sort
     and the cursor's key set are one decision.
     """
+    is_admin = isinstance(actor, User) and has_role(actor, Role.ADMIN)
+    wants_moderated = bool(set(statuses) & set(MODERATED_ISSUE_STATUSES))
+    if is_admin and wants_moderated:
+        base_issues = Issue.objects.all()
+    else:
+        base_issues = Issue.objects.exclude(status__in=MODERATED_ISSUE_STATUSES)
+
     queryset = annotate_queue_fields(
-        Issue.objects.exclude(status__in=MODERATED_ISSUE_STATUSES)
+        base_issues
         .select_related("primary_category")
         .prefetch_related("reports__media", "confirmations")
     )

@@ -12,6 +12,7 @@ import {
   ChevronsRight,
   Clock,
   ExternalLink,
+  Eye,
   EyeOff,
   RotateCcw,
   Search,
@@ -62,7 +63,7 @@ export default function ModerationQueuePage() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const urlQuery = searchParams.get('q') || ''
-  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'new' | 'in_process' | 'resolved'
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'new' | 'in_process' | 'resolved' | 'hidden'
   const [severityFilter, setSeverityFilter] = useState('all') // 'all' | 'critical' | 'high' | 'medium' | 'low'
   const [search, setSearch] = useState(urlQuery)
   const [localStatusMap, setLocalStatusMap] = useState({}) // { [issueId]: { status, action } }
@@ -83,18 +84,19 @@ export default function ModerationQueuePage() {
 
   const { data: categories } = useCategories()
   const issuesQuery = useIssues({ limit: '100' }, { refetchInterval: 15_000 })
+  const hiddenIssuesQuery = useIssues({ limit: '100', status: 'hidden' }, { refetchInterval: 15_000 })
   const reportsQuery = useAllReports()
   const moderate = useModerate('issue')
 
   const [dialogTarget, setDialogTarget] = useState(null)
-  const [dialogAction, setDialogAction] = useState('hide') // 'hide' | 'remove'
+  const [dialogAction, setDialogAction] = useState('hide') // 'hide' | 'remove' | 'restore'
   const [reason, setReason] = useState('')
   const [submitError, setSubmitError] = useState(null)
 
   const openDialog = (id, title, action = 'hide') => {
     setDialogTarget({ id, title })
     setDialogAction(action)
-    setReason('')
+    setReason(action === 'restore' ? 'Restored to active public queue by administrator' : '')
     setSubmitError(null)
   }
 
@@ -104,11 +106,20 @@ export default function ModerationQueuePage() {
     try {
       if (action === 'hide' || action === 'remove') {
         await moderate.mutateAsync({ id: dialogTarget.id, action, reason: reason.trim() })
+        setLocalStatusMap((prev) => ({
+          ...prev,
+          [dialogTarget.id]: { status: action === 'hide' ? 'hidden' : 'resolved', action },
+        }))
+      } else if (action === 'restore') {
+        await moderate.mutateAsync({ id: dialogTarget.id, action: 'restore', reason: reason.trim() })
+        setLocalStatusMap((prev) => ({
+          ...prev,
+          [dialogTarget.id]: { status: 'new', action: 'restore' },
+        }))
       }
-      setLocalStatusMap((prev) => ({
-        ...prev,
-        [dialogTarget.id]: { status: 'resolved', action },
-      }))
+      queryClient.invalidateQueries({ queryKey: ['issues'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
+      await Promise.all([issuesQuery.refetch(), hiddenIssuesQuery.refetch(), reportsQuery.refetch()])
       setDialogTarget(null)
     } catch (err) {
       setSubmitError(err.message)
@@ -160,11 +171,20 @@ export default function ModerationQueuePage() {
   }
 
   const rawIssues = issuesQuery.data?.data ?? []
+  const rawHiddenIssues = hiddenIssuesQuery.data?.data ?? []
   const rawReports = reportsQuery.data?.data ?? []
+
+  // Combine unique issues (active and hidden)
+  const combinedRawIssues = useMemo(() => {
+    const map = new Map()
+    for (const issue of rawIssues) map.set(issue.id, issue)
+    for (const issue of rawHiddenIssues) map.set(issue.id, issue)
+    return Array.from(map.values())
+  }, [rawIssues, rawHiddenIssues])
 
   // Map each actual database Issue to a Queue Card item
   const queueItems = useMemo(() => {
-    return rawIssues.map((issue) => {
+    return combinedRawIssues.map((issue) => {
       // Find associated bundled report for actual citizen description & submitter
       const linkedReport = rawReports.find(
         (r) => r.issueId === issue.id || r.id === issue.representativeReportId
@@ -183,6 +203,9 @@ export default function ModerationQueuePage() {
       if (localStatusMap[issue.id]) {
         workflowStatus = localStatusMap[issue.id].status
         resolutionAction = localStatusMap[issue.id].action
+      } else if (issue.status === 'hidden') {
+        workflowStatus = 'hidden'
+        resolutionAction = 'hidden'
       } else if (issue.status === 'resolved' || issue.status === 'closed') {
         workflowStatus = 'resolved'
         resolutionAction = 'resolved'
@@ -225,21 +248,26 @@ export default function ModerationQueuePage() {
         resolutionAction,
       }
     })
-  }, [rawIssues, rawReports, localStatusMap])
+  }, [combinedRawIssues, rawReports, localStatusMap])
 
   // Dynamic counts for each tab from actual database items
   const counts = useMemo(() => {
-    const all = queueItems.length
+    const all = queueItems.filter((i) => i.workflowStatus !== 'hidden').length
     const newCount = queueItems.filter((i) => i.workflowStatus === 'new').length
     const inProcessCount = queueItems.filter((i) => i.workflowStatus === 'in_process').length
     const resolvedCount = queueItems.filter((i) => i.workflowStatus === 'resolved').length
-    return { all, new: newCount, in_process: inProcessCount, resolved: resolvedCount }
+    const hiddenCount = queueItems.filter((i) => i.workflowStatus === 'hidden').length
+    return { all, new: newCount, in_process: inProcessCount, resolved: resolvedCount, hidden: hiddenCount }
   }, [queueItems])
 
   // Filter items by status tab, severity, and search term
   const filteredItems = useMemo(() => {
     return queueItems.filter((item) => {
-      if (statusFilter !== 'all' && item.workflowStatus !== statusFilter) return false
+      if (statusFilter === 'all') {
+        if (item.workflowStatus === 'hidden') return false
+      } else if (item.workflowStatus !== statusFilter) {
+        return false
+      }
       if (severityFilter !== 'all' && item.severity !== severityFilter) return false
       if (search.trim()) {
         const query = search.trim().toLowerCase()
@@ -349,6 +377,18 @@ export default function ModerationQueuePage() {
             }`}
           >
             Resolved ({counts.resolved})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('hidden')}
+            className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold transition ${
+              statusFilter === 'hidden'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'border border-line bg-surface-panel text-ink-muted hover:text-ink'
+            }`}
+          >
+            <EyeOff className="h-3 w-3" />
+            <span>Hidden ({counts.hidden})</span>
           </button>
         </div>
 
@@ -536,6 +576,12 @@ export default function ModerationQueuePage() {
                         Resolved
                       </span>
                     )}
+                    {item.workflowStatus === 'hidden' && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                        <EyeOff className="h-3 w-3 text-slate-500" />
+                        Hidden from Public
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-1 text-xs text-ink-muted">
@@ -576,7 +622,35 @@ export default function ModerationQueuePage() {
                   </div>
 
                   {/* Contextual Action Buttons */}
-                  {isResolved ? (
+                  {item.workflowStatus === 'hidden' ? (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        <EyeOff className="h-3.5 w-3.5 text-slate-500" />
+                        Hidden
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={Boolean(actionLoadingId)}
+                        onClick={() => openDialog(item.id, categoryLabel(categories, item.primaryCategory), 'restore')}
+                        className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 font-semibold"
+                        title="Unhide and restore to active public queue"
+                      >
+                        <Eye className="h-3.5 w-3.5 text-emerald-700" />
+                        Unhide
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={Boolean(actionLoadingId)}
+                        onClick={() => openDialog(item.id, categoryLabel(categories, item.primaryCategory), 'remove')}
+                        className="text-xs flex items-center gap-1"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Remove
+                      </Button>
+                    </div>
+                  ) : isResolved ? (
                     <div className="flex items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-900">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
@@ -739,10 +813,12 @@ export default function ModerationQueuePage() {
       <Dialog
         open={!!dialogTarget}
         onClose={() => setDialogTarget(null)}
-        title={`${dialogAction === 'hide' ? 'Hide' : 'Remove'} Issue: ${dialogTarget?.title}`}
+        title={`${dialogAction === 'restore' ? 'Unhide' : dialogAction === 'hide' ? 'Hide' : 'Remove'} Issue: ${dialogTarget?.title}`}
       >
         <p className="mb-3 text-sm text-ink-muted">
-          {dialogAction === 'hide'
+          {dialogAction === 'restore'
+            ? 'Choose whether to unhide this issue and restore it to the active public queue. A reason is mandatory and recorded to the audit log.'
+            : dialogAction === 'hide'
             ? 'Choose whether to hide this issue from public view. A reason is mandatory and recorded to the audit log.'
             : 'Choose whether to remove this issue. A reason is mandatory and recorded to the audit log.'}
         </p>
@@ -751,7 +827,11 @@ export default function ModerationQueuePage() {
           onChange={(e) => setReason(e.target.value)}
           rows={3}
           aria-label="Moderation reason"
-          placeholder="Reason for this action…"
+          placeholder={
+            dialogAction === 'restore'
+              ? 'Reason for unhiding (e.g. Verified authentic, privacy concern resolved)…'
+              : 'Reason for this action…'
+          }
           className="block w-full rounded-panel border border-line px-3 py-2 text-sm focus:border-primary"
         />
         {submitError && (
@@ -760,12 +840,12 @@ export default function ModerationQueuePage() {
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={() => setDialogTarget(null)}>Cancel</Button>
           <Button
-            variant={dialogAction === 'hide' ? 'secondary' : 'danger'}
+            variant={dialogAction === 'restore' ? 'primary' : dialogAction === 'hide' ? 'secondary' : 'danger'}
             disabled={!reason.trim() || moderate.isPending}
             loading={moderate.isPending}
             onClick={() => confirm(dialogAction)}
           >
-            {dialogAction === 'hide' ? 'Confirm Hide' : 'Confirm Remove'}
+            {dialogAction === 'restore' ? 'Confirm Unhide' : dialogAction === 'hide' ? 'Confirm Hide' : 'Confirm Remove'}
           </Button>
         </div>
       </Dialog>

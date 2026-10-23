@@ -498,19 +498,23 @@ class IssueListQuerySerializer(CamelCaseSerializer):
         return allowlisted_csv(value, allowed=set(SeveritySignal.values), label="severity")
 
     def validate_status(self, value: str) -> list[str]:
-        """`?status=in_progress,resolved` — the workflow statuses, minus the moderated pair.
+        """`?status=in_progress,resolved` — the workflow statuses, minus the moderated pair for non-admins.
 
-        ⚠️ **`hidden`/`removed` are not selectable, and the message says so rather than "unknown
-        value".** They are real members of `IssueStatus`, so "unknown" would be a lie that sends a
-        developer looking for a typo. Refusing them here is presentation; the actual suppression is
-        unconditional in `list_issues()`, because a filter allowlist protects only the HTTP path.
+        ⚠️ **`hidden`/`removed` are only selectable by System Administrators.** They are real
+        members of `IssueStatus`. Non-admins are refused with a clear message, and unauthenticated
+        calls are unconditionally excluded in `list_issues()`.
         """
-        selectable = set(IssueStatus.values) - set(MODERATED_ISSUE_STATUSES)
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request else None
+        is_admin = bool(user and getattr(user, "is_authenticated", False) and getattr(user, "role", None) == "admin")
+
+        selectable = set(IssueStatus.values) if is_admin else (set(IssueStatus.values) - set(MODERATED_ISSUE_STATUSES))
         submitted = [item.strip() for item in value.split(",") if item.strip()]
-        if moderated := sorted(set(submitted) & set(MODERATED_ISSUE_STATUSES)):
-            raise serializers.ValidationError(
-                f"Moderated Issues cannot be listed: {', '.join(moderated)}.", code="INVALID"
-            )
+        if not is_admin:
+            if moderated := sorted(set(submitted) & set(MODERATED_ISSUE_STATUSES)):
+                raise serializers.ValidationError(
+                    f"Moderated Issues cannot be listed: {', '.join(moderated)}.", code="INVALID"
+                )
         return allowlisted_csv(value, allowed=selectable, label="status")
 
     def validate_bbox(self, value: str) -> Polygon:

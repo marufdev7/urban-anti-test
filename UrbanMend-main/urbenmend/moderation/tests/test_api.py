@@ -104,3 +104,28 @@ def test_admin_can_reopen_or_restore_removed_report() -> None:
     assert report.status not in (ReportStatus.REMOVED, ReportStatus.HIDDEN)
     assert ModerationAction.objects.filter(action="reopen").exists()
     assert AuditEvent.objects.filter(action="moderation.reopen").exists()
+
+
+@pytest.mark.django_db
+def test_admin_can_list_and_unhide_hidden_issue():
+    admin = AdminFactory()
+    citizen = UserFactory()
+    issue = IssueFactory(status=IssueStatus.HIDDEN)
+
+    # Citizen cannot list hidden issues
+    assert _client(citizen).get(reverse("api:issues") + "?status=hidden").status_code == 400
+
+    # Admin CAN list hidden issues
+    res = _client(admin).get(reverse("api:issues") + "?status=hidden")
+    assert res.status_code == 200
+    assert any(item["id"] == str(issue.pk) for item in res.json()["data"])
+
+    # Admin unhides / restores the issue
+    unhide_url = reverse("api:issues-moderation", kwargs={"pk": issue.pk})
+    unhide_res = _client(admin).post(
+        unhide_url, {"action": "restore", "reason": "Restored to active queue by admin"}, format="json"
+    )
+    assert unhide_res.status_code == 200
+    issue.refresh_from_db()
+    assert issue.status not in (IssueStatus.HIDDEN, IssueStatus.REMOVED)
+    assert issue.status == IssueStatus.SUBMITTED

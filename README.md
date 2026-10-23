@@ -494,7 +494,7 @@ flowchart TD
 ### 7. Civic Content Moderation & Queue Lifecycle Operations (`/admin/moderation` & `/admin/queue`)
 * **Unified Municipal Moderation Command Queue:**
   * Central triage queue displaying all active municipal issues and citizen reports undergoing investigation.
-  * Dynamic status tabs: `All Issues`, `New`, `In Process`, and `Resolved`.
+  * Dynamic status tabs: `All Flags`, `New`, `In Process`, `Resolved`, and dedicated **`Hidden`** archive tab.
   * Severity and keyword filtering, pagination, and instant issue search.
 * **Full Lifecycle Execution & Database Persistence:**
   * **`Resolve` Button:**
@@ -504,7 +504,9 @@ flowchart TD
     * Allows administrators to reopen resolved cases back to active status (`In Process` or `reopen`) if repairs were incomplete or issues recurred.
     * Synchronizes in real-time with React Query and Celery background workers.
   * **`Hide` Button:**
-    * Temporarily suppresses reports containing sensitive personal data (PII) or unverified claims from public maps and feeds via `POST /issues/{id}/moderation`.
+    * Temporarily suppresses reports containing sensitive personal data (PII) or unverified claims from public maps and feeds via `POST /issues/{id}/moderation`. Moves the item to the `Hidden` moderation archive.
+  * **`Unhide / Restore` Button:**
+    * Located in the **`Hidden`** tab of the Moderation Queue. Allows administrators to seamlessly unhide any suppressed issue back into the active public queue via `POST /issues/{id}/moderation` (`action: "restore"`), logging the administrative justification into the immutable audit ledger.
   * **`Remove` Button:**
     * Safely discards invalid, spam, or out-of-scope reports, moving them directly into the **Deleted Reports Archive** with mandatory audit notes.
 
