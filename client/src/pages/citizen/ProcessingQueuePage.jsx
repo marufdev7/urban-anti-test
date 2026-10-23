@@ -21,6 +21,7 @@ import {
 import { api } from '../../lib/api'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { DHAKA_CENTER } from '../../lib/geo'
+import { useAuth } from '../../auth/AuthContext'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import EmptyState from '../../components/ui/EmptyState'
@@ -72,6 +73,8 @@ const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1 }
  * Completely distinct from "My Reports" (/citizen/reports).
  */
 export default function ProcessingQueuePage() {
+  const { user } = useAuth()
+  const isGuest = Boolean(user?.isGuest)
   const { data: categories } = useCategories()
   const [userLocation, setUserLocation] = useState(null)
   const [geoError, setGeoError] = useState(false)
@@ -128,6 +131,7 @@ export default function ProcessingQueuePage() {
   const { data: myReportsData } = useQuery({
     queryKey: ['reports', 'mine', 'queue-crosscheck'],
     queryFn: () => api('/reports?limit=100'),
+    enabled: !isGuest,
     staleTime: 15_000,
   })
 

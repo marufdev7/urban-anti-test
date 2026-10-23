@@ -468,23 +468,34 @@ export default function ReportWizardPage() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 mb-4">
               <Lock className="h-7 w-7" />
             </div>
-            <h2 className="text-xl font-bold text-ink">Sign In Required to Report Issues</h2>
+            <h2 className="text-xl font-bold text-ink">Citizen Registration Required to Report Issues</h2>
+            <p className="mt-1 text-sm font-medium text-amber-700 dark:text-amber-400">
+              রিপোর্ট জমা দিতে নাগরিক হিসেবে নিবন্ধন বা লগইন করুন
+            </p>
             <p className="mt-2 text-sm text-ink-muted leading-relaxed max-w-md mx-auto">
-              You are exploring UrbanMend in <strong>Guest Mode (অতিথি মোড)</strong>. To report civic problems, submit photos, and track repair status, please sign in with a citizen account.
+              You are exploring UrbanMend in <strong>Guest Mode (অতিথি মোড)</strong>. To report civic problems, submit photos, and track repair status, please register or sign in with a citizen account.
             </p>
           </div>
           <div className="p-6 flex flex-col gap-3">
             <Button
               type="button"
               className="w-full justify-center"
-              onClick={() => navigate('/auth/login')}
+              onClick={() => navigate('/auth/register', { state: { from: '/citizen/reports/new' } })}
             >
-              Sign In or Create Account
+              Register as Citizen (নাগরিক নিবন্ধন করুন)
             </Button>
             <Button
               type="button"
               variant="secondary"
               className="w-full justify-center"
+              onClick={() => navigate('/auth/login', { state: { from: '/citizen/reports/new' } })}
+            >
+              Already have an account? Sign In (সাইন ইন)
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full justify-center text-ink-muted"
               onClick={() => navigate('/citizen/dashboard')}
             >
               Back to Dashboard (Explore Nearby)

@@ -23,8 +23,17 @@ export function RequireAuth() {
 /** Narrows an authenticated area to one or more allowed roles. */
 export function RequireRole({ role }) {
   const { user } = useAuth()
+  const location = useLocation()
   const allowed = Array.isArray(role) ? role : [role]
-  if (!user || !allowed.includes(user.role)) {
+  if (!user) {
+    return <Navigate to="/auth/login" replace state={{ from: location.pathname }} />
+  }
+  if (!allowed.includes(user.role)) {
+    // If a guest explorer attempts to access authority/admin restricted area,
+    // prompt them to log in with an authorized account instead of hitting 403
+    if (user.isGuest) {
+      return <Navigate to="/auth/login" replace state={{ from: location.pathname }} />
+    }
     return <Navigate to="/403" replace />
   }
   return <Outlet />

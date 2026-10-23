@@ -24,14 +24,6 @@ export const GUEST_USER = {
 }
 
 export function AuthProvider({ children }) {
-  const [isGuest, setIsGuest] = useState(() => {
-    try {
-      return localStorage.getItem('urbanmend_guest_mode') === 'true'
-    } catch {
-      return false
-    }
-  })
-
   const [googleProfile, setGoogleProfile] = useState(() => {
     try {
       const stored = localStorage.getItem('urbanmend_google_profile')
@@ -81,9 +73,6 @@ export function AuthProvider({ children }) {
     queryKey: ['session'],
     queryFn: async () => {
       try {
-        if (localStorage.getItem('urbanmend_guest_mode') === 'true') {
-          return GUEST_USER
-        }
         return await api('/users/me')
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
@@ -99,7 +88,18 @@ export function AuthProvider({ children }) {
       }
     },
     staleTime: 5 * 60_000,
+    retry: false,
   })
+
+  // When not authenticated with an official account, default to GUEST_USER so the public
+  // can freely explore community issues, nearby activity, and map without logging in.
+  const rawUser = session.data
+    ? session.data
+    : session.isLoading
+      ? null
+      : GUEST_USER
+
+  const isGuest = Boolean(rawUser?.isGuest)
 
   const loginAsGuest = () => {
     try {
@@ -107,9 +107,13 @@ export function AuthProvider({ children }) {
     } catch {
       // ignore
     }
-    setIsGuest(true)
     queryClient.setQueryData(['session'], GUEST_USER)
   }
+
+  const register = useMutation({
+    mutationFn: (payload) =>
+      api('/auth/register', { method: 'POST', body: payload }),
+  })
 
   const login = useMutation({
     mutationFn: (credentials) =>
@@ -132,7 +136,6 @@ export function AuthProvider({ children }) {
     } catch {
       // ignore
     }
-    setIsGuest(false)
 
     if (extraProfile) {
       setGoogleProfile(extraProfile)
@@ -169,7 +172,6 @@ export function AuthProvider({ children }) {
         // ignore
       }
       setGoogleProfile(null)
-      setIsGuest(false)
       await firebaseSignOut()
       if (isGuest) return null
       return await api('/auth/logout', { method: 'POST' })
@@ -182,16 +184,14 @@ export function AuthProvider({ children }) {
         // ignore
       }
       setGoogleProfile(null)
-      setIsGuest(false)
       queryClient.setQueryData(['session'], null)
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' })
+      window.location.href = '/auth/login'
     },
   })
 
   // State tick to immediately re-render components when avatar or display name changes
   const [profileTick, setProfileTick] = useState(0)
-
-  const rawUser = isGuest ? GUEST_USER : session.data ?? null
 
   const updateAvatar = (newAvatarUrl) => {
     if (!rawUser || isGuest) return
@@ -330,6 +330,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: Boolean(user),
     isGuest,
     loginAsGuest,
+    register,
     login,
     firebaseLogin,
     verifyTwoFactor,

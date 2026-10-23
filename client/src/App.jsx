@@ -56,6 +56,7 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/auth/login" element={<LoginPage />} />
+          <Route path="/auth/register" element={<LoginPage initialMode="register" />} />
           <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
 
           {/* Authenticated area */}
