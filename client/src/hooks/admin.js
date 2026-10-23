@@ -81,6 +81,34 @@ export function useAuthorityProfile(userId, options = {}) {
   })
 }
 
+/** Super-admin account soft-deletion (DELETE /users/{id}). */
+export function useDeleteUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, reason }) =>
+      api(`/users/${userId}`, { method: 'DELETE', body: { reason } }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['authority-profile', variables?.userId] })
+      queryClient.invalidateQueries({ queryKey: ['audit-events'] })
+    },
+  })
+}
+
+/** Super-admin account restoration (POST /users/{id}/restore). */
+export function useRestoreUser() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, reason }) =>
+      api(`/users/${userId}/restore`, { method: 'POST', body: { reason } }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      queryClient.invalidateQueries({ queryKey: ['authority-profile', variables?.userId] })
+      queryClient.invalidateQueries({ queryKey: ['audit-events'] })
+    },
+  })
+}
+
 // ---------- Analytics (API §6.9) ----------
 
 export function useAnalytics(groupBy, params = {}, options = {}) {

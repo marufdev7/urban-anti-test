@@ -273,20 +273,24 @@ Accessible via `/admin/reports`:
   - Provencance badges: Displays removing moderator, role, timestamp, and removal notes.
   - **Reopen & Restore Engine (`ReopenReportModal.jsx`):** Enables admins to restore soft-deleted reports back to active municipal circulation (`ReportStatus.TRIAGED` or `SUBMITTED`), appending an immutable `reopen` audit record to `moderation_action` and `audit_event`.
 
-### Authority Provisioning
+### Authority Provisioning & Account Lifecycle Management
 
-Match `admin-authority-provisioning.png`:
+Accessible via `/admin/authorities`:
 
-- Authority personnel table.
-- Role.
-- Category scope.
-- Jurisdiction.
-- Account status.
-- Last activity.
-- Provision new authority action.
-- Active and revoked personnel summary.
-- Role distribution chart.
-- Compliance report export.
+- **Segmented Directory Navigation:**
+  - `Field Authorities`: Municipal engineers, inspectors, and departmental specialists.
+  - `System Administrators`: Platform administrators, privilege levels, and root super admins.
+  - `Deleted Accounts Archive` (`?tab=deleted`): Dedicated repository storing soft-deleted accounts with session invalidation.
+- **Account Operational Status & Role Hierarchy:**
+  - Standard administrators can toggle between `Active` and `Suspended`.
+  - **Super Admin Exclusive Deletion (`DELETE /api/v1/users/:userId`):** Only Super Administrators (`is_superuser=True`) can delete accounts. Deletion instantly revokes all active JWT tokens and sessions (`revoke_all_sessions`), locking out the credentials immediately while recording immutable audit entries.
+  - **Account Restoration Engine (`POST /api/v1/users/:userId/restore`):** Super Administrators can restore archived accounts back to `Active` operational status directly from the "Deleted Accounts" tab with confirmation dialogs and audit reasons.
+  - **Standard Administrator Guard:** Standard administrators have read-only visibility into the deleted accounts archive for audit compliance and are strictly blocked from deleting or restoring accounts at both UI and API levels (HTTP 403 Forbidden).
+  - **Self-Deletion Guard:** Super Administrators cannot delete their own active account.
+- Authority personnel table with real-time search, jurisdiction badges, category scopes, and dynamic restriction countdown indicators.
+- Provision new authority and provision new admin actions.
+- Active, revoked, and deleted personnel summary metrics.
+- Role distribution chart and compliance PDF/CSV export.
 
 Provisioning form fields:
 

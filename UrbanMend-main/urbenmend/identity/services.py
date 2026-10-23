@@ -1315,6 +1315,22 @@ def update_user_by_admin(*, actor: User, user_id, **changes: Any) -> User:
         "require_two_factor": target.require_two_factor,
         "category_scope": sorted(target.category_scope.values_list("slug", flat=True)),
     }
+
+    # Restrict deletion / restoration privileges strictly to Super Administrators
+    new_status = changes.get("status")
+    if new_status == UserStatus.DELETED:
+        if not getattr(actor, "is_superuser", False):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Only Super Administrators may delete user accounts.")
+        if target.pk == actor.pk:
+            raise ValidationError("Super Administrators cannot delete their own account.")
+    elif target.status == UserStatus.DELETED and new_status and new_status != UserStatus.DELETED:
+        if not getattr(actor, "is_superuser", False):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Only Super Administrators may restore deleted user accounts.")
+
     resulting_role = changes.get("role", target.role)
     if "category_scope" in changes and resulting_role != Role.AUTHORITY:
         raise ValidationError("Category scope applies only to Authority accounts (BR-26).")
@@ -1383,6 +1399,80 @@ def update_user_by_admin(*, actor: User, user_id, **changes: Any) -> User:
 
     record_event(
         actor=actor, action="identity.user_updated", target=target, before=before, after=after
+    )
+    return target
+
+
+@transaction.atomic
+def delete_user_by_admin(*, actor: User, user_id: Any, reason: str = "") -> User:
+    """Soft-delete an authority or admin account. Super Admin ONLY."""
+    from rest_framework.exceptions import PermissionDenied
+    from urbenmend.identity.models import Role, User, UserStatus
+
+    require_role(actor, Role.ADMIN)
+    if not getattr(actor, "is_superuser", False):
+        raise PermissionDenied("Only Super Administrators may delete user accounts.")
+
+    try:
+        target = User.objects.select_for_update().get(pk=user_id)
+    except (User.DoesNotExist, ValueError, TypeError) as exc:
+        from django.http import Http404
+
+        raise Http404("User not found.") from exc
+
+    if target.pk == actor.pk:
+        raise ValidationError("Super Administrators cannot delete their own account.")
+
+    if target.status == UserStatus.DELETED:
+        return target
+
+    before_status = target.status
+    target.status = UserStatus.DELETED
+    target.save(update_fields=["status"])
+    revoke_all_sessions(user=target)
+
+    _audit_privileged_action(
+        actor=actor,
+        action="authority.deleted" if target.role == Role.AUTHORITY else "user.deleted",
+        target=target,
+        before={"status": before_status},
+        status=UserStatus.DELETED,
+        reason=reason or "Account deleted and archived by Super Administrator",
+    )
+    return target
+
+
+@transaction.atomic
+def restore_user_by_admin(*, actor: User, user_id: Any, reason: str = "") -> User:
+    """Restore a previously deleted account. Super Admin ONLY."""
+    from rest_framework.exceptions import PermissionDenied
+    from urbenmend.identity.models import Role, User, UserStatus
+
+    require_role(actor, Role.ADMIN)
+    if not getattr(actor, "is_superuser", False):
+        raise PermissionDenied("Only Super Administrators may restore deleted accounts.")
+
+    try:
+        target = User.objects.select_for_update().get(pk=user_id)
+    except (User.DoesNotExist, ValueError, TypeError) as exc:
+        from django.http import Http404
+
+        raise Http404("User not found.") from exc
+
+    if target.status != UserStatus.DELETED:
+        return target
+
+    before_status = target.status
+    target.status = UserStatus.ACTIVE
+    target.save(update_fields=["status"])
+
+    _audit_privileged_action(
+        actor=actor,
+        action="authority.restored" if target.role == Role.AUTHORITY else "user.restored",
+        target=target,
+        before={"status": before_status},
+        status=UserStatus.ACTIVE,
+        reason=reason or "Account restored to active status by Super Administrator",
     )
     return target
 

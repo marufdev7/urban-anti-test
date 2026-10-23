@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import {
+  AlertTriangle,
   ArrowRight,
   Check,
   ChevronDown,
@@ -17,17 +18,26 @@ import {
   MapPin,
   Pencil,
   Phone,
+  RotateCcw,
   Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UserCheck,
   UserPlus,
   Users,
 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
-import { useAuthorities, useAdmins, useAdminUpdateUser } from '../../hooks/admin'
+import {
+  useAuthorities,
+  useAdmins,
+  useUsers,
+  useAdminUpdateUser,
+  useDeleteUser,
+  useRestoreUser,
+} from '../../hooks/admin'
 import { categoryLabel, useCategories } from '../../hooks/data'
 import { exportAuthoritiesPdf } from '../../lib/pdfExport'
 import { JURISDICTION_AREAS, getJurisdictionLabel } from '../../lib/zones'
@@ -132,8 +142,9 @@ const ROLE_COLORS = [
   'bg-[#38bdf8]',
 ]
 
-function EditAuthorityModal({ authority, onClose, categories }) {
+function EditAuthorityModal({ authority, onClose, categories, isSuperAdmin }) {
   const adminUpdate = useAdminUpdateUser()
+  const deleteUser = useDeleteUser()
   const [activeTab, setActiveTab] = useState('general')
   const [email, setEmail] = useState(authority?.email || '')
   const [phone, setPhone] = useState(authority?.phone || '')
@@ -149,6 +160,7 @@ function EditAuthorityModal({ authority, onClose, categories }) {
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   const activeCategories = useMemo(() => (categories ?? []).filter((c) => c.active), [categories])
 
@@ -421,16 +433,21 @@ function EditAuthorityModal({ authority, onClose, categories }) {
                     onChange={(e) => setStatus(e.target.value)}
                     className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-sm text-ink focus:border-primary focus:outline-none cursor-pointer"
                   >
-                    {!['active', 'suspended'].includes(status) && (
+                    {!['active', 'suspended', 'deleted'].includes(status) && (
                       <option value={status} disabled>
                         {status.charAt(0).toUpperCase() + status.slice(1)} (Current)
                       </option>
                     )}
                     <option value="active">Active (Operational &amp; Full Access)</option>
                     <option value="suspended">Suspended (Access immediately revoked)</option>
+                    {isSuperAdmin && (
+                      <option value="deleted">Deleted (Archive &amp; Invalidate Sessions)</option>
+                    )}
                   </select>
                   <p className="mt-1 text-2xs text-ink-muted">
-                    Suspended accounts cannot log in or perform dispatch actions.
+                    {isSuperAdmin
+                      ? 'Suspended or Deleted accounts cannot log in. Deleted accounts are preserved in archive.'
+                      : 'Suspended accounts cannot log in or perform dispatch actions. Only Super Admins can delete.'}
                   </p>
                 </div>
               </div>
@@ -635,13 +652,48 @@ function EditAuthorityModal({ authority, onClose, categories }) {
 
         {/* Persistent Bottom Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-line">
-          <Link
-            to={`/admin/authorities/${authority?.id}`}
-            className="text-xs text-primary hover:underline inline-flex items-center gap-1.5 font-medium"
-          >
-            <span>Full Profile &amp; Audit Log</span>
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              to={`/admin/authorities/${authority?.id}`}
+              className="text-xs text-primary hover:underline inline-flex items-center gap-1.5 font-medium"
+            >
+              <span>Full Profile &amp; Audit Log</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+            {isSuperAdmin && (
+              <button
+                type="button"
+                disabled={isDeleting || adminUpdate.isPending}
+                onClick={async () => {
+                  if (
+                    window.confirm(
+                      `Are you sure you want to delete account for ${authority.email}? It will immediately terminate active sessions and move to the Deleted Accounts archive.`
+                    )
+                  ) {
+                    setIsDeleting(true)
+                    setError(null)
+                    try {
+                      await deleteUser.mutateAsync({
+                        userId: authority.id,
+                        reason: 'Deleted by Super Admin via Authority Edit Dialog',
+                      })
+                      setSuccess(true)
+                      setTimeout(() => {
+                        onClose()
+                      }, 600)
+                    } catch (err) {
+                      setError(err.message || 'Failed to delete account.')
+                      setIsDeleting(false)
+                    }
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer ml-1"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{isDeleting ? 'Deleting...' : 'Delete Account'}</span>
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2.5">
             <Button variant="ghost" size="sm" type="button" onClick={onClose}>
               Cancel
@@ -651,7 +703,7 @@ function EditAuthorityModal({ authority, onClose, categories }) {
               size="sm"
               type="submit"
               loading={adminUpdate.isPending}
-              disabled={adminUpdate.isPending}
+              disabled={adminUpdate.isPending || isDeleting}
               className="flex items-center gap-1.5 px-4"
             >
               <Check className="h-4 w-4" />
@@ -711,6 +763,66 @@ function formatAdmin(user) {
   }
 }
 
+function formatDeletedAccount(user) {
+  const email = user.email || ''
+  const emailPrefix = email.split('@')[0] || 'user'
+  const isSuper = Boolean(user.isSuperuser || user.is_superuser)
+
+  let name = ''
+  let roleTitle = 'Field Authority'
+
+  if (user.role === 'admin') {
+    roleTitle = isSuper ? 'Super Administrator' : 'Platform Administrator'
+    name =
+      email === 'admin@urbanmend.test'
+        ? 'Root Super Administrator'
+        : emailPrefix
+            .replace(/[._-]/g, ' ')
+            .replace(/\b\w/g, (l) => l.toUpperCase())
+  } else if (user.role === 'authority') {
+    roleTitle = 'Field Authority'
+    name =
+      email === 'authority@urbanmend.test'
+        ? 'Central Operations Command'
+        : emailPrefix
+            .replace(/^authority[._-]/i, '')
+            .split(/[._-]/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ') || 'Authority Officer'
+  } else {
+    roleTitle = 'Citizen'
+    name = user.name || emailPrefix
+  }
+
+  const initials =
+    name
+      .split(' ')
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'DA'
+
+  return {
+    id: shortId(user.id),
+    fullId: user.id,
+    email: user.email,
+    phone: user.phone || '—',
+    name,
+    role: user.role,
+    roleTitle,
+    isSuper,
+    avatar: initials,
+    assignedArea: user.assignedArea || '',
+    areaLabel:
+      getJurisdictionLabel(user.assignedArea) ||
+      user.assignedArea ||
+      'All Municipalities (Global)',
+    status: user.status || 'deleted',
+    rawUser: user,
+  }
+}
+
 /**
  * Authority & Administrator provisioning table and stats with actual database data.
  */
@@ -718,7 +830,8 @@ export default function AuthoritiesPage() {
   const { user } = useAuth()
   const { data: categories } = useCategories()
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get('tab') === 'admins' ? 'admins' : 'authorities'
+  const tabParam = searchParams.get('tab')
+  const activeTab = ['admins', 'deleted'].includes(tabParam) ? tabParam : 'authorities'
   const isSuperAdmin = Boolean(
     user?.role === 'admin' && (user?.isSuperuser || user?.is_superuser),
   )
@@ -726,9 +839,16 @@ export default function AuthoritiesPage() {
   const [q, setQ] = useState('')
   const [cursor, setCursor] = useState('')
   const [editingAuthority, setEditingAuthority] = useState(null)
+  const [userToDelete, setUserToDelete] = useState(null)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [userToRestore, setUserToRestore] = useState(null)
+  const [restoreReason, setRestoreReason] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
   const [tabFading, setTabFading] = useState(false)
   const [visibleTab, setVisibleTab] = useState(activeTab)
+
+  const deleteUserMutation = useDeleteUser()
+  const restoreUserMutation = useRestoreUser()
 
   useEffect(() => {
     const handleSecAlert = () => setRefreshKey((k) => k + 1)
@@ -781,6 +901,52 @@ export default function AuthoritiesPage() {
   } = useAdmins({
     cursor: activeTab === 'admins' ? cursor || undefined : undefined,
   })
+
+  // Deleted accounts query
+  const {
+    data: deletedData,
+    isLoading: deletedLoading,
+    isError: deletedIsError,
+    error: deletedError,
+    refetch: deletedRefetch,
+  } = useUsers({
+    status: 'deleted',
+    cursor: activeTab === 'deleted' ? cursor || undefined : undefined,
+  })
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return
+    try {
+      await deleteUserMutation.mutateAsync({
+        userId: userToDelete.fullId || userToDelete.id,
+        reason: deleteReason || 'Deleted by Super Admin via Authority Provisioning',
+      })
+      setUserToDelete(null)
+      setDeleteReason('')
+      authRefetch()
+      adminRefetch()
+      deletedRefetch()
+    } catch (err) {
+      alert(err.message || 'Failed to delete account')
+    }
+  }
+
+  const handleConfirmRestore = async () => {
+    if (!userToRestore) return
+    try {
+      await restoreUserMutation.mutateAsync({
+        userId: userToRestore.fullId || userToRestore.id,
+        reason: restoreReason || 'Restored by Super Admin via Authority Provisioning',
+      })
+      setUserToRestore(null)
+      setRestoreReason('')
+      authRefetch()
+      adminRefetch()
+      deletedRefetch()
+    } catch (err) {
+      alert(err.message || 'Failed to restore account')
+    }
+  }
 
   const handleReactivate = (officerId, officerName) => {
     if (
@@ -851,6 +1017,29 @@ export default function AuthoritiesPage() {
         a.status.toLowerCase().includes(lower),
     )
   }, [displayAdmins, q])
+
+  // Deleted accounts list calculations
+  const deletedUsers = deletedData?.data ?? []
+  const deletedNextCursor = deletedData?.page?.nextCursor
+  const deletedAuthCount = deletedUsers.filter((u) => u.role === 'authority').length
+  const deletedAdminCount = deletedUsers.filter((u) => u.role === 'admin').length
+
+  const displayDeleted = useMemo(() => {
+    return deletedUsers.map((u) => formatDeletedAccount(u))
+  }, [deletedUsers])
+
+  const filteredDeleted = useMemo(() => {
+    if (!q.trim()) return displayDeleted
+    const lower = q.toLowerCase()
+    return displayDeleted.filter(
+      (u) =>
+        u.name.toLowerCase().includes(lower) ||
+        u.email.toLowerCase().includes(lower) ||
+        u.roleTitle.toLowerCase().includes(lower) ||
+        u.areaLabel.toLowerCase().includes(lower) ||
+        u.status.toLowerCase().includes(lower),
+    )
+  }, [displayDeleted, q])
 
   // Calculate dynamic role distribution from actual authorities
   const roleDistribution = useMemo(() => {
@@ -933,11 +1122,17 @@ export default function AuthoritiesPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-ink">
-            {activeTab === 'admins' ? 'System Administrators' : 'Authority Provisioning'}
+            {activeTab === 'admins'
+              ? 'System Administrators'
+              : activeTab === 'deleted'
+              ? 'Deleted Accounts Archive'
+              : 'Authority Provisioning'}
           </h1>
           <p className="mt-1 text-sm text-ink-muted">
             {activeTab === 'admins'
               ? 'Manage platform administrators, privilege levels, and super admin credentials.'
+              : activeTab === 'deleted'
+              ? 'Archived personnel accounts with revoked credentials. Super Administrators can restore accounts to active service.'
               : 'Manage system access, field roles, and category scopes for UrbanMend staff and allied agency personnel.'}
           </p>
         </div>
@@ -955,6 +1150,11 @@ export default function AuthoritiesPage() {
               Super Admin required
             </span>
           )
+        ) : activeTab === 'deleted' ? (
+          <span className="inline-flex items-center gap-1.5 rounded-panel border border-rose-300/60 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-800">
+            <Trash2 className="h-3.5 w-3.5 text-rose-600" />
+            Archived Accounts Repository
+          </span>
         ) : (
           <Link to="/admin/authorities/new">
             <Button className="flex items-center gap-2 bg-[#0e7490] px-4 py-2 font-semibold text-white hover:bg-[#085f76]">
@@ -966,7 +1166,7 @@ export default function AuthoritiesPage() {
       </div>
 
       {/* Tab Switcher */}
-      <div className="mb-5 flex items-center gap-1 rounded-panel border border-line bg-surface-sunken/50 p-1 w-fit">
+      <div className="mb-5 flex flex-wrap items-center gap-1 rounded-panel border border-line bg-surface-sunken/50 p-1 w-fit">
         <button
           type="button"
           onClick={() => handleTabChange('authorities')}
@@ -1003,6 +1203,25 @@ export default function AuthoritiesPage() {
               : 'bg-surface-sunken text-ink-faint'
           }`}>
             {admins.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTabChange('deleted')}
+          className={`flex items-center gap-2 rounded-panel px-4 py-2 text-sm font-semibold transition-all ${
+            activeTab === 'deleted'
+              ? 'bg-surface-panel text-rose-700 shadow-sm border border-line'
+              : 'text-ink-muted hover:text-ink'
+          }`}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" />
+          <span>Deleted Accounts</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+            activeTab === 'deleted'
+              ? 'bg-rose-100 text-rose-700'
+              : 'bg-surface-sunken text-ink-faint'
+          }`}>
+            {deletedUsers.length}
           </span>
         </button>
       </div>
@@ -1182,6 +1401,25 @@ export default function AuthoritiesPage() {
                                   <Pencil className="h-3 w-3 text-primary" aria-hidden="true" />
                                   <span>Edit</span>
                                 </Button>
+                                {isSuperAdmin && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setUserToDelete({
+                                        id: item.id,
+                                        fullId: item.fullId,
+                                        name: item.name,
+                                        email: item.email,
+                                        roleLabel: 'Field Authority',
+                                      })
+                                    }
+                                    className="inline-flex items-center gap-1 py-1 px-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                                    title="Delete Authority Account (Super Admin Only)"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  </Button>
+                                )}
                                 <Link
                                   to={`/admin/authorities/${item.fullId}`}
                                   className="rounded-panel border border-line p-1.5 text-ink-muted transition hover:border-primary hover:text-primary hover:bg-slate-50"
@@ -1211,7 +1449,7 @@ export default function AuthoritiesPage() {
                 </div>
               </div>
             </Card>
-          ) : (
+          ) : visibleTab === 'admins' ? (
             /* ── ADMINISTRATORS TABLE ── */
             <Card className="overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-3.5">
@@ -1273,6 +1511,9 @@ export default function AuthoritiesPage() {
                         <th scope="col" className="px-4 py-3.5">Assigned Area</th>
                         <th scope="col" className="px-4 py-3.5">2FA</th>
                         <th scope="col" className="px-4 py-3.5">Status</th>
+                        {isSuperAdmin && (
+                          <th scope="col" className="px-4 py-3.5 text-right">Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-line">
@@ -1344,6 +1585,34 @@ export default function AuthoritiesPage() {
                               </span>
                             </span>
                           </td>
+                          {isSuperAdmin && (
+                            <td className="px-4 py-3.5 text-right">
+                              {adm.fullId !== user?.id ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setUserToDelete({
+                                      id: adm.id,
+                                      fullId: adm.fullId,
+                                      name: adm.name,
+                                      email: adm.email,
+                                      roleLabel: adm.roleTitle,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 py-1 px-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300"
+                                  title="Delete Administrator Account (Super Admin Only)"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                                  <span>Delete</span>
+                                </Button>
+                              ) : (
+                                <span className="text-2xs font-semibold text-ink-muted bg-surface-sunken px-2 py-0.5 rounded border border-line">
+                                  Current
+                                </span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -1358,6 +1627,154 @@ export default function AuthoritiesPage() {
                     First Page
                   </Button>
                   <Button variant="secondary" size="sm" disabled={!adminNextCursor} onClick={() => adminNextCursor && setCursor(adminNextCursor)} className="text-xs font-semibold text-primary">
+                    Next Page &rarr;
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          ) : (
+            /* ── DELETED ACCOUNTS TABLE ── */
+            <Card className="overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-3.5">
+                <div className="relative w-full max-w-xs">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" />
+                  <input
+                    type="text"
+                    placeholder="Search deleted accounts, roles, areas..."
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    className="w-full rounded-panel border border-line bg-surface-panel py-1.5 pl-9 pr-3 text-xs text-ink placeholder:text-ink-muted focus:border-primary focus:outline-hidden"
+                  />
+                </div>
+                <p className="text-xs text-ink-muted">
+                  Showing {filteredDeleted.length} of {displayDeleted.length} deleted accounts
+                </p>
+              </div>
+
+              {!isSuperAdmin && (
+                <div className="mx-3.5 mt-3 flex items-start gap-3 rounded-panel border border-amber-300/50 bg-amber-50/60 p-3 text-xs leading-relaxed text-amber-900">
+                  <ShieldAlert className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Standard Administrator Archive View</p>
+                    <p className="mt-0.5 text-amber-800">
+                      You are viewing archived deleted accounts for operational audit visibility. Only <strong>Super Administrators</strong> can restore accounts back to active service or permanently manage personnel.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {deletedLoading ? (
+                <div className="space-y-3 p-5">
+                  <Skeleton className="h-8 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : deletedIsError ? (
+                <div className="p-6 text-sm text-status-critical" role="alert">
+                  Failed to load deleted accounts: {deletedError?.message}
+                </div>
+              ) : filteredDeleted.length === 0 ? (
+                <div className="p-8">
+                  <EmptyState
+                    title={q ? 'No matching deleted accounts found' : 'No Deleted Accounts'}
+                    message={
+                      q
+                        ? `No deleted account match for "${q}".`
+                        : 'No accounts have been deleted. When a Super Administrator deletes an authority or administrator account, it is archived here and can be restored.'
+                    }
+                  />
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-line bg-surface-sunken/60 text-left text-xs font-bold tracking-wider text-ink-muted uppercase">
+                        <th scope="col" className="px-4 py-3.5">Personnel &amp; Email</th>
+                        <th scope="col" className="px-4 py-3.5">Original Role</th>
+                        <th scope="col" className="px-4 py-3.5">Jurisdiction Area</th>
+                        <th scope="col" className="px-4 py-3.5">Status</th>
+                        <th scope="col" className="px-4 py-3.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-line">
+                      {filteredDeleted.map((item) => (
+                        <tr key={item.fullId} className="transition hover:bg-slate-50/80 bg-rose-50/15">
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold bg-slate-200 text-slate-600">
+                                {item.avatar}
+                              </div>
+                              <div>
+                                <p className="font-bold text-ink line-through decoration-rose-400">
+                                  {item.name}
+                                </p>
+                                <p className="text-xs text-ink-faint">
+                                  {item.email} &bull; ID: {item.id}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            {item.role === 'admin' ? (
+                              <span className="inline-flex items-center gap-1 rounded border border-purple-200/60 bg-purple-50 px-2.5 py-1 text-xs font-semibold text-purple-800">
+                                <Crown className="h-3 w-3 text-purple-600" aria-hidden="true" />
+                                {item.roleTitle}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded border border-sky-200/60 bg-sky-50 px-2.5 py-1 text-xs font-semibold text-sky-800">
+                                <UserCheck className="h-3 w-3 text-sky-600" aria-hidden="true" />
+                                {item.roleTitle}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1 rounded border border-emerald-200/60 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                              <MapPin className="h-3 w-3 text-emerald-600" aria-hidden="true" />
+                              {item.areaLabel}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-rose-300 bg-rose-50 px-2.5 py-0.5 text-xs font-bold text-rose-800">
+                              <span className="h-2 w-2 rounded-full bg-rose-500" aria-hidden="true" />
+                              Deleted (Archived)
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            {isSuperAdmin ? (
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => setUserToRestore(item)}
+                                className="inline-flex items-center gap-1.5 py-1 px-3 text-xs font-bold text-emerald-800 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 shadow-2xs"
+                                title="Restore account to active operational status"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
+                                <span>Restore</span>
+                              </Button>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 text-2xs font-semibold text-ink-muted bg-surface-sunken px-2.5 py-1 rounded border border-line"
+                                title="Only Super Administrators can restore accounts"
+                              >
+                                <Lock className="h-3 w-3 text-amber-600" />
+                                Super Admin Only
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between border-t border-line px-4 py-3 text-xs text-ink-muted">
+                <span>Showing 1-{filteredDeleted.length} of {displayDeleted.length} Deleted Accounts</span>
+                <div className="flex items-center gap-2">
+                  <Button variant="secondary" size="sm" disabled={!cursor} onClick={() => setCursor('')} className="text-xs">
+                    First Page
+                  </Button>
+                  <Button variant="secondary" size="sm" disabled={!deletedNextCursor} onClick={() => deletedNextCursor && setCursor(deletedNextCursor)} className="text-xs font-semibold text-primary">
                     Next Page &rarr;
                   </Button>
                 </div>
@@ -1424,7 +1841,7 @@ export default function AuthoritiesPage() {
                 </CardBody>
               </Card>
             </>
-          ) : (
+          ) : visibleTab === 'admins' ? (
             <>
               <Card>
                 <div className="p-4 pb-2">
@@ -1484,6 +1901,60 @@ export default function AuthoritiesPage() {
                 </CardBody>
               </Card>
             </>
+          ) : (
+            <>
+              <Card>
+                <div className="p-4 pb-2">
+                  <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">Archived Accounts Overview</p>
+                </div>
+                <CardBody className="pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-rose-600">{deletedUsers.length}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Total Archived</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-sky-600">{deletedAuthCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Authorities</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-purple-600">{deletedAdminCount}</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Administrators</p>
+                    </div>
+                    <div className="rounded-panel border border-line bg-surface-sunken/60 p-4 text-center">
+                      <p className="text-3xl font-bold text-emerald-600">100%</p>
+                      <p className="mt-1 text-xs font-medium text-ink-muted">Restorable</p>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+
+              <Card>
+                <div className="p-4 pb-2">
+                  <p className="text-[11px] font-bold tracking-wider text-ink-muted uppercase">Archive &amp; Restoration Rules</p>
+                </div>
+                <CardBody className="space-y-3 pt-2">
+                  <div className="flex items-start gap-3 rounded-panel border border-rose-200/60 bg-rose-50/40 p-3">
+                    <Trash2 className="h-5 w-5 shrink-0 text-rose-600 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-rose-900">Soft-Delete &amp; Session Termination</p>
+                      <p className="mt-0.5 text-[11px] text-rose-800 leading-relaxed">
+                        When an account is deleted by a Super Administrator, all active refresh tokens and user sessions are instantly revoked. Accounts are never permanently lost from the database.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-panel border border-emerald-200/60 bg-emerald-50/40 p-3">
+                    <RotateCcw className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-emerald-900">Super Admin Restoration</p>
+                      <p className="mt-0.5 text-[11px] text-emerald-800 leading-relaxed">
+                        Only Super Administrators have permission to restore accounts. Standard platform administrators cannot delete or restore accounts.
+                      </p>
+                    </div>
+                  </div>
+                </CardBody>
+              </Card>
+            </>
           )}
         </div>
       </div>
@@ -1493,8 +1964,143 @@ export default function AuthoritiesPage() {
           authority={editingAuthority}
           onClose={() => setEditingAuthority(null)}
           categories={categories}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={Boolean(userToDelete)}
+        onClose={() => {
+          setUserToDelete(null)
+          setDeleteReason('')
+        }}
+        title="Confirm Account Deletion"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900">
+            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Super Admin Authorization Required</p>
+              <p className="mt-1 leading-relaxed">
+                You are about to delete the account for{' '}
+                <strong>{userToDelete?.name || userToDelete?.email}</strong> (
+                {userToDelete?.email}).
+              </p>
+              <p className="mt-1 leading-relaxed">
+                All active user sessions will be revoked immediately. The account will be archived in
+                the <strong>Deleted Accounts</strong> tab where it can be restored if needed.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Reason for Deletion (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Personnel reassignment, role deprecation"
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-xs text-ink focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setUserToDelete(null)
+                setDeleteReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              loading={deleteUserMutation.isPending}
+              onClick={handleConfirmDelete}
+              className="flex items-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete Account</span>
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Restore Confirmation Modal */}
+      <Dialog
+        open={Boolean(userToRestore)}
+        onClose={() => {
+          setUserToRestore(null)
+          setRestoreReason('')
+        }}
+        title="Restore Deleted Account"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">
+            <RotateCcw className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Reactivate Account</p>
+              <p className="mt-1 leading-relaxed">
+                Are you sure you want to restore the account for{' '}
+                <strong>{userToRestore?.name || userToRestore?.email}</strong> (
+                {userToRestore?.email})?
+              </p>
+              <p className="mt-1 leading-relaxed">
+                The account status will be restored to <strong>Active</strong> and the officer will be
+                able to sign in and resume operations.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Reason for Restoration (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Reinstated to active duties"
+              value={restoreReason}
+              onChange={(e) => setRestoreReason(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-xs text-ink focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setUserToRestore(null)
+                setRestoreReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="button"
+              loading={restoreUserMutation.isPending}
+              onClick={handleConfirmRestore}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Confirm Restore</span>
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   )
 }

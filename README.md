@@ -422,8 +422,14 @@ flowchart TD
 * **Municipal Authority Directory:**
   * Central personnel registry listing all municipal engineers, inspectors, and departmental staff.
   * Real-time search across names, emails, departments, and assigned wards.
-  * Department filter tabs (All, Roads, Waste, Water & Drainage, Electricity, etc.).
-  * Dynamic status indicator pills (`Active` / `Suspended`).
+  * Tab navigation across **Field Authorities**, **System Administrators**, and **Deleted Accounts Archive**.
+  * Dynamic status indicator pills (`Active` / `Suspended` / `Deleted`).
+* **Super Administrator Exclusive Account Deletion & Restoration:**
+  * **Role-Gated Security:** Only Super Administrators (`is_superuser=True`) have permission to delete or restore accounts. Standard administrators are strictly restricted both in frontend UI and at the API level (HTTP 403 Forbidden).
+  * **Immediate Session Revocation:** Deleting an account (`DELETE /api/v1/users/:userId`) instantly revokes all active JWT tokens and sessions (`revoke_all_sessions`), locking out the credentials immediately.
+  * **Dedicated "Deleted Accounts" Archive Tab:** All deleted accounts are safely stored in a dedicated archive tab (`/admin/authorities?tab=deleted`) without polluting active authority directories.
+  * **One-Click Account Restoration:** Super Administrators can inspect archived accounts and click **"Restore Account"** (`POST /api/v1/users/:userId/restore`) to reactivate operational status with recorded audit tracking.
+  * **Safe Against Self-Deletion:** Root administrators cannot delete their own active session.
 * **Dynamic Restriction Indicators & Real-Time Countdown:**
   * Table status column dynamically renders `🔴 Suspended` or `🟠 Cooldown (14m 32s)` with animated pulsing indicators (`RestrictionBadge.jsx`).
   * One-click **"Reactivate"** button in table action column allowing administrators to lift operational cooldowns and suspensions instantly.

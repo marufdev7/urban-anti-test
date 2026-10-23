@@ -53,12 +53,17 @@ def category_scope_for(user: User) -> QuerySet[Category]:
 
 
 def list_users(*, actor: User, role: str | None = None, status: str | None = None, query: str = ""):
+    from urbenmend.identity.models import UserStatus
+
     require_role(actor, Role.ADMIN)
     queryset = User.objects.prefetch_related("category_scope").annotate(created_at=F("date_joined"))
     if role:
         queryset = queryset.filter(role=role)
     if status:
         queryset = queryset.filter(status=status)
+    else:
+        # Default: exclude deleted accounts from active administrative lists
+        queryset = queryset.exclude(status=UserStatus.DELETED)
     if query:
         queryset = queryset.filter(Q(email__icontains=query) | Q(phone__icontains=query))
     return queryset.order_by("-date_joined", "-pk")

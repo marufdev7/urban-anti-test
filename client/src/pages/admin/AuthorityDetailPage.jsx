@@ -25,12 +25,19 @@ import {
   ShieldAlert,
   ShieldCheck,
   TrendingUp,
+  Trash2,
+  RotateCcw,
   User,
   UserCheck,
   UserPlus,
 } from 'lucide-react'
 import { useAuth } from '../../auth/AuthContext'
-import { useAuthorityProfile, useUpdateUser } from '../../hooks/admin'
+import {
+  useAuthorityProfile,
+  useUpdateUser,
+  useDeleteUser,
+  useRestoreUser,
+} from '../../hooks/admin'
 import { useCategories } from '../../hooks/data'
 import { formatDate, formatDateTime, shortId, timeAgo } from '../../lib/format'
 import {
@@ -63,6 +70,7 @@ const STATUS_TONES = {
   registered: 'processing',
   suspended: 'high',
   deprovisioned: 'neutral',
+  deleted: 'high',
 }
 
 const STATUS_LABELS = {
@@ -71,6 +79,7 @@ const STATUS_LABELS = {
   registered: 'Registered',
   suspended: 'Suspended',
   deprovisioned: 'Deprovisioned',
+  deleted: 'Deleted (Archived)',
 }
 
 const ISSUE_STATUS_TONES = {
@@ -457,6 +466,7 @@ function OfficerInspectModalContent({ event, onClose }) {
 export default function AuthorityDetailPage() {
   const { authorityId } = useParams()
   const { user } = useAuth()
+  const isSuperAdmin = Boolean(user?.role === 'admin' && (user?.isSuperuser || user?.is_superuser))
   const { data: categories } = useCategories()
   const { data, isLoading, isError, error, refetch, isFetching } = useAuthorityProfile(authorityId)
 
@@ -472,6 +482,13 @@ export default function AuthorityDetailPage() {
   const activityLog = data?.activityLog ?? []
 
   const update = useUpdateUser(authorityId)
+  const deleteUser = useDeleteUser()
+  const restoreUser = useRestoreUser()
+
+  const [confirmDeleteModal, setConfirmDeleteModal] = useState(false)
+  const [deleteReason, setDeleteReason] = useState('')
+  const [confirmRestoreModal, setConfirmRestoreModal] = useState(false)
+  const [restoreReason, setRestoreReason] = useState('')
 
   const [restrictionTick, setRestrictionTick] = useState(0)
   const restriction = useMemo(() => getAuthorityRestriction(authority?.id), [authority?.id, restrictionTick])
@@ -681,6 +698,34 @@ export default function AuthorityDetailPage() {
     }
   }
 
+  const handleConfirmDelete = async () => {
+    try {
+      await deleteUser.mutateAsync({
+        userId: authorityId,
+        reason: deleteReason || 'Deleted by Super Admin from Officer Detail Page',
+      })
+      setConfirmDeleteModal(false)
+      setDeleteReason('')
+      refetch()
+    } catch (err) {
+      setSaveError(err.message || 'Failed to delete account')
+    }
+  }
+
+  const handleConfirmRestore = async () => {
+    try {
+      await restoreUser.mutateAsync({
+        userId: authorityId,
+        reason: restoreReason || 'Restored by Super Admin from Officer Detail Page',
+      })
+      setConfirmRestoreModal(false)
+      setRestoreReason('')
+      refetch()
+    } catch (err) {
+      setSaveError(err.message || 'Failed to restore account')
+    }
+  }
+
   const toggleScope = (slug) => {
     setScopeDraft((prev) =>
       prev.includes(slug) ? prev.filter((s) => s !== slug) : [...prev, slug]
@@ -740,6 +785,17 @@ export default function AuthorityDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {authority.status === 'deleted' && isSuperAdmin && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setConfirmRestoreModal(true)}
+              className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Restore Account</span>
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -760,6 +816,33 @@ export default function AuthorityDetailPage() {
           </Link>
         </div>
       </div>
+
+      {authority.status === 'deleted' && (
+        <div className="rounded-xl border border-rose-300 bg-rose-50 p-4 text-xs text-rose-900 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-rose-100 text-rose-700 shrink-0">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm text-rose-900">Archived &amp; Deleted Account</p>
+              <p className="mt-0.5 text-xs text-rose-800">
+                This account was deleted by a Super Administrator. All active login sessions have been terminated.
+              </p>
+            </div>
+          </div>
+          {isSuperAdmin && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setConfirmRestoreModal(true)}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Restore Account</span>
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Security Engine Restriction Alert Banner */}
       {restriction && (
@@ -1261,15 +1344,31 @@ export default function AuthorityDetailPage() {
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
                   ))}
+                  {isSuperAdmin && (
+                    <option value="deleted">Deleted (Archive &amp; Invalidate Sessions)</option>
+                  )}
                 </select>
                 {statusDraft !== authority.status && (
                   <Button
                     className="mt-3 w-full"
-                    variant={statusDraft === 'suspended' ? 'danger' : 'primary'}
+                    variant={statusDraft === 'suspended' || statusDraft === 'deleted' ? 'danger' : 'primary'}
                     onClick={() => setConfirmStatus(statusDraft)}
                   >
                     Apply status change
                   </Button>
+                )}
+                {isSuperAdmin && authority.status !== 'deleted' && (
+                  <div className="mt-4 pt-3 border-t border-line flex items-center justify-between">
+                    <span className="text-xs text-ink-muted">Account lifecycle management:</span>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteModal(true)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete Account (Super Admin)</span>
+                    </button>
+                  </div>
                 )}
                 <p className="mt-3 text-xs text-ink-muted">
                   Officer profile created on {formatDate(authority.dateJoined)}
@@ -1485,6 +1584,135 @@ export default function AuthorityDetailPage() {
         className="max-w-2xl"
       >
         <OfficerInspectModalContent event={inspectEvent} onClose={() => setInspectEvent(null)} />
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog
+        open={confirmDeleteModal}
+        onClose={() => {
+          setConfirmDeleteModal(false)
+          setDeleteReason('')
+        }}
+        title="Confirm Account Deletion"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-rose-300 bg-rose-50 p-3 text-xs text-rose-900">
+            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Super Admin Deletion Authorization</p>
+              <p className="mt-1 leading-relaxed">
+                You are about to delete account for <strong>{authority.email}</strong>.
+              </p>
+              <p className="mt-1 leading-relaxed">
+                All active login sessions will be immediately revoked. The account will be archived
+                in the Deleted Accounts repository and can be restored at any time by a Super Administrator.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Reason for Deletion (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Operational reorganization, credential revoked"
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-xs text-ink focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setConfirmDeleteModal(false)
+                setDeleteReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              type="button"
+              loading={deleteUser.isPending}
+              onClick={handleConfirmDelete}
+              className="flex items-center gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete Account</span>
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Restore Confirmation Modal */}
+      <Dialog
+        open={confirmRestoreModal}
+        onClose={() => {
+          setConfirmRestoreModal(false)
+          setRestoreReason('')
+        }}
+        title="Restore Deleted Account"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">
+            <RotateCcw className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold">Restore to Operational Status</p>
+              <p className="mt-1 leading-relaxed">
+                Restore account for <strong>{authority.email}</strong> back to Active status?
+              </p>
+              <p className="mt-1 leading-relaxed">
+                The account will regain access to moderate, dispatch, and resolve assigned incidents.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1.5">
+              Reason for Restoration (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Reinstated to field duty"
+              value={restoreReason}
+              onChange={(e) => setRestoreReason(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface-panel px-3 py-2 text-xs text-ink focus:border-primary focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-line">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setConfirmRestoreModal(false)
+                setRestoreReason('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              type="button"
+              loading={restoreUser.isPending}
+              onClick={handleConfirmRestore}
+              className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Confirm Restore</span>
+            </Button>
+          </div>
+        </div>
       </Dialog>
     </div>
   )

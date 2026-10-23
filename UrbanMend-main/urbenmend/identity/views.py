@@ -584,6 +584,22 @@ class UserAdminDetailView(APIView):
             raise UnprocessableEntity(exc.messages[0]) from exc
         return Response(UserSerializer(target).data)
 
+    def delete(self, request: Request, user_id) -> Response:
+        actor = cast("User", request.user)
+        reason = request.data.get("reason", "") if isinstance(request.data, dict) else ""
+        target = services.delete_user_by_admin(actor=actor, user_id=user_id, reason=reason)
+        return Response(UserSerializer(target).data, status=status.HTTP_200_OK)
+
+
+class UserAdminRestoreView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, user_id) -> Response:
+        actor = cast("User", request.user)
+        reason = request.data.get("reason", "") if isinstance(request.data, dict) else ""
+        target = services.restore_user_by_admin(actor=actor, user_id=user_id, reason=reason)
+        return Response(UserSerializer(target).data, status=status.HTTP_200_OK)
+
 
 class TwoFactorEnrollView(RateLimitHeadersMixin, APIView):
     """`POST /auth/2fa/enroll` — begin TOTP enrolment (FR-4, API §6.1 amended 2026-08-07).

@@ -97,3 +97,38 @@ def test_role_change_to_citizen_cannot_carry_category_scope() -> None:
         format="json",
     )
     assert response.status_code == 400
+
+
+def test_super_admin_can_delete_and_restore_authority_with_audit() -> None:
+    normal_admin = AdminFactory(is_superuser=False)
+    super_admin = AdminFactory(is_superuser=True)
+    authority = AuthorityFactory(status=UserStatus.ACTIVE)
+
+    detail_url = reverse("api:users-detail", kwargs={"user_id": authority.pk})
+    restore_url = reverse("api:users-restore", kwargs={"user_id": authority.pk})
+
+    # Normal admin cannot delete
+    assert client(normal_admin).delete(detail_url).status_code == 403
+
+    # Super admin CAN delete
+    delete_res = client(super_admin).delete(detail_url, {"reason": "Departed agency"}, format="json")
+    assert delete_res.status_code == 200
+    authority.refresh_from_db()
+    assert authority.status == UserStatus.DELETED
+    assert AuditEvent.objects.filter(action="authority.deleted").exists()
+
+    # Deleted account is excluded from default list but returned when status=deleted
+    list_url = reverse("api:users")
+    assert not any(u["id"] == str(authority.pk) for u in client(super_admin).get(list_url).data["data"])
+    deleted_list_res = client(super_admin).get(list_url, {"status": "deleted"})
+    assert any(u["id"] == str(authority.pk) for u in deleted_list_res.data["data"])
+
+    # Normal admin cannot restore
+    assert client(normal_admin).post(restore_url).status_code == 403
+
+    # Super admin CAN restore
+    restore_res = client(super_admin).post(restore_url, {"reason": "Reinstated by chief admin"}, format="json")
+    assert restore_res.status_code == 200
+    authority.refresh_from_db()
+    assert authority.status == UserStatus.ACTIVE
+    assert AuditEvent.objects.filter(action="authority.restored").exists()
