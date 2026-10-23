@@ -60,6 +60,12 @@ function formatAuthError(error) {
   if (code === 'auth/too-many-requests') {
     return 'Too many attempts. Please wait a moment and try again.'
   }
+  if (code === 'auth/billing-not-enabled') {
+    return 'Firebase SMS Authentication requires Google Cloud Billing (Blaze Plan) or Test Phone Numbers. For free local testing, please use Email Verification or add your number under "Phone numbers for testing" in Firebase Console.'
+  }
+  if (code === 'auth/captcha-check-failed') {
+    return 'Security verification failed. Please refresh the page and try again.'
+  }
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
     return null
   }
